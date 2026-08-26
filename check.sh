@@ -367,6 +367,26 @@ for name in dirs:
                          [f"Mentioning the path is not enough. Link it as "
                           f"[...]({link}) with a line saying when to read it."])
 
+# ------------------------------------------------- always-on prose block
+
+# Step 2 of Setup lives outside the repo, so this warns and never fails. A
+# fresh clone, a CI run, and anyone else's machine all lack the file, and none
+# of those are a reason to reject a commit.
+if any(d == "plain-writing" for d in dirs):
+    config = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    claude_md = os.path.join(config, "CLAUDE.md")
+    if not os.path.isfile(claude_md):
+        warn(f"no {claude_md}, so step 2 of Setup is not done here. "
+             "plain-writing reaches commit messages but not chat replies.")
+    else:
+        try:
+            if "plain-writing" not in open(
+                    claude_md, encoding="utf-8", errors="replace").read():
+                warn(f"{claude_md} does not mention plain-writing. "
+                     "See step 2 of Setup in the README.")
+        except OSError as exc:
+            warn(f"could not read {claude_md}: {exc}")
+
 # -------------------------------------------------------- context budget
 
 print("== context budget ==")

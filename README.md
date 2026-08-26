@@ -41,6 +41,9 @@ description is consulted on that turn. This block is what closes that gap.
 Its own rules stay in `SKILL.md`, one copy. The block says only the thing the
 skill cannot make true about itself, that it always applies.
 
+`./check.sh` warns when this step is missing. It never fails on it, because the
+file is per machine and lives outside the repo.
+
 ### Keeping working repos clean
 
 The repo sits at `~/Work/Personal/skills`, in its own area away from client

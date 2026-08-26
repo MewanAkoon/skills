@@ -150,6 +150,12 @@ Checked by `./check.sh`:
 8. Every file in `references/` is linked from `SKILL.md`.
 9. Five model-invoked skills at most.
 
+The script also warns when `~/.claude/CLAUDE.md` is missing the prose block
+from step 2 of the README's setup. That is machine state rather than repo
+state, so it is a warning and never a failure: a fresh clone, a CI run, and
+anyone else's machine all lack the file. Set `CLAUDE_CONFIG_DIR` if your Claude
+config lives somewhere else.
+
 Judged by you, because no script can:
 
 10. The description would fire on a real prompt you would actually type. Say

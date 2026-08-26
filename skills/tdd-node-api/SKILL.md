@@ -42,26 +42,32 @@ service the choices are:
 | HTTP route | Supertest against the Express or Nest app | Status codes, validation, auth, serialization |
 | Repository | Call the repo against a real Mongo instance | Query shape, indexes, aggregation results |
 
-Ask: "Which seam should this test live at?" Wait for the answer, then say it
-back in one sentence naming the seam and what you will call through.
+Run the suite once before you touch anything, and write down which tests are
+already failing. This is the last moment that list is honest, and step 3
+compares against it.
 
-Before answering for them, read
-[references/mocking.md](references/mocking.md): the repository seam is cheaper
-than it looks, because an in-memory Mongo starts in a couple of seconds.
+Read [references/mocking.md](references/mocking.md) before you steer the
+answer: the repository seam is cheaper than it looks, because an in-memory
+Mongo starts in a couple of seconds.
+
+Then ask: "Which seam should this test live at?" Wait for the answer, and say
+it back in one sentence naming the seam and what you will call through.
 
 You cannot test everything. Agreeing the seam up front puts the effort on the
 critical path instead of spreading it thin across every edge case.
 
-**Done when:** the user has named one of the three seams and you have repeated
-it back.
+**Done when:** the user has named one of the three seams, you have repeated it
+back, and the already-failing tests are written down.
 
 ## Step 2: Write one failing test
 
 Create the function first, with an empty body and a real signature, so the run
 reaches your assertion instead of dying on a missing import. Then write exactly
 one test, with the seam from step 1 as a comment on the first line of the test
-file, so the next cycle can read it back. Run it. Confirm it fails on the assertion you wrote, not on a setup
-error. Read the failure message to check.
+file, so the next cycle can read it back.
+
+Run it. Confirm it fails on the assertion you wrote, not on a setup error. Read
+the failure message to check.
 
 A good test reads like a statement of a capability. "rejects a checkout when
 the cart is empty" tells a reader what the system does, and it survives a
@@ -71,9 +77,11 @@ Take the expected value from somewhere independent: a known-good literal, a
 worked example, the ticket. Compute it a different way than the code does.
 
 Read [references/good-tests.md](references/good-tests.md) when naming the test
-or deciding what to assert on. Read [references/mocking.md](references/mocking.md)
-when deciding whether to run a dependency for real or stub it, including
-whether a real Mongo instance is worth the setup.
+or deciding what to assert on.
+
+Read [references/mocking.md](references/mocking.md) when deciding whether to
+run a dependency for real or stub it, including whether a real Mongo instance
+is worth the setup.
 
 **Done when:** one test runs, fails, and the message names your assertion.
 
@@ -82,9 +90,8 @@ whether a real Mongo instance is worth the setup.
 Write only enough to turn that one test green. Run the whole suite. Leave the
 next test's behaviour for the next cycle.
 
-Record which tests were already failing before you started. Green means no new
-failures against that baseline, so a suite that arrived broken does not become
-your problem mid-cycle.
+Compare against the failures you wrote down in step 1. Green means no new ones,
+so a suite that arrived broken does not become your problem mid-cycle.
 
 **Done when:** your new test passes and the suite has no failures that were not
 there at the start.

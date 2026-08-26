@@ -52,7 +52,7 @@ because a PR cannot be opened from it.
 ## 2. Check the state of things
 
 ```bash
-git status --porcelain
+git status --porcelain -uall
 gh auth status
 git remote get-url origin
 ```
@@ -274,8 +274,8 @@ EOF
 ```
 
 A non-zero exit here is usually a GraphQL deprecation. Fall back to REST,
-reading `{owner}` and `{repo}` out of the `url` field of `PR_DATA` and
-`number` from its own field:
+taking `number` from `PR_DATA`. Leave `{owner}` and `{repo}` as they are,
+because `gh api` fills them in from the current repo:
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/{number} --method PATCH \

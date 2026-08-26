@@ -49,7 +49,7 @@ carries triggers. Costs permanent context.
 Codex. The description becomes a plain one-line summary for a human browsing
 slash commands. Costs nothing.
 
-What caps the model-invoked set is overlap, not count. A description costs
+What caps the model-invoked set is conflict, not count. A description costs
 about seventy tokens, so the whole set is a few hundred. A false fire costs
 far more, because the agent reads an entire `SKILL.md` and then follows the
 wrong procedure.

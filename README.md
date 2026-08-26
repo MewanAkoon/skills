@@ -26,7 +26,7 @@ work, and the symlinks live under `$HOME`. Nothing lands in a project. As a
 safety net:
 
 ```bash
-printf '.claude/\n.cursor/skills/\n.agents/\n.skills.json\n' >> ~/.gitignore_global
+printf '.claude/\n.cursor/skills/\n.agents/\n.scratch/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
@@ -53,6 +53,7 @@ in context on every turn, so keep this list short.
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, config, consumers, third-party calls | Validation at the edge, no guards inside |
 | [tdd-node-api](skills/tdd-node-api/SKILL.md) | Test-first backend work | Seams, red-green loop, three anti-patterns |
+| [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths after a merge, rebase, cherry-pick, revert, or stash pop | Traces both sides, resolves hunk by hunk, finishes the operation |
 
 ### User-invoked
 
@@ -65,6 +66,11 @@ Only fire when typed. Zero context cost.
 | [grill-me](skills/grill-me/SKILL.md) | `/grill-me` | Interview until the design has no open branches |
 | [architect](skills/architect/SKILL.md) | `/architect` | Types and module shape before implementation |
 | [handoff](skills/handoff/SKILL.md) | `/handoff` | Compact this session for the next one |
+| [code-review](skills/code-review/SKILL.md) | `/code-review` | Diff against repo standards, plus a smell baseline |
+| [how](skills/how/SKILL.md) | `/how` | Subsystem walkthrough, and where new code belongs |
+| [why](skills/why/SKILL.md) | `/why` | Design rationale from git history and the rest of the record, evidence kept apart from inference |
+| [verify-app](skills/verify-app/SKILL.md) | `/verify-app` | Generates a project-local skill that drives this app |
+| [wayfinder](skills/wayfinder/SKILL.md) | `/wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
 
 ## Writing new skills
 

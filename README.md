@@ -44,12 +44,18 @@ That copies files into the current repo. Default to the global setup instead.
 
 ### Model-invoked
 
-These fire on their own when the description matches. Their descriptions sit
-in context on every turn, so keep this list short.
+These fire on their own when the description matches. What limits the list is
+not its length, it is conflict. Several of these firing at once is fine and
+often right, since `commit` shapes a commit and `plain-writing` shapes the
+words in it. What costs you is two skills claiming the same decision, because
+the agent picks one, reads a whole `SKILL.md`, and follows the wrong
+procedure. Add a skill when nothing here would contradict it.
 
 | Skill | Fires on | What it does |
 |---|---|---|
-| [plain-writing](skills/plain-writing/SKILL.md) | Any prose being written or edited | Strips AI tells, enforces plain language |
+| [plain-writing](skills/plain-writing/SKILL.md) | Any prose being written or edited | Strips AI tells, enforces plain language, gates code comments |
+| [commit](skills/commit/SKILL.md) | Finished changes sitting in the working tree | Stages one change, matches the repo's message convention, survives hooks |
+| [pr](skills/pr/SKILL.md) | A branch with commits ahead of its base | Resolves the base, writes title and body from the diff, creates or updates |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, config, consumers, third-party calls | Validation at the edge, no guards inside |
 | [tdd-node-api](skills/tdd-node-api/SKILL.md) | Test-first backend work | Seams, red-green loop, three anti-patterns |

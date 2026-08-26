@@ -71,7 +71,8 @@ def _scannable():
     cannot come back empty, so that failure mode is gone.
     """
     found = list(_walk_files())
-    kept = [f for f in found if f not in _gitignored(found)]
+    ignored = _gitignored(found)          # one subprocess for the whole batch
+    kept = [f for f in found if f not in ignored]
     if not kept:
         # Every file ignored means the rules belong to some enclosing repo,
         # not to this one. Scanning everything beats scanning nothing.
@@ -328,16 +329,23 @@ for name in dirs:
         # Three shapes name a moment to run in. Matching bare "when" or "if"
         # instead rejected ordinary English: "what to try if it happens again"
         # names no trigger, and an author had no way to write it.
-        TEMPORAL = r"before|when|while|during|whenever|after|upon|any ?time"
+        TEMPORAL = r"before|when|while|during|whenever|after|upon|any ?time|prior to"
+        VERB = r"run|call|type|invoke|use|apply|follow|start|trigger|execute|reach"
         trigger = "|".join((
             # opens with a condition: "Before shipping a change, ..."
             rf"^\s*(?:{TEMPORAL}|if|as soon as)\b",
             # says outright how to reach it
-            r"\b(?:use(?: this| it)?(?: when| for| before| after| while| whenever)"
+            rf"\b(?:use(?: this| it)?\s+(?:{TEMPORAL}|for)"
             r"|triggers? on|reach for|invoke|run this|apply(?: this)? when"
             r"|at the start of|on encountering)\b",
             # temporal word plus an activity: "before writing", "while planning"
             rf"\b(?:{TEMPORAL})\s+\w+ing\b",
+            # opens with an imperative and names a time: "Run before every
+            # release." Both halves are required, so "Find what a change could
+            # break" stays clean.
+            rf"^\s*(?:{VERB})\b.*\b(?:{TEMPORAL})\b",
+            # defers the verb: "the loop to follow when", "to be run prior to"
+            rf"\bto (?:be )?(?:{VERB})\w*\s+(?:\w+\s+)??(?:{TEMPORAL})\b",
         ))
         if re.search(trigger, desc, re.I):
             fail(f"{name}: user-invoked, but the description names a trigger condition",

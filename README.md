@@ -5,7 +5,9 @@ global skill directories. Nothing gets committed into working repos.
 
 ## Setup
 
-Clone once, somewhere permanent:
+Two steps. Both are needed on every machine.
+
+### 1. Clone and link
 
 ```bash
 git clone git@github.com:MewanAkoon/skills.git ~/Work/Personal/skills
@@ -13,11 +15,31 @@ cd ~/Work/Personal/skills
 ./link.sh
 ```
 
-`link.sh` symlinks every skill folder into each agent's global skill
-directory. Because they are symlinks, editing a file here takes effect
-immediately, and `git pull` updates every tool at once.
+`link.sh` symlinks every skill folder into Claude Code's and Cursor's global
+skill directories. Because they are symlinks, editing a file here takes effect
+immediately, and `git pull` updates both tools at once. It also drops links
+whose skill has been renamed or deleted.
 
-Re-run `link.sh` only after adding or renaming a skill.
+Re-run `link.sh` after adding, renaming, or removing a skill.
+
+### 2. Add the prose block to your global instructions
+
+Append this to `~/.claude/CLAUDE.md`, which Claude Code loads at the start of
+every session:
+
+```markdown
+# Prose
+Apply the plain-writing skill (`~/.claude/skills/plain-writing/SKILL.md`) to
+every piece of prose, chat replies included, before sending it.
+```
+
+A skill loads when something triggers it. Writing a commit message is a
+trigger, so `plain-writing` reaches commit messages and PR bodies from step 1
+alone. A plain chat reply is not a trigger, so nothing guarantees the
+description is consulted on that turn. This block is what closes that gap.
+
+Its own rules stay in `SKILL.md`, one copy. The block says only the thing the
+skill cannot make true about itself, that it always applies.
 
 ### Keeping working repos clean
 
@@ -29,23 +51,6 @@ safety net:
 printf '.claude/\n.cursor/skills/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
-
-### Always-on prose
-
-A skill loads when something triggers it. Writing a commit message is a
-trigger. A plain chat reply is not, so nothing guarantees the description is
-consulted on that turn. Close the gap in `~/.claude/CLAUDE.md`, which Claude
-Code loads at the start of every session:
-
-```markdown
-# Prose
-Apply the plain-writing skill (`~/.claude/skills/plain-writing/SKILL.md`) to
-every piece of prose, chat replies included, before sending it.
-```
-
-The skill's description already asks for chat replies. The block is what makes
-that reach a turn where nothing else would have loaded the skill. The rules stay
-in `SKILL.md`, one copy.
 
 ### Sharing one skill with a client team
 

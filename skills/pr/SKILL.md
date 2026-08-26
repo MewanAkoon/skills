@@ -71,9 +71,10 @@ git ls-remote --heads $REMOTE main master develop trunk
 Stop and tell the user when the current branch is that default branch,
 because a PR cannot be opened from it.
 
-End condition: `$REMOTE` is one of the names `git remote` printed, `$BASE`
-names a branch that remote actually has, and `$CURRENT_BRANCH` is not
-`$BASE`.
+End condition: `$REMOTE` is one of the names `git remote` printed and `$BASE`
+names a branch that remote actually has, or the run has stopped with its
+reason named, which is either no remote at all or a current branch that is
+already `$BASE`.
 
 ## 2. Check the state of things
 
@@ -90,6 +91,11 @@ mid-flight. Stop and say which one. `HEAD` is part way through the operation,
 so the diff you would describe is not the diff that will land, and a rebase
 still to finish rewrites every commit the PR would show. The
 `merge-conflicts` skill finishes the operation.
+
+An unmerged path in the first command's output stops the run the same way,
+even with no operation in flight, which is the state `git apply --3way`
+leaves behind. Its status codes are the ones carrying a `U`, plus `AA` and
+`DD`.
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
 be in the PR. Continue? (yes / no)". Stop on no.
@@ -115,8 +121,8 @@ Call the result `PR_DATA`.
   5, then create the PR in step 6.
 
 End condition: `PR_DATA` is on the record, or the run has stopped with its
-reason named, which is an operation in flight, a declined prompt, or no
-usable `gh`.
+reason named, which is an operation in flight, an unmerged path, a declined
+prompt, or no usable `gh`.
 
 ## 3. Read the diff
 
@@ -147,7 +153,9 @@ Above 20 files, or above roughly 500 changed lines, read it one directory or
 one package at a time and summarise per unit instead of per line.
 
 End condition: you can name what every changed file does in the change, or
-you have deliberately grouped it under a unit you can name.
+you have deliberately grouped it under a unit you can name, or the run has
+stopped because no commits are ahead of the base and there is nothing to open
+a PR for.
 
 ## 4. Pick the template
 
@@ -357,6 +365,7 @@ nothing was sent, or one of the two commands exited zero.
 
 Print the PR URL.
 
-End condition: `gh pr view --json state,title,url` returns the PR open, with
-the title step 5 drafted. A URL printed from memory proves nothing about what
-landed.
+End condition: `gh pr view --json state,title,url` returns the PR open, and
+its title is the one step 5 drafted, or the one it already carried when the
+user declined the update in step 7. A URL printed from memory proves nothing
+about what landed.

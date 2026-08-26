@@ -59,10 +59,23 @@ run to `merge-conflicts` and stop, because a plain `git commit` during a
 rebase leaves the rebase sitting unfinished. The two `rebase-` entries are
 directories that last the whole rebase, which `REBASE_HEAD` does not.
 
-End condition: the probe printed nothing and `git status --porcelain -uall`
+Then ask separately whether anything is unmerged, because a conflict can
+outlive its operation:
+
+```bash
+git diff --name-only --diff-filter=U
+```
+
+Hand the run to `merge-conflicts` for any path this lists too. `git add` on a
+conflicted path clears the unmerged flag without resolving a thing, so
+staging first and committing after puts the conflict markers into history and
+nothing later in this skill looks for them. `git apply --3way` is how you
+reach this state with the probe above still silent: it leaves unmerged paths
+and starts no operation at all.
+
+End condition: both checks printed nothing and `git status --porcelain -uall`
 printed at least one path, or the run has stopped with its reason named,
-which is either nothing to commit or an operation handed to
-`merge-conflicts`.
+which is either nothing to commit or work handed to `merge-conflicts`.
 
 ## 2. Stage the change
 
@@ -88,7 +101,9 @@ and commit them one at a time: stage the group, derive its scope, write its
 message, commit, then move to the next.
 
 End condition: every staged path belongs to the change named in the message
-you are about to write.
+you are about to write, or the run has stopped with the secret it found named,
+which is a `.env` file other than the example, or a `*.pem`, `*.key`, `id_rsa`
+or `credentials` path.
 
 ## 3. Match the repo's convention
 
@@ -126,8 +141,10 @@ conventional commits shape.
 Whichever shape you pick, step 5 supplies the length, the body rule, and the
 ending. Only the shape itself is decided here.
 
-End condition: the subject you draft matches the same pattern as most of the
-last 30 subjects.
+End condition: the subject you draft satisfies the commitlint config when the
+repo has one, and otherwise matches the same pattern as most of the last 30
+subjects. A repo that has just adopted commitlint has a history that
+disagrees with its own config, and the config wins.
 
 ## 4. Derive the scope
 
@@ -236,7 +253,9 @@ Step 7 reads both, so neither can be skipped here.
   as `chore(lint): apply auto-fixes`.
 
 End condition: `git status --porcelain -uall` returns nothing beyond the
-unstaged and untracked entries the step 6 snapshot held.
+unstaged and untracked entries the step 6 snapshot held, or the run has
+stopped on a hook failure that changed no files, with the hook output printed
+and the staged change left exactly as it was for the user to fix.
 
 ## 8. Push, when asked
 
@@ -269,14 +288,18 @@ default branch, say so and let the user confirm before pushing.
 
 No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
 
-End condition: no push was asked for and the step was skipped, or `git push`
-exited zero and `git rev-parse --abbrev-ref --symbolic-full-name '@{u}'` names
-a branch on `$REMOTE`.
+End condition: `git push` exited zero and `git rev-parse --abbrev-ref
+--symbolic-full-name '@{u}'` names a branch on `$REMOTE`, or the step was
+skipped with its reason named, which is either no push asked for or a push
+onto the default branch that the user declined.
 
 ## 9. Confirm
 
+Print one line per commit this run created, so a run that split three groups
+prints three and a run that added a hook fix-up in step 7 prints that too:
+
 ```bash
-git log --oneline -3
+git log --oneline -<commits this run created>
 ```
 
 End condition: every commit this run created is in that output, newest first,

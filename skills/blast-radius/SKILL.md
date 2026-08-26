@@ -62,8 +62,8 @@ one, and the worst one is usually not first.
 
 ## The confidence ladder
 
-Get every claim to level 2 at least. Get the one or two the change rests on to
-level 4, whatever it costs. Say where each one stopped.
+Get every claim to level 2 at least, and the one or two the change rests on to
+level 4. Say where each one stopped.
 
 1. **You said so.** Worthless alone. Never the final answer for the key fact.
 2. **You pointed at a line.** A real `file:line`, or the library's own

@@ -132,10 +132,12 @@ because a rule you know is a rule you do not trip over.
 Checked by `./check.sh`:
 
 1. No em dashes, en dashes, or horizontal bars, and no HTML entity that
-   renders as one, in any Markdown, YAML, or text file. `check.sh` skips
-   itself, because it carries those characters as data.
-2. No banned words and no filler phrases, outside the two files that define
-   the lists.
+   renders as one, in any Markdown, YAML, text, or shell file. `check.sh` is
+   exempt from this one rule alone, because it holds those characters as data
+   in order to search for them.
+2. No banned words and no filler phrases, outside the three files that quote
+   the lists in order to ban them: this file, `plain-writing/SKILL.md`, and
+   `check.sh`.
 3. The three opening headings, in order, and a skip condition somewhere in
    the second one.
 4. An attribution line on the last line of `SKILL.md`. The script warns here

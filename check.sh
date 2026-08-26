@@ -22,8 +22,9 @@ EN_DASH = "–"
 HORIZONTAL_BAR = "―"
 DASH_ENTITIES = ("&mdash;", "&#8212;", "&ndash;", "&#8211;")
 
-# Files whose subject matter is the banned patterns themselves.
-RULE_FILES = {"WRITING-RULES.md", "skills/plain-writing/SKILL.md"}
+# Files whose subject matter is the banned patterns themselves. They quote the
+# words in order to ban them, so the word check cannot apply to them.
+RULE_FILES = {"WRITING-RULES.md", "skills/plain-writing/SKILL.md", "check.sh"}
 
 failures = []
 warnings = []
@@ -37,7 +38,11 @@ def warn(msg):
     warnings.append(msg)
 
 
-EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt")
+EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt", ".sh")
+
+# This file holds the dash characters as data, so the dash rule cannot apply to
+# it either. Adding .sh above is what brings link.sh under both rules.
+DASH_EXEMPT = {"check.sh"}
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build"}
 
 
@@ -234,6 +239,8 @@ def banned_lists():
 print("== prose ==")
 
 for path in text_files():
+    if path in DASH_EXEMPT:
+        continue
     body = read(path)
     for name, ch in (("em dash", EM_DASH), ("en dash", EN_DASH),
                      ("horizontal bar", HORIZONTAL_BAR)):
@@ -359,8 +366,9 @@ for name in dirs:
 
     refs = os.path.join(REPO, rel, "references")
     if os.path.isdir(refs):
-        for root, _, names in os.walk(refs):
-            for n in sorted(names):
+        for root, subdirs, names in os.walk(refs):
+            subdirs[:] = [d for d in subdirs if not d.startswith(".")]
+            for n in sorted(n for n in names if not n.startswith(".")):
                 link = os.path.relpath(os.path.join(root, n), os.path.join(REPO, rel))
                 if not re.search(rf"\]\((?:\./)?{re.escape(link)}\)", body):
                     fail(f"{name}: {link} has no Markdown link in SKILL.md",

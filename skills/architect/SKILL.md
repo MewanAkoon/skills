@@ -1,6 +1,6 @@
 ---
 name: architect
-description: A design pass that settles types, signatures, and module shape as a sketch with empty bodies.
+description: A design pass that settles types, signatures, and module shape as a sketch with stub bodies.
 disable-model-invocation: true
 ---
 
@@ -81,10 +81,11 @@ Show the sketch. Say what it commits to, what it leaves open, and what the
 rejected alternative was, or one sentence saying why there was no real fork.
 
 Then ask one question about a specific detail in the sketch, something a reader
-could only answer having looked at it. An answer to that question is the
-approval.
+could only answer having looked at it. A decision in reply to that question is
+the approval.
 
-**Done when:** the user has answered that question.
+**Done when:** the user has answered that question with a decision. A question
+back, or "I don't know", means ask again rather than start.
 
 ## Phase 4: Implement
 

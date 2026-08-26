@@ -135,8 +135,8 @@ against the branch point rather than the working tree, because a commit empties
 Ask before committing. The user may want the change on a different branch.
 
 **Gate:** the new test runs and fails with the fix stashed, passes once it is
-restored,
-the full suite is green, and `git diff <branch-point>` shows no phase 4 logging.
+restored, the full suite is green, and `git diff <branch-point>` shows no phase
+4 logging.
 
 ---
 

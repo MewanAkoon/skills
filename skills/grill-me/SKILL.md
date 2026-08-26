@@ -68,8 +68,7 @@ Work through these, skipping the ones that do not apply:
 - **The actual goal.** What does the user of this see that they do not see
   now? If nothing, why build it.
 - **Data shape.** What is stored, in what form, and what is derived at read
-  time. Ask this second, right after the goal, because everything downstream
-  follows from it.
+  time. Everything downstream follows from it.
 - **Boundaries.** What comes in from outside, what goes out, and what is
   internal.
 - **Failure.** Every external call can fail. What happens for each one, and
@@ -89,8 +88,8 @@ Every area under "Question areas worth reaching" is either answered or written
 into the summary as not applying, with one sentence on why. That is the floor.
 Past it, stop when the remaining questions would not change the build.
 
-On "enough", stop there and write the summary immediately, listing every area
-you did not reach under "still open".
+When the user says they have had enough, stop there and write the summary
+immediately, listing every area you did not reach under "still open".
 
 Write the summary in chat: the decisions made, the options rejected and why, the
 decisions you made on the user's behalf, and anything still open. Short. It is a

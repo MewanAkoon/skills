@@ -15,6 +15,28 @@ DESTS=(
   "$HOME/.cursor/skills"   # Cursor
 )
 
+# Destinations this repo used to write to. Links are pruned from them, so a
+# machine set up before a tool was dropped does not keep loading every skill
+# into it. Dropping a destination from DESTS alone would leave the old links
+# working, updating on every git pull, with nothing reporting them.
+RETIRED=(
+  "$HOME/.agents/skills"
+)
+
+for OLD in "${RETIRED[@]}"; do
+  [ -d "$OLD" ] || continue
+  for link in "$OLD"/*; do
+    [ -L "$link" ] || continue
+    case "$(readlink "$link")" in
+      "$REPO"/skills/*)
+        rm "$link"
+        echo "removed retired $(basename "$link") from $OLD"
+        ;;
+    esac
+  done
+  rmdir "$OLD" 2>/dev/null && echo "removed empty $OLD" || true
+done
+
 for DEST in "${DESTS[@]}"; do
   if [ -L "$DEST" ] && [[ "$(readlink -f "$DEST")" == "$REPO"* ]]; then
     echo "error: $DEST is a symlink back into this repo. Remove it and re-run." >&2

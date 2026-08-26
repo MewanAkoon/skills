@@ -63,7 +63,7 @@ work, and the symlinks live under `$HOME`. Nothing lands in a project. As a
 safety net:
 
 ```bash
-printf '.claude/\n.cursor/skills/\n.skills.json\n' >> ~/.gitignore_global
+printf '.claude/\n.cursor/skills/\n.agents/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
@@ -108,7 +108,8 @@ Only fire when typed. Zero context cost.
 Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
-Run `./check.sh` before committing. It needs `python3`, which ships with macOS.
+Run `./check.sh` before committing. It needs `python3`, which macOS provides
+once Command Line Tools are installed.
 It enforces items 1 to 9 of the list at the end of `WRITING-RULES.md`, which is
 the mechanical half, and it derives its banned-word list from
 `plain-writing/SKILL.md` so the two cannot drift apart. Items 10 to 13 are

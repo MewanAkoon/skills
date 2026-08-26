@@ -19,6 +19,9 @@ Finished means the branch is reviewable, not that every commit has landed.
 Skip it while commits are still going onto the branch, and when the branch
 already has an open PR whose description still matches the diff.
 
+Skip it too while a merge, rebase, cherry-pick, or revert is in progress.
+Step 2 says how to spot one.
+
 ## How to use it
 
 Nothing to invoke. Type `/pr` to force a run, or `/pr draft` to open it as a
@@ -72,9 +75,17 @@ because a PR cannot be opened from it.
 
 ```bash
 git status --porcelain -uall
+ls "$(git rev-parse --git-dir)" \
+  | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
 gh auth status
 git remote get-url $REMOTE
 ```
+
+A hit on the second command means a merge, rebase, cherry-pick, or revert is
+mid-flight. Stop and say which one. `HEAD` is part way through the operation,
+so the diff you would describe is not the diff that will land, and a rebase
+still to finish rewrites every commit the PR would show. The
+`merge-conflicts` skill finishes the operation.
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
 be in the PR. Continue? (yes / no)". Stop on no.
@@ -98,6 +109,9 @@ Call the result `PR_DATA`.
   base branch for this PR? (default: <resolved default>)" and take their
   answer, or the resolved default on an empty reply. Work through steps 3 to
   5, then create the PR in step 6.
+
+End condition: the in-progress probe printed nothing, and either `PR_DATA` is
+on the record or the run has stopped with a reason.
 
 ## 3. Read the diff
 

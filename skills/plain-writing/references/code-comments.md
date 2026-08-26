@@ -73,19 +73,20 @@ cannot open, drop the marker and keep the reason behind it. Where it does not,
 leave the line alone.
 
 ```bash
-{ git diff -z --name-only --diff-filter=d HEAD
-  git ls-files -z --others --exclude-standard; } \
+git diff -z --name-only --diff-filter=d HEAD \
   | xargs -0 -r grep -nIiE \
     "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}"
 ```
 
-The two commands cover the two halves of a change. The first lists tracked
-files you edited, and `--diff-filter=d` drops the ones you deleted so grep is
-never handed a path that no longer exists. The second lists new files, which
-`git diff` never shows, so a change made entirely of new files still gets
-swept. `--exclude-standard` keeps gitignored paths out. The `-z` and `-0`
-pair carries filenames with spaces through intact, `-I` skips binaries, and
-`-r` stays quiet when there is nothing to grep.
+`git diff HEAD` covers both halves of a change: tracked files you edited, and
+new files you have already staged. `--diff-filter=d` drops the ones you
+deleted so grep is never handed a path that no longer exists. The `-z` and
+`-0` pair carries filenames with spaces through intact, `-I` skips binaries,
+and `-r` stays quiet when there is nothing to grep.
+
+Stage the change before sweeping, or name the new paths yourself. An unstaged
+new file is indistinguishable from someone's unrelated scratch file, so
+asking git for every untracked path sweeps files this change never touched.
 
 Pass the paths yourself instead when the comments are already committed.
 

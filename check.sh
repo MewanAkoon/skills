@@ -11,6 +11,7 @@ A shell version silently skipped those and still printed a pass.
 
 import os
 import re
+import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.realpath(__file__))
@@ -36,16 +37,44 @@ def warn(msg):
     warnings.append(msg)
 
 
+EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt")
+SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build"}
+
+
+def _walk_files():
+    for root, dirs, names in os.walk(REPO):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for n in sorted(names):
+            yield os.path.relpath(os.path.join(root, n), REPO)
+
+
+def _git_files():
+    """Tracked files plus new ones, minus anything .gitignore excludes.
+
+    Without this the scan reaches node_modules, which .gitignore lists, and
+    every dependency README becomes a failure the user cannot fix.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            cwd=REPO, capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [f for f in out.decode("utf-8", "replace").split("\0") if f]
+
+
+_FILES = _git_files()
+
+
 def text_files():
     """Every file worth scanning for prose violations, symlinks excluded."""
-    exts = (".md", ".markdown", ".yaml", ".yml", ".txt")
-    for root, dirs, names in os.walk(REPO):
-        dirs[:] = [d for d in dirs if d != ".git"]
-        for n in sorted(names):
-            if n.lower().endswith(exts):
-                p = os.path.join(root, n)
-                if not os.path.islink(p):
-                    yield os.path.relpath(p, REPO)
+    names = _FILES if _FILES is not None else list(_walk_files())
+    for rel in sorted(names):
+        if not rel.lower().endswith(EXTS):
+            continue
+        full = os.path.join(REPO, rel)
+        if os.path.isfile(full) and not os.path.islink(full):
+            yield rel
 
 
 def read(path):
@@ -278,8 +307,10 @@ for name in dirs:
         for root, _, names in os.walk(refs):
             for n in sorted(names):
                 link = os.path.relpath(os.path.join(root, n), os.path.join(REPO, rel))
-                if link not in body:
-                    fail(f"{name}: {link} is not linked from SKILL.md")
+                if not re.search(rf"\]\((?:\./)?{re.escape(link)}\)", body):
+                    fail(f"{name}: {link} has no Markdown link in SKILL.md",
+                         [f"Mentioning the path is not enough. Link it as "
+                          f"[...]({link}) with a line saying when to read it."])
 
 # -------------------------------------------------------- context budget
 

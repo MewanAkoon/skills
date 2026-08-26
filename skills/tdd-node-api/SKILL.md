@@ -42,8 +42,8 @@ service the choices are:
 | HTTP route | Supertest against the Express or Nest app | Status codes, validation, auth, serialization |
 | Repository | Call the repo against a real Mongo instance | Query shape, indexes, aggregation results |
 
-Ask: "Which seam should this test live at?" Wait for the answer, then write it
-at the top of the test file as a comment, so the next cycle can read it back.
+Ask: "Which seam should this test live at?" Wait for the answer, then say it
+back in one sentence naming the seam and what you will call through.
 
 Before answering for them, read
 [references/mocking.md](references/mocking.md): the repository seam is cheaper
@@ -52,13 +52,15 @@ than it looks, because an in-memory Mongo starts in a couple of seconds.
 You cannot test everything. Agreeing the seam up front puts the effort on the
 critical path instead of spreading it thin across every edge case.
 
-**Done when:** the seam is a comment at the top of the test file.
+**Done when:** the user has named one of the three seams and you have repeated
+it back.
 
 ## Step 2: Write one failing test
 
 Create the function first, with an empty body and a real signature, so the run
 reaches your assertion instead of dying on a missing import. Then write exactly
-one test. Run it. Confirm it fails on the assertion you wrote, not on a setup
+one test, with the seam from step 1 as a comment on the first line of the test
+file, so the next cycle can read it back. Run it. Confirm it fails on the assertion you wrote, not on a setup
 error. Read the failure message to check.
 
 A good test reads like a statement of a capability. "rejects a checkout when

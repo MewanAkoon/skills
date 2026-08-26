@@ -111,9 +111,17 @@ Turn the phase 1 reproduction into a permanent test in the suite. Give it a
 name that says what broke, so the next person who breaks it knows what they
 did.
 
-Before committing anything, stash the phase 5 fix, run the new test, and watch
-it fail. Restore the fix and watch it pass. That is the only moment the test
-proves it catches this bug.
+Before committing anything, prove the test catches the bug. Stash only the
+files you changed in phase 5, by naming them:
+
+```bash
+git stash push -- src/path/you/fixed.ts
+```
+
+A bare `git stash` would take the new test with the fix, and a run with no test
+present reports nothing to do, which reads like a pass. With the fix stashed and
+the test still on disk, run the test and watch it fail. Then `git stash pop` and
+watch it pass.
 
 Run the full suite. Then remove the temporary logging from phase 4, and diff
 against the branch point rather than the working tree, because a commit empties
@@ -121,7 +129,8 @@ against the branch point rather than the working tree, because a commit empties
 
 Ask before committing. The user may want the change on a different branch.
 
-**Gate:** the new test fails with the fix stashed and passes with it restored,
+**Gate:** the new test runs and fails with the fix stashed, passes once it is
+restored,
 the full suite is green, and `git diff <branch-point>` shows no phase 4 logging.
 
 ---

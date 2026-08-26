@@ -26,25 +26,38 @@ draft.
 
 ---
 
-## 1. Resolve the base branch
+## 1. Resolve the remote and the base branch
 
 ```bash
 git rev-parse --abbrev-ref HEAD
-git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||'
+git remote
+git for-each-ref --format='%(upstream:remotename)' "$(git symbolic-ref -q HEAD)"
 ```
 
-`$BASE` and `$CURRENT_BRANCH` below stand for the two names these print.
-Substitute the real names into every later command, because a shell variable
-set in one command does not survive into the next one.
+The third command names the remote this branch already tracks. Take it when
+it prints something. Otherwise take `origin` when `git remote` lists it, or
+the only name listed when there is exactly one. Ask the user which to use
+when several are listed and none is `origin`. Stop when `git remote` lists
+nothing at all, because there is nowhere to open a PR.
 
-When the second command prints nothing, ask the remote:
+Then the base branch:
 
 ```bash
-git remote show origin | sed -n '/HEAD branch/s/.*: //p'
+git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'
+```
+
+When that prints nothing, ask the remote itself:
+
+```bash
+git remote show $REMOTE | sed -n '/HEAD branch/s/.*: //p'
 ```
 
 When that fails too, use the first of `main`, `master`, `develop`, or `trunk`
 that exists on the remote.
+
+`$REMOTE`, `$BASE` and `$CURRENT_BRANCH` stand for the three names you just
+resolved. Substitute the real names into every later command, because a shell
+variable set in one command does not survive into the next one.
 
 Stop and tell the user when the current branch is that default branch,
 because a PR cannot be opened from it.
@@ -54,7 +67,7 @@ because a PR cannot be opened from it.
 ```bash
 git status --porcelain -uall
 gh auth status
-git remote get-url origin
+git remote get-url $REMOTE
 ```
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
@@ -82,12 +95,12 @@ Call the result `PR_DATA`.
 ## 3. Read the diff
 
 ```bash
-git fetch origin $BASE
-git log --oneline origin/$BASE...HEAD
-git diff --stat origin/$BASE...HEAD
+git fetch $REMOTE $BASE
+git log --oneline $REMOTE/$BASE...HEAD
+git diff --stat $REMOTE/$BASE...HEAD
 ```
 
-The fetch matters. Comparing against a stale `origin/$BASE` describes a diff
+The fetch matters. Comparing against a stale `$REMOTE/$BASE` describes a diff
 that no longer exists.
 
 Stop and tell the user there is nothing to open a PR for when no commits are
@@ -96,7 +109,7 @@ ahead of the base.
 Read the full diff when the stat line shows 20 files or fewer:
 
 ```bash
-git diff origin/$BASE...HEAD
+git diff $REMOTE/$BASE...HEAD
 ```
 
 Above 20 files, or above roughly 500 changed lines, read it one directory or
@@ -222,7 +235,7 @@ the page.
 Push first when the branch has no upstream:
 
 ```bash
-git push -u origin $CURRENT_BRANCH
+git push -u $REMOTE $CURRENT_BRANCH
 ```
 
 Then create it. The single-quoted heredoc keeps backticks and special

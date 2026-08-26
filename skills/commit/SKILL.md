@@ -206,17 +206,25 @@ Only on `/commit push` or a direct request.
 
 ```bash
 git rev-parse --abbrev-ref HEAD
-git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||'
+git remote
+git for-each-ref --format='%(upstream:remotename)' "$(git symbolic-ref -q HEAD)"
 git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null
 ```
 
-When the second command prints nothing, fall back to the first of `main`,
-`master`, `develop`, or `trunk` that exists on the remote.
+`$REMOTE` is what the third command prints, or `origin` when `git remote`
+lists it, or the only name it lists. Then read the default branch:
+
+```bash
+git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'
+```
+
+When that prints nothing, fall back to the first of `main`, `master`,
+`develop`, or `trunk` that exists on the remote.
 
 Push when the current branch is not that default branch. When it is the
 default branch, say so and let the user confirm before pushing.
 
-No upstream means `git push -u origin <branch>`. Otherwise `git push`.
+No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
 
 ## 9. Confirm
 

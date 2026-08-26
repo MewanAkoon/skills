@@ -52,8 +52,8 @@ phase 2 ends on a compile.
 
 Cover:
 
-- The domain types, with the `ts-types` rules applied. Model the variants,
-  brand the ids, make the impossible state unwritable.
+- The domain types, with the [ts-types](../ts-types/SKILL.md) rules applied.
+  Model the variants, brand the ids, make the impossible state unwritable.
 - Every function signature at the new boundary, with real parameter and
   return types.
 - Where each piece lives, and which module owns it.

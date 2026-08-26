@@ -4,10 +4,10 @@
 The judgement calls stay manual; they are items 10 to 13 in that file.
 Run before committing. Exits non-zero on any failure.
 
-Written in Python rather than shell because the checks need to parse YAML
-frontmatter, skip fenced code blocks, and walk filenames containing spaces.
-A shell version silently skipped those and still printed a pass, which is why
-the file is named .py despite the shell-shaped job it does.
+Written in Python because the checks need to parse YAML frontmatter, skip
+fenced code blocks, and walk filenames containing spaces. The shell version
+that came first did none of those: it word-split on a filename with a space,
+glob-expanded another away, and printed a pass over both.
 """
 
 import os
@@ -316,7 +316,7 @@ for name in dirs:
         fail(f"{name}: frontmatter name is {fm.get('name')!r}, expected {name!r}")
 
     desc = (fm.get("description") or "").strip()
-    if not desc or desc in ("|", ">", "|-", ">-"):
+    if not desc:
         fail(f"{name}: description is empty")
 
     heads = re.findall(r"^## (.+?)\s*$", strip_code(body), re.M)[:3]

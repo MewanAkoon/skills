@@ -62,9 +62,10 @@ back, and the already-failing tests are written down.
 ## Step 2: Write one failing test
 
 Create the function first, with a real signature and a body of
-`throw new Error("not implemented")`, so the run reaches your assertion instead
-of dying on a missing import. An empty body fails to compile once the return
-type is anything but `void`, the same way it does in `architect` phase 2. Then write exactly
+`throw new Error("not implemented")`, so the run reaches your assertion
+instead of dying on a missing import. An empty body fails to compile once the
+return type is anything but `void`, the same way it does in `architect`
+phase 2. Then write exactly
 one test, with the seam from step 1 as a comment on the first line of the test
 file, so the next cycle can read it back.
 

@@ -52,7 +52,7 @@ every piece of prose, chat replies included, before sending it.
 The rules themselves stay in `SKILL.md`, one copy. Each block says only the
 thing the skill cannot make true about itself, that it always applies.
 
-`./check.sh` warns when the Claude Code file is missing the block. It never
+`./check.py` warns when the Claude Code file is missing the block. It never
 fails on it, because the file is per machine and lives outside the repo. It
 cannot see Cursor's user rules at all, so that half is on you.
 
@@ -108,7 +108,7 @@ Only fire when typed. Zero context cost.
 Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
-Run `./check.sh` before committing. It needs `python3`, which macOS provides
+Run `./check.py` before committing. It needs `python3`, which macOS provides
 once Command Line Tools are installed.
 It enforces items 1 to 9 of the list at the end of `WRITING-RULES.md`, which is
 the mechanical half, and it derives its banned-word list from

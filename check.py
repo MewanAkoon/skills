@@ -6,7 +6,8 @@ Run before committing. Exits non-zero on any failure.
 
 Written in Python rather than shell because the checks need to parse YAML
 frontmatter, skip fenced code blocks, and walk filenames containing spaces.
-A shell version silently skipped those and still printed a pass.
+A shell version silently skipped those and still printed a pass, which is why
+the file is named .py despite the shell-shaped job it does.
 """
 
 import os
@@ -15,6 +16,7 @@ import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.realpath(__file__))
+SELF = os.path.basename(os.path.realpath(__file__))
 os.chdir(REPO)
 
 EM_DASH = "—"
@@ -24,7 +26,7 @@ DASH_ENTITIES = ("&mdash;", "&#8212;", "&ndash;", "&#8211;")
 
 # Files whose subject matter is the banned patterns themselves. They quote the
 # words in order to ban them, so the word check cannot apply to them.
-RULE_FILES = {"WRITING-RULES.md", "skills/plain-writing/SKILL.md", "check.sh"}
+RULE_FILES = {"WRITING-RULES.md", "skills/plain-writing/SKILL.md", SELF}
 
 failures = []
 warnings = []
@@ -38,11 +40,11 @@ def warn(msg):
     warnings.append(msg)
 
 
-EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt", ".sh")
+EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt", ".sh", ".py")
 
 # This file holds the dash characters as data, so the dash rule cannot apply to
 # it either. Adding .sh above is what brings link.sh under both rules.
-DASH_EXEMPT = {"check.sh"}
+DASH_EXEMPT = {SELF}
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build"}
 
 
@@ -209,7 +211,7 @@ def banned_lists():
     phrases_raw = grab("Delete these phrases:")
     filler_raw = grab("Delete chatbot filler:")
     if not all((words_raw, phrases_raw, filler_raw)):
-        fail("check.sh cannot find the banned lists in plain-writing/SKILL.md",
+        fail(f"{SELF} cannot find the banned lists in plain-writing/SKILL.md",
              ["Its wording changed. Update banned_lists() so the two stay in sync."])
         return [], []
 

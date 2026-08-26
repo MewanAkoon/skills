@@ -123,21 +123,21 @@ upstream and you will not remember which files were yours.
 
 ## Before committing
 
-Every rule below still holds whether or not you run the script. `./check.sh`
+Every rule below still holds whether or not you run the script. `./check.py`
 exits non-zero on the first group, apart from item 4 which warns, so you do not
 have to hold those in your head. Nothing runs it for you: there is no commit
 hook, and adding one is your call. Read the rules anyway before writing,
 because a rule you know is a rule you do not trip over.
 
-Checked by `./check.sh`:
+Checked by `./check.py`:
 
 1. No em dashes, en dashes, or horizontal bars, and no HTML entity that
-   renders as one, in any Markdown, YAML, text, or shell file. `check.sh` is
-   exempt from this one rule alone, because it holds those characters as data
-   in order to search for them.
+   renders as one, in any Markdown, YAML, text, shell, or Python file.
+   `check.py` is exempt from the dash and word rules alone, because it holds
+   both lists as data in order to search for them.
 2. No banned words and no filler phrases, outside the three files that quote
    the lists in order to ban them: this file, `plain-writing/SKILL.md`, and
-   `check.sh`.
+   `check.py`.
 3. The three opening headings, in order, and a skip condition somewhere in
    the second one.
 4. An attribution line on the last line of `SKILL.md`. The script warns here

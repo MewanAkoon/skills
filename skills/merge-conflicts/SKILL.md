@@ -58,8 +58,9 @@ revert, and stash pop, `--ours` is where you already are. In a rebase,
 `--ours` is the upstream being replayed onto and `--theirs` is your own
 commit. Confirm against the commits before trusting either word.
 
-**Done when:** the operation is named, the unmerged paths are listed, and
-each side is tied to a real branch, commit, or stash entry.
+**Done when:** the operation is named, or recorded as none for a bare
+`git apply --3way`, the unmerged paths are listed, and each side is tied to a
+real branch, commit, stash entry, or patch file.
 
 ## Step 2: Trace each side
 
@@ -83,11 +84,13 @@ keeps its ref in `REVERT_HEAD`, which is why that name is in the list.
 Read `$OTHER` back before running the log commands. An empty value means the
 four `cat` reads all failed, and `HEAD...` with nothing after it compares
 HEAD to itself and prints nothing at all. Stop there and name the operation
-from step 1, unless it is one of the two that keep no such ref.
+from step 1, unless it is one of the three that keep no such ref.
 
-A stash pop is the first: the other side is `stash@{0}`. An applied patch is
-the second, because `git am` records no commit to compare against. Its other
-side is the patch, so read that instead of the log commands and then carry on
+A stash pop is the first: the other side is `stash@{0}`.
+
+An applied patch is the second and the third, because neither `git am` nor
+`git apply --3way` records a commit to compare against. In both the other
+side is the patch. `git am` keeps a copy, so read it from there and carry on
 to step 3:
 
 ```bash
@@ -95,12 +98,17 @@ cat "$GITDIR"/rebase-apply/info     # author, subject, date
 cat "$GITDIR"/rebase-apply/patch    # what it changes
 ```
 
+`git apply --3way` keeps no copy and starts no operation, so `git status`
+names none. Ask the user which patch file they applied, read that, and say on
+the record that the other side came from the user rather than from git.
+
 Where a commit subject carries a PR or an issue number, read it with
 `gh pr view <n>` or `gh issue view <n>`.
 
-**Done when:** `$OTHER` names a real commit or the operation is a stash pop,
-and for every unmerged path you can say in one sentence what each side was
-trying to do.
+**Done when:** `$OTHER` names a real commit, or the operation is one of the
+three that keep no such ref and its other side has been read the way this
+step describes, and for every unmerged path you can say in one sentence what
+each side was trying to do.
 
 ## Step 3: Resolve each hunk
 
@@ -177,6 +185,9 @@ rebase or a cherry-pick needs its own continue rather than a fresh
 
 A rebase stops again on the next commit. Repeat from step 1 until it runs
 out.
+
+A bare `git apply --3way` started no operation, so there is nothing to
+continue. Stage the resolved files and commit them as an ordinary change.
 
 A stash pop has no continue. Stage the resolved files, confirm the working
 tree holds what you want, then drop the entry git kept:

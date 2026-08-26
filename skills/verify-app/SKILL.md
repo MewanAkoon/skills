@@ -73,7 +73,8 @@ A skill written against an app you never started teaches steps that do not
 work.
 
 **Done when:** the app started, one request or one command got a real
-response, and the teardown command stopped it.
+response, and the teardown command stopped it, or the run has stopped with
+the build failure named and nothing written to disk.
 
 ## Step 3: Write the skill
 

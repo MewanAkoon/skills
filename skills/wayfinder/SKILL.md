@@ -137,7 +137,8 @@ step on it.
 question from step 2 is either a ticket file or a line under "not yet
 specified", every ticket's blocked-by line names tickets that exist or says
 none, every research ticket created in step 4 is closed with its answer, and
-at least one ticket is takeable.
+at least one ticket is takeable. Or step 2 turned up no fog, in which case
+nothing is written and the run has said the effort fits in one session.
 
 ## Mode 2: work the map
 

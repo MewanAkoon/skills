@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+
+# The setup in README.md has you ignore .claude/ globally, to keep skill
+# symlinks out of working repos. This repo commits .claude/rules/, so
+# un-ignore it here.
+!.claude/

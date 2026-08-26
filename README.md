@@ -83,6 +83,25 @@ Only fire when typed. Zero context cost.
 Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
+Run the checker before committing:
+
+```bash
+./scripts/check.sh
+```
+
+It verifies the invariants that are easy to get wrong: the frontmatter name
+matches the directory, a user-invoked skill carries both halves of its
+invocation pair, every skill has a README row under the right heading, the
+model-invoked set is still five or fewer, and no markdown file has an em
+dash. CI runs the same script on every push.
+
+## Instructions for agents
+
+[AGENTS.md](AGENTS.md) holds the rules for any agent working in this repo.
+Cursor and Codex read it directly. Claude Code reads [CLAUDE.md](CLAUDE.md),
+which imports it. Both `.cursor/rules/` and `.claude/rules/` carry one rule
+that fires on `skills/**` and sends the agent to WRITING-RULES.md.
+
 ## Attribution
 
 Skills here are adapted from two MIT-licensed repos. Each file names its

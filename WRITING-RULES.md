@@ -66,8 +66,8 @@ conflicting instructions. When you find one, narrow the new description until
 they no longer collide, move the overlapping part into the existing skill's
 `references/`, or demote something.
 
-Note that `disable-model-invocation` is a Claude Code field and the YAML is a
-Codex file. An agent that reads neither will treat the skill as
+Claude Code and Cursor both read `disable-model-invocation`, and the YAML is
+for Codex. An agent that reads neither will treat the skill as
 model-invoked. So for anything that must not auto-fire, also keep the
 description free of trigger phrases. The flag alone is not a guarantee.
 
@@ -145,13 +145,19 @@ you will not remember which files were yours.
 
 ## Before committing
 
+Run `./scripts/check.sh`. It covers the mechanical half: the frontmatter name
+matches the directory, the invocation pair is consistent, the README table has
+a row under the right heading, the model-invoked set is still five or fewer,
+and no markdown file has an em dash.
+
+Then read the skill back and check the half no script can:
+
 1. The description would fire on a real prompt you would actually type.
 2. Every step has a checkable end condition that admits every ending the step
    has, stops included, or the skill is pure reference and has no steps.
 3. No sentence states a default the model already follows.
 4. Reference material that only some runs need is in `references/`.
-5. No em dashes, no filler, no banned words.
-6. The README table has a row for it.
+5. No filler, no banned words.
 
 ## After committing
 

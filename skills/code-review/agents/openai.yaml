@@ -1,0 +1,5 @@
+interface:
+  display_name: "Code review"
+  short_description: "Review a diff against repo standards"
+policy:
+  allow_implicit_invocation: false

@@ -71,7 +71,9 @@ before you write the thing. If the call site is awkward, the interface is
 wrong, and you found out in thirty seconds instead of after the
 implementation.
 
-**Done when:** the sketch compiles, with no implementation in it.
+**Done when:** the typecheck command from phase 1 passes on the sketch, with
+no implementation in it. Use that command, not a bare `tsc`, which picks up
+the root config and reports errors from packages you have not touched.
 
 ## Phase 3: Agree
 
@@ -92,7 +94,7 @@ command named in phase 1 after each one.
 Do not change a signature quietly. If a signature is wrong, stop and go to
 phase 5.
 
-**Done when:** every body is filled and the typecheck passes.
+**Done when:** every body is filled and the phase 1 typecheck command passes.
 
 ## Phase 5: Scrap when it is wrong
 

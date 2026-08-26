@@ -335,10 +335,20 @@ for name in dirs:
                     r"^\s+allow_implicit_invocation:\s*false\s*$", policy.group(1), re.M):
                 fail(f"{name}: openai.yaml does not set "
                      f"policy.allow_implicit_invocation: false")
-        trigger = (r"\buse when\b|\buse this when\b|\buse it when\b|\btriggers on\b"
-                   r"|\breach for\b|\bbefore\b|\bwhen\b|\bwhile\b|\bduring\b"
-                   r"|\bwhenever\b|\bany ?time\b|\bupon\b|\bas soon as\b|\bafter\b"
-                   r"|\bat the start of\b|\bon encountering\b|\bif\b")
+        # Three shapes name a moment to run in. Matching bare "when" or "if"
+        # instead rejected ordinary English: "what to try if it happens again"
+        # names no trigger, and an author had no way to write it.
+        TEMPORAL = r"before|when|while|during|whenever|after|upon|any ?time"
+        trigger = "|".join((
+            # opens with a condition: "Before shipping a change, ..."
+            rf"^\s*(?:{TEMPORAL}|if|as soon as)\b",
+            # says outright how to reach it
+            r"\b(?:use(?: this| it)?(?: when| for| before| after| while| whenever)"
+            r"|triggers? on|reach for|invoke|run this|apply(?: this)? when"
+            r"|at the start of|on encountering)\b",
+            # temporal word plus an activity: "before writing", "while planning"
+            rf"\b(?:{TEMPORAL})\s+\w+ing\b",
+        ))
         if re.search(trigger, desc, re.I):
             fail(f"{name}: user-invoked, but the description names a trigger condition",
                  [desc,

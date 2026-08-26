@@ -20,6 +20,10 @@ on every route, a shared type, an env var, a database index.
 
 Also useful on a diff someone else wrote that you do not trust yet.
 
+Skip it for a change whose every caller is in the diff you are already looking
+at. If grep for the symbol returns only lines you just wrote, there is no blast
+radius to find.
+
 ## How to use it
 
 Type `/blast-radius` with the change described, or point it at a diff or a
@@ -38,10 +42,28 @@ all together is actually true.
 So do not hand back the writeup. Find the one or two facts the change's
 safety depends on and prove those by running something.
 
+## How to work through it
+
+Read "Where to look", "The confidence ladder" and "Output" below before you
+start step 1. Each step depends on one of them.
+
+1. List what the change touches, then list what else reads or writes the same
+   thing. Grep gives you the direct callers. Walk every category under "Where
+   to look" for the rest, because grep finds none of those.
+2. Write one sentence per item saying why it breaks or why it is safe. One
+   sentence, so a weak claim has nowhere to hide.
+3. Name the one or two claims the change's safety actually rests on. Take
+   those to level 4 on the ladder below by running something.
+4. Write the report in the shape under "Output".
+
+Finish step 1 before starting step 3. Reaching for evidence while the list is
+still growing puts the effort into the first risk found rather than the worst
+one, and the worst one is usually not first.
+
 ## The confidence ladder
 
-For every claim that the change is safe, get the evidence as far down this
-list as is cheap, then say where it stopped.
+Get every claim to level 2 at least. Get the one or two the change rests on to
+level 4, whatever it costs. Say where each one stopped.
 
 1. **You said so.** Worthless alone. Never the final answer for the key fact.
 2. **You pointed at a line.** A real `file:line`, or the library's own
@@ -80,8 +102,13 @@ Keep it short. For each risk:
 - Evidence level, 1 to 4
 - What would settle it, if it is below 4
 
-Then one line at the end: the single fact this change's safety rests on, and
-whether it is proven.
+Then one line at the end per fact the change's safety rests on, and whether
+each is proven.
+
+**Done when:** every risk carries a level of 2 or better, and each fact the
+change rests on is at level 4. When you could not reach level 4, the report
+names the exact command you could not run and the access you would need to run
+it. "It was expensive" does not close this gate.
 
 ---
 

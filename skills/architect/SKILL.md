@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Settle types, signatures, and module shape before writing any implementation.
+description: A design pass that settles types, signatures, and module shape as a sketch with empty bodies.
 disable-model-invocation: true
 ---
 
@@ -39,13 +39,16 @@ happens at each hop.
 Name what already exists that this change has to live alongside: existing
 types it must match, existing patterns in this codebase, existing callers.
 
-**Done when:** you can describe the current flow without reading the files
-again, and you have named the constraints the design has to satisfy.
+**Done when:** the trace is written out, one line per hop, each naming a
+`file:line`, and the constraints are a numbered list. Name the typecheck command
+for this repo here too, because phases 2 and 4 both end on it.
 
 ## Phase 2: Sketch
 
-Write the types and signatures. Bodies are `throw new Error("not
-implemented")` or a two-line comment of pseudocode.
+Write the types and signatures. Every body is `throw new Error("not
+implemented")`, with any pseudocode as a comment above the throw. A body that is
+only a comment does not compile once the return type is anything but `void`, and
+phase 2 ends on a compile.
 
 Cover:
 
@@ -73,17 +76,18 @@ implementation.
 ## Phase 3: Agree
 
 Show the sketch. Say what it commits to, what it leaves open, and what the
-rejected alternative was.
+rejected alternative was, or one sentence saying why there was no real fork.
 
-Wait for approval. Do not start implementing on a "looks good" that came
-before the user read it.
+Then ask one question about a specific detail in the sketch, something a reader
+could only answer having looked at it. An answer to that question is the
+approval.
 
-**Done when:** the user has approved this specific sketch.
+**Done when:** the user has answered that question.
 
 ## Phase 4: Implement
 
-Fill the bodies in, one at a time, against the agreed sketch. Run the
-typecheck after each one.
+Fill the bodies in, one at a time, against the agreed sketch. Run the typecheck
+command named in phase 1 after each one.
 
 Do not change a signature quietly. If a signature is wrong, stop and go to
 phase 5.
@@ -99,8 +103,8 @@ Do not bend the implementation around a bad sketch. A sketch that survives by
 being worked around is worse than no sketch, because the shape is now wrong
 and nobody said so.
 
-**Done when:** either the redesign is agreed, or the original sketch is
-confirmed as still correct.
+**Done when:** the redesign is agreed the same way phase 3 agreed the first
+one.
 
 ---
 

@@ -18,11 +18,15 @@ When you are switching from one AI tool to another mid-task. When a session
 has gone long and the context is getting thin. At the end of a work day on
 something unfinished. Before handing a branch to someone else.
 
+Skip it when the work is committed and the branch is green. A commit message
+and a clean diff already carry everything the next session needs.
+
 ## How to use it
 
-Type `/handoff`. Optionally say what the next session is for, which narrows
-what gets included. Paste the resulting document as the first message of the
-next session, or save it next to the branch.
+Type `/handoff`. Optionally say what the next session is for, which shortens
+the sections that do not serve it, and drops none of them. The document is
+printed in chat. Ask before writing it to a file, and take the path from the
+user, so nothing lands in their working repo uninvited.
 
 ---
 
@@ -34,7 +38,9 @@ Write these sections, in this order. Keep the whole thing under a page.
 would still make sense to someone who has not read anything else.
 
 **State.** What is done and works, what is done and untested, what is not
-started. Name real files and real functions, not "the auth stuff".
+started. Name real files and real functions, not "the auth stuff". Run the test
+suite before writing this, and put anything you did not watch pass under "done
+and untested".
 
 **Decisions made.** Each one as a line: what was decided and the reason.
 Include the options that were rejected. Without the reasons, the next session
@@ -63,19 +69,21 @@ Do not paste code that is already in the branch. Reference `file:line`
 instead. The next agent can read the repo, and pasted code goes stale the
 moment someone commits.
 
-Do not summarise the conversation. Nobody needs to know what order things
-were discussed in.
+Write the state the work is in, and leave out the story of how it got there.
+The next session does not need the order things were discussed in.
 
-Do not include reasoning that led nowhere and taught nothing. Dead ends are
-worth recording, wandering is not.
+Keep every approach you actually ran, in **Dead ends** above. Leave out the
+options that were only discussed and dropped without being tried. Running it is
+the test, not whether you judge that it taught you something.
 
 ## Checking it
 
-Read the document back and ask: if this were all I had, no chat history and
-no memory, could I do the next step?
+Name the first file you would open and the first command you would run to do
+the next step. If the document does not already contain both, it is not
+finished, so add them.
 
-If the answer needs anything from the session that is not written down, add
-it.
+**Done when:** all seven sections are present and non-empty, Next step names a
+file path, and State names real functions.
 
 ---
 

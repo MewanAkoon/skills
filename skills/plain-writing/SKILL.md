@@ -14,8 +14,11 @@ sentence shape, and structure.
 ## When it runs
 
 Automatically, whenever prose is being written or edited. That includes
-commit messages and PR descriptions, which people often forget count as
-prose.
+commit messages and PR descriptions, which people often forget count as prose.
+
+Skip it for text no human reads as prose: log lines, test fixture strings,
+generated output, and code identifiers. Renaming a variable called
+`enhanceOrder` is not this skill's business.
 
 ## How to use it
 
@@ -101,8 +104,16 @@ closers say nothing.
 
 ## Self-audit
 
-After writing, read it back and ask one question: what in here makes this
-obviously AI generated? Fix what that turns up before handing it over.
+After writing, make one pass per section above, in this order: punctuation,
+word choice, sentences, structure, named sources. One pass per section, because
+a single pass looking for everything at once finds the first problem in each
+paragraph and stops there.
+
+Search for the em dash character rather than reading for it. It is the tell
+that survives every other edit, because the sentence around it scans fine.
+
+Then ask the question the passes do not cover: what in here would make a
+reader say a machine wrote this? Fix that before handing the text over.
 
 ---
 

@@ -40,7 +40,8 @@ is the input to whatever you build next.
 **One question at a time.** A numbered list of eight questions gets three
 lazy answers. One question gets a real one.
 
-**Go depth-first.** Follow an answer into its consequences before moving to a
+**Go depth-first.** Ask the goal question first and the data shape question
+second. From there follow an answer into its consequences before moving to a
 new topic. An answer that opens two new questions means those two come next,
 not later.
 
@@ -52,9 +53,10 @@ variable names.
 is not an answer. Ask what the caller sees, what gets logged, and what
 happens to the half-finished work.
 
-**Propose when asked.** If the user says they do not know, give two concrete
-options with the trade-off, and let them pick. Do not stall on a question
-they cannot answer.
+**Decide when asked.** If the user says they do not know, name two concrete
+options with the trade-off. If they pick, take their pick. If they hand the
+decision back, choose one yourself and record the choice and the reason in the
+summary, so the question does not come back a second time.
 
 **Say when an answer contradicts an earlier one.** Quote both and ask which
 one holds.
@@ -66,8 +68,8 @@ Work through these, skipping the ones that do not apply:
 - **The actual goal.** What does the user of this see that they do not see
   now? If nothing, why build it.
 - **Data shape.** What is stored, in what form, and what is derived at read
-  time. Get this before anything else, because everything downstream follows
-  from it.
+  time. Ask this second, right after the goal, because everything downstream
+  follows from it.
 - **Boundaries.** What comes in from outside, what goes out, and what is
   internal.
 - **Failure.** Every external call can fail. What happens for each one, and
@@ -76,18 +78,26 @@ Work through these, skipping the ones that do not apply:
   Retries, duplicate webhooks, a double-clicked button.
 - **Existing data.** What happens to the records that already exist and do
   not match the new shape.
-- **Scope edges.** Name three things adjacent to this that you are choosing
-  not to build. Getting the "not this" list explicit prevents half of the
-  scope creep.
+- **Scope edges.** Name at least two things adjacent to this that you are
+  choosing not to build, and one sentence each on why they are out. Getting
+  the "not this" list explicit prevents half of the scope creep.
 - **Done.** What has to be true before you would call this finished.
 
 ## Ending
 
-Stop when the remaining questions are ones whose answers would not change the
-build.
+Every area under "Question areas worth reaching" is either answered or written
+into the summary as not applying, with one sentence on why. That is the floor.
+Past it, stop when the remaining questions would not change the build.
 
-Then write the summary: the decisions made, the options rejected and why, and
-anything still open. Short. It is a record, not a document.
+On "enough", stop there and write the summary immediately, listing every area
+you did not reach under "still open".
+
+Write the summary in chat: the decisions made, the options rejected and why, the
+decisions you made on the user's behalf, and anything still open. Short. It is a
+record, not a document.
+
+**Done when:** every question area is answered or recorded as not applying, and
+the summary is written.
 
 ---
 

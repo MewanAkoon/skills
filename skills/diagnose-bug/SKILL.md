@@ -40,8 +40,12 @@ Say out loud what the loop is and how long it takes to run. A loop that takes
 two minutes will get run three times. A loop that takes two seconds will get
 run fifty times, and that difference decides whether the rest of this works.
 
-If the bug will not reproduce, that is the whole problem right now. Add
-logging to the failing environment and go get a reproduction. Do not move on.
+If the bug will not reproduce, that is the whole problem right now. Add logging
+to the failing environment and go get a reproduction.
+
+After two rounds of logging with no reproduction, stop and hand back what the
+logging did show, plus the next instrumentation you would add. A bug you cannot
+trigger is not one you can fix from here.
 
 **Gate:** one command, run twice, fails both times, for this bug.
 
@@ -50,14 +54,17 @@ logging to the failing environment and go get a reproduction. Do not move on.
 Cut everything the failure does not need. Remove middleware, drop fields from
 the payload, replace the database call with a literal, delete branches.
 
+Make the cuts on a scratch branch or a copy, and keep a list of what you cut.
+Phase 5 changes the real code, and it should not arrive carrying phase 2's
+deletions.
+
 After each cut, run the loop. If it still fails, keep the cut. If it passes,
 put it back, and note what you just learned: the thing you removed is part of
 the cause.
 
 Stop when every remaining piece is load-bearing.
 
-**Gate:** the reproduction is small enough to read in one screen, and every
-line in it is needed.
+**Gate:** the reproduction is under 40 lines and every line in it is needed.
 
 ## Phase 3: Name a hypothesis
 
@@ -79,6 +86,9 @@ Read what came back. If it contradicts the hypothesis, go back to phase 3
 with what you learned. Do not adjust the hypothesis to fit and carry on. That
 is how a wrong theory survives three rounds of evidence.
 
+Output that is neither a confirmation nor a refutation sends you back to phase 3
+as well. Sharpen the observation until it can only come out one way.
+
 **Gate:** you have looked at real output from a real run, and it either
 confirms or kills the hypothesis.
 
@@ -89,7 +99,8 @@ Fix the thing the evidence pointed at, not the place the error surfaced.
 A null check where the crash happened is not a fix if the value was never
 supposed to be null. Trace back to where it became null and fix it there.
 
-Run the loop. It goes green.
+Run the loop. If it is still red, the evidence pointed at the wrong thing, so
+go back to phase 3 rather than patching until the red goes away.
 
 **Gate:** the loop passes and you can say, in one sentence, why the change
 makes it pass.
@@ -100,10 +111,18 @@ Turn the phase 1 reproduction into a permanent test in the suite. Give it a
 name that says what broke, so the next person who breaks it knows what they
 did.
 
-Run the full suite. Then remove the temporary logging from phase 4.
+Before committing anything, stash the phase 5 fix, run the new test, and watch
+it fail. Restore the fix and watch it pass. That is the only moment the test
+proves it catches this bug.
 
-**Gate:** a committed test that fails on the old code and passes on the new,
-the full suite green, and `git diff` showing no phase 4 logging left behind.
+Run the full suite. Then remove the temporary logging from phase 4, and diff
+against the branch point rather than the working tree, because a commit empties
+`git diff` and hides whatever went in with it.
+
+Ask before committing. The user may want the change on a different branch.
+
+**Gate:** the new test fails with the fix stashed and passes with it restored,
+the full suite is green, and `git diff <branch-point>` shows no phase 4 logging.
 
 ---
 

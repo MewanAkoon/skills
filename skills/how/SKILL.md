@@ -65,10 +65,15 @@ once per angle from step 1.
 Open the code at every hop. A file name and an import graph tell you what the
 author intended to build, not what runs.
 
-In this stack the hops usually run route or controller, validation, service,
-repository or Mongoose model, database, then whatever shapes the response.
+The hops are whatever layers this repo actually has, so read them off its
+directories and its imports rather than assuming. A request-handling stack
+usually runs entry point, input validation, business logic, data access, then
+whatever shapes the response, but the names and the count differ per repo.
 Note every place the path leaves the process: another service, a third-party
 API, a queue, a cache.
+
+To fork this for one repo, replace those generic layer names with the repo's
+real ones. A generic skill cannot know them. A fork can.
 
 **Done when:** every hop from trigger to stored or returned result is named
 with a `file:line`, and each hop says which function runs and what it does to

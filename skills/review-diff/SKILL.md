@@ -124,14 +124,19 @@ The smells are judgement calls. Label each one as a judgement call, and label
 a broken documented standard as a violation. The difference is what tells the
 reader which findings to argue with.
 
-In this stack, four things are worth a specific look:
+Four things are worth a specific look, each one where the diff has them:
 
-- Route handlers and NestJS controllers that trust their input. See the
+- Entry points that trust their input: route handlers, controllers,
+  middleware, message consumers, CLI argument parsing. See the
   `api-boundaries` skill for where the edge is.
-- `as` casts and `any` added by the diff. See the `ts-types` skill.
-- Mongoose queries inside a controller or a route handler rather than behind a
+- `as` casts and `any` added by the diff, in a TypeScript repo. See the
+  `ts-types` skill.
+- Database queries written inline in an entry point rather than behind a
   repository or a service.
 - New `await` inside a loop where the calls are independent.
+
+To fork this for one repo, name that repo's real frameworks in these four
+lines. A generic skill cannot know them. A fork can.
 
 **Done when:** every changed file has been opened in full, and each finding
 names the standard or the smell it came from.

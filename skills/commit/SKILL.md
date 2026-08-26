@@ -57,9 +57,10 @@ neither test.
 Stage files by name so the list is visible in the transcript. Reach for
 `git add -A` or `git add .` only after the user says to.
 
-Check each path before staging it. Stop and name the file when one matches
-`.env` and it is not `.env.example` or `.env.sample`, or when it matches
-`*.pem`, `*.key`, `id_rsa`, or `credentials`.
+Check each path before staging it. Stop and name the file when its name starts
+with `.env` and is neither `.env.example` nor `.env.sample`, so `.env.local`
+and `.env.production` both stop the run. Stop too when a path matches `*.pem`,
+`*.key`, `id_rsa`, or `credentials`.
 
 When the staged files cover unrelated concerns, name the groups to the user
 and commit them one at a time: stage the group, derive its scope, write its
@@ -74,11 +75,18 @@ Read what the repo already does:
 
 ```bash
 git log --oneline -30
-ls -a | grep -i commitlint || echo "no commitlint config"
-grep -l commitlint package.json 2>/dev/null || true
+ls -a "$(git rev-parse --show-toplevel)" | grep -i commitlint || echo "no config file"
+grep -o '"commitlint"[[:space:]]*:' "$(git rev-parse --show-toplevel)/package.json" \
+  2>/dev/null || echo "no commitlint key"
 ```
 
-A commitlint config wins. Follow it and skip the rest of this step.
+Both probes read the repo root, not the working directory, so they still find
+the config from inside a package of a monorepo. The second looks for a
+`commitlint` key rather than the word anywhere in the file, because a repo
+that installs `@commitlint/cli` as a dependency without configuring it has no
+rules to follow.
+
+A config file or that key wins. Follow it and skip the rest of this step.
 
 Otherwise read the last 30 subject lines and pick the shape most of them
 share:
@@ -120,8 +128,9 @@ src/auth/login.ts                   ->  auth
 `.github/workflows/` is the one exception to the rule, because `ci` is what
 everyone calls those files.
 
-Omit the scope when the prefix reduces to the repo root, which happens for
-root config files and for a change spanning several units.
+Omit the scope when nothing is left to name. That happens when every segment
+was a container, as for `src/lib/utils.ts`, and when the prefix reduces to the
+repo root, as for root config files and a change spanning several units.
 
 End condition: the scope names a directory that exists in the repo, or it is
 `ci`, or there is no scope.
@@ -188,7 +197,8 @@ first.
 ## 7. Handle what the hooks did
 
 - **Hook failed and files were modified.** The hook fixed things itself.
-  Re-stage those files and retry the commit once.
+  Re-stage only what changed since the step 6 snapshot, leaving anything the
+  snapshot already listed where it is, and retry the commit once.
 - **Hook failed and nothing was modified.** A real failure, such as a type
   error or a lint rule with no autofix. Print the hook output, stop, and tell
   the user what to fix. Do not retry.
@@ -212,7 +222,9 @@ git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null
 ```
 
 `$REMOTE` is what the third command prints, or `origin` when `git remote`
-lists it, or the only name it lists. Then read the default branch:
+lists it, or the only name it lists. It is a name to substitute into the
+commands below, not a shell variable, because a variable set in one command
+does not survive into the next one. Then read the default branch:
 
 ```bash
 git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'

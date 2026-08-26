@@ -35,7 +35,8 @@ git for-each-ref --format='%(upstream:remotename)' "$(git symbolic-ref -q HEAD)"
 ```
 
 The third command names the remote this branch already tracks. Take it when
-it prints something. Otherwise take `origin` when `git remote` lists it, or
+it prints something. Printing nothing also means the branch has no upstream,
+which is what step 6 needs to know. Otherwise take `origin` when `git remote` lists it, or
 the only name listed when there is exactly one. Ask the user which to use
 when several are listed and none is `origin`. Stop when `git remote` lists
 nothing at all, because there is nowhere to open a PR.
@@ -73,11 +74,12 @@ git remote get-url $REMOTE
 Uncommitted changes mean asking: "You have uncommitted changes that will not
 be in the PR. Continue? (yes / no)". Stop on no.
 
-When `gh` is missing, unauthenticated, or the remote is not GitHub, work
-through steps 3 to 5, print the title and body for the user to paste in
-themselves, and stop. Say plainly that you did not create anything.
+When `gh` is missing, unauthenticated, or the remote is not GitHub, skip the
+rest of this step, work through steps 3 to 5, print the title and body for the
+user to paste in themselves, and stop there. Say plainly that you did not
+create anything.
 
-Look for an existing PR in one call:
+Otherwise look for an existing PR in one call:
 
 ```bash
 gh pr view --json baseRefName,number,url,title,body,state 2>/dev/null || true
@@ -123,9 +125,12 @@ you have deliberately grouped it under a unit you can name.
 The repo's own template wins whenever one exists:
 
 ```bash
-find . -maxdepth 3 -ipath '*pull_request_template*' \
-  -not -path './.git/*' -not -path './node_modules/*'
+find "$(git rev-parse --show-toplevel)" -maxdepth 3 -ipath '*pull_request_template*' \
+  -not -path '*/.git/*' -not -path '*/node_modules/*'
 ```
+
+The search starts at the repo root so it still finds the template from inside
+a subdirectory.
 
 Found one? Fill in its sections and its checkboxes, keep its headings exactly
 as they are, and skip the body template in step 5. The title guidance in step
@@ -286,9 +291,11 @@ EOF
 )
 ```
 
-A non-zero exit here is usually a GraphQL deprecation. Fall back to REST,
-taking `number` from `PR_DATA`. Leave `{owner}` and `{repo}` as they are,
-because `gh api` fills them in from the current repo:
+A non-zero exit here is usually a GraphQL deprecation. Fall back to REST.
+Replace `{number}` with the number from `PR_DATA`, and leave `{owner}` and
+`{repo}` exactly as written. `gh api` fills in those two from the current repo
+and nothing else, so a literal `{number}` returns a 404 that looks like a
+missing PR:
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/{number} --method PATCH \

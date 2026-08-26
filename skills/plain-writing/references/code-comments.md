@@ -90,5 +90,8 @@ asking git for every untracked path sweeps files this change never touched.
 
 Pass the paths yourself instead when the comments are already committed.
 
-End condition: every hit has been read, and no comment in the files you
-touched still points at something outside the repo.
+End condition: the change's new files are staged, or their paths were handed
+to grep by name, and every hit has been read, and no comment in the files you
+touched still points at something outside the repo. An unstaged new file that
+was never named was never swept, so the first clause is the one that makes
+the last one true.

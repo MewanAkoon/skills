@@ -81,6 +81,11 @@ what the last cycle taught you.
 
 Refactoring happens after the loop, at review time, not inside it.
 
+**Done when:** the seam from step 1 does all the behaviour it was agreed to
+do, the whole suite is green, and every cycle added one test and only the code
+that turned it green. A cycle that added several tests at once, or code no
+test asked for, is the horizontal slicing named below.
+
 ---
 
 ## The three ways backend tests go wrong

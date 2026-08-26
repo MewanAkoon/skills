@@ -1,7 +1,7 @@
 # skills
 
-My agent skills. One clone on disk, symlinked into every AI tool's global
-skill directory. Nothing gets committed into working repos.
+My agent skills. One clone on disk, symlinked into Claude Code's and Cursor's
+global skill directories. Nothing gets committed into working repos.
 
 ## Setup
 
@@ -26,7 +26,7 @@ work, and the symlinks live under `$HOME`. Nothing lands in a project. As a
 safety net:
 
 ```bash
-printf '.claude/\n.cursor/skills/\n.agents/\n.skills.json\n' >> ~/.gitignore_global
+printf '.claude/\n.cursor/skills/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
@@ -34,9 +34,8 @@ git config --global core.excludesfile ~/.gitignore_global
 
 A skill loads when something triggers it. Writing a commit message is a
 trigger. A plain chat reply is not, so nothing guarantees the description is
-consulted on that turn. Close the gap in each tool's always-loaded instructions,
-`~/.claude/CLAUDE.md` for Claude Code and the equivalent for other tools, with
-the skill path adjusted to where that tool reads skills from:
+consulted on that turn. Close the gap in `~/.claude/CLAUDE.md`, which Claude
+Code loads at the start of every session:
 
 ```markdown
 # Prose

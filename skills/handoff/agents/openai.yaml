@@ -1,5 +1,0 @@
-interface:
-  display_name: "Handoff"
-  short_description: "Compact this session for the next one"
-policy:
-  allow_implicit_invocation: false

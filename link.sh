@@ -12,7 +12,6 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 # Add or remove destinations as you confirm where each tool reads from.
 DESTS=(
   "$HOME/.claude/skills"   # Claude Code
-  "$HOME/.agents/skills"   # Codex and other Agent Skills compatible tools
   "$HOME/.cursor/skills"   # Cursor
 )
 

@@ -1,5 +1,0 @@
-interface:
-  display_name: "Diagnose bug"
-  short_description: "Gated debugging loop for stubborn bugs"
-policy:
-  allow_implicit_invocation: false

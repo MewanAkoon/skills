@@ -325,16 +325,6 @@ for name in dirs:
 
     user_invoked = str(fm.get("disable-model-invocation", "")).lower() == "true"
     if user_invoked:
-        yaml_path = f"{rel}/agents/openai.yaml"
-        if not os.path.exists(os.path.join(REPO, yaml_path)):
-            fail(f"{name}: user-invoked but has no agents/openai.yaml")
-        else:
-            y = read(yaml_path)
-            policy = re.search(r"^policy:\s*$(.*?)(?=^\S|\Z)", y, re.M | re.S)
-            if not policy or not re.search(
-                    r"^\s+allow_implicit_invocation:\s*false\s*$", policy.group(1), re.M):
-                fail(f"{name}: openai.yaml does not set "
-                     f"policy.allow_implicit_invocation: false")
         # Three shapes name a moment to run in. Matching bare "when" or "if"
         # instead rejected ordinary English: "what to try if it happens again"
         # names no trigger, and an author had no way to write it.
@@ -352,9 +342,10 @@ for name in dirs:
         if re.search(trigger, desc, re.I):
             fail(f"{name}: user-invoked, but the description names a trigger condition",
                  [desc,
-                  "A tool reading neither disable-model-invocation nor openai.yaml",
-                  "falls back to this line. Make it a noun phrase naming what the",
-                  "skill produces, with no clause saying when to run it."])
+                  "Cursor does not read disable-model-invocation, so this line is",
+                  "all that stops the skill firing on its own there. Make it a noun",
+                  "phrase naming what the skill produces, with no clause saying",
+                  "when to run it."])
     else:
         model_invoked.append(name)
 

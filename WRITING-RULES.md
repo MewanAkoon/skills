@@ -49,18 +49,18 @@ One question decides it: could the agent usefully reach for this on its own?
 **Yes, model-invoked.** Omit `disable-model-invocation`. The description
 carries triggers. Costs permanent context.
 
-**No, user-invoked.** Set `disable-model-invocation: true`, and add
-`agents/openai.yaml` with `policy.allow_implicit_invocation: false` for
-Codex. The description becomes a plain one-line summary for a human browsing
-slash commands. Costs nothing.
+**No, user-invoked.** Set `disable-model-invocation: true`. The description
+becomes a plain one-line summary for a human browsing slash commands. Costs
+nothing in Claude Code.
 
 Keep the model-invoked set to four or five. When a sixth is worth having,
 demote one first.
 
-Note that `disable-model-invocation` is a Claude Code field and the YAML is a
-Codex file. An agent that reads neither will treat the skill as
-model-invoked. So for anything that must not auto-fire, also keep the
-description free of trigger phrases. The flag alone is not a guarantee.
+`disable-model-invocation` is a Claude Code field. Cursor does not read it, so
+in Cursor every skill here is model-invoked and every description is loaded.
+The description is therefore the only thing keeping a user-invoked skill from
+firing on its own, and it has to carry no trigger condition. Write it as a noun
+phrase naming what the skill produces. The flag protects one tool of the two.
 
 ## Structure
 
@@ -136,16 +136,17 @@ Checked by `./check.sh`:
    itself, because it carries those characters as data.
 2. No banned words and no filler phrases, outside the two files that define
    the lists.
-3. The three opening headings, in order.
+3. The three opening headings, in order, and a skip condition somewhere in
+   the second one.
 4. An attribution line on the last line of `SKILL.md`. The script warns here
    instead of failing, because a skill you wrote yourself has no source to
    name. Read the warning and confirm that is the case.
 5. A row in the README table.
 6. Frontmatter `name` matching the directory name, and a description that is
    not empty.
-7. A user-invoked skill has `agents/openai.yaml` setting
-   `allow_implicit_invocation: false`, and its description names no trigger
-   condition.
+7. A user-invoked skill's description names no trigger condition: no opening
+   condition, no "use this for" or "reach for", no temporal word followed by
+   an activity such as "before writing".
 8. Every file in `references/` is linked from `SKILL.md`.
 9. Five model-invoked skills at most.
 

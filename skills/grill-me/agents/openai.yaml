@@ -1,5 +1,0 @@
-interface:
-  display_name: "Grill me"
-  short_description: "Interview me until the design is settled"
-policy:
-  allow_implicit_invocation: false

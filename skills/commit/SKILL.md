@@ -29,16 +29,19 @@ after the commits land.
 
 ## 1. Read the working tree
 
-Run these together:
+Run these together. The `-uall` matters, because plain `git status
+--porcelain` collapses a new directory to `?? packages/` and hides the files
+inside it:
 
 ```bash
-git status --porcelain
+git status --porcelain -uall
 git diff
 git diff --staged
 ```
 
-Stop with "Nothing to commit" when both diffs are empty and nothing is
-staged.
+Stop with "Nothing to commit" only when `git status --porcelain -uall`
+prints nothing. Both diffs come back empty for a change made entirely of new
+files, so they cannot decide this on their own.
 
 ## 2. Stage the change
 
@@ -46,8 +49,10 @@ When files are already staged, work with those. Add any untracked (`??`) or
 unstaged file that sits in the same directory or module as something already
 staged. Ask before adding one that sits somewhere else.
 
-When nothing is staged, stage the files of the change by name, tracked and
-untracked alike. Ask about any file that looks unrelated to the change.
+When nothing is staged, work out the group first. Files in the same directory
+or module belong together, and so do files that import one another. Stage that
+group by name, tracked and untracked alike, then ask about anything that fits
+neither test.
 
 Stage files by name so the list is visible in the transcript. Reach for
 `git add -A` or `git add .` only after the user says to.
@@ -87,7 +92,10 @@ share:
   name has none.
 
 Fewer than five commits, or no shape shared by most of them, means use the
-template in step 5.
+conventional commits shape.
+
+Whichever shape you pick, step 5 supplies the length, the body rule, and the
+ending. Only the shape itself is decided here.
 
 End condition: the subject you draft matches the same pattern as most of the
 last 30 subjects.
@@ -124,6 +132,21 @@ can.
 
 ## 5. Write the message
 
+These hold whichever shape step 3 picked:
+
+- The subject is one line of about 60 characters at most, with no full stop.
+- The subject takes its mood and its capitalisation from that shape, so a
+  repo writing "Add retry to the poller" keeps the capital A.
+- A body is for a reason the subject and the diff do not already carry. One
+  or two bullets, and the message ends at the last one with no trailers of
+  any kind.
+
+Two body bullets is the ceiling. Wanting a third means the commit covers too
+much, so go back to step 2 and split it.
+
+When step 3 picked the conventional commits shape, the subject looks like
+this, with an imperative lowercase description:
+
 ```
 type(scope): short description
 
@@ -133,22 +156,12 @@ type(scope): short description
 Types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `chore`, `style`,
 `build`, `ci`.
 
-The description is imperative, lowercase, no full stop, about 60 characters
-at most.
-
-Write a body only when the reason for the change is not obvious from the
-subject and the diff. One or two bullets. The message ends at the last
-bullet, with no trailers of any kind.
-
-Two body bullets is the ceiling. Wanting a third means the commit covers too
-much, so go back to step 2 and split it.
-
 End condition: the subject fits in roughly 60 characters and someone scanning
 `git log` learns what changed from it without opening the diff.
 
 ## 6. Commit
 
-Record the output of `git status --porcelain` first and keep it as the
+Record the output of `git status --porcelain -uall` first and keep it as the
 snapshot. Step 7 uses it to tell hook output apart from files the user had
 already left lying around.
 
@@ -180,12 +193,12 @@ first.
   error or a lint rule with no autofix. Print the hook output, stop, and tell
   the user what to fix. Do not retry.
 - **Hook passed but files were modified or created.** A hook rewrote files
-  silently. Run `git status --porcelain` again, ignore everything that was in
-  the step 6 snapshot, stage what is left, and commit it as
+  silently. Run `git status --porcelain -uall` again, ignore everything that
+  was in the step 6 snapshot, stage what is left, and commit it as
   `chore(lint): apply auto-fixes`.
 
-End condition: `git status --porcelain` returns nothing beyond what the step
-6 snapshot held.
+End condition: `git status --porcelain -uall` returns nothing beyond what the
+step 6 snapshot held.
 
 ## 8. Push, when asked
 

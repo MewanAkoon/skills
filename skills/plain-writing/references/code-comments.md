@@ -73,11 +73,20 @@ cannot open, drop the marker and keep the reason behind it. Where it does not,
 leave the line alone.
 
 ```bash
-git diff --name-only HEAD | xargs -r grep -niE \
-  "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}"
+{ git diff -z --name-only --diff-filter=d HEAD
+  git ls-files -z --others --exclude-standard; } \
+  | xargs -0 -r grep -nIiE \
+    "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}"
 ```
 
-That greps the files you have changed and stays quiet when there are none.
+The two commands cover the two halves of a change. The first lists tracked
+files you edited, and `--diff-filter=d` drops the ones you deleted so grep is
+never handed a path that no longer exists. The second lists new files, which
+`git diff` never shows, so a change made entirely of new files still gets
+swept. `--exclude-standard` keeps gitignored paths out. The `-z` and `-0`
+pair carries filenames with spaces through intact, `-I` skips binaries, and
+`-r` stays quiet when there is nothing to grep.
+
 Pass the paths yourself instead when the comments are already committed.
 
 End condition: every hit has been read, and no comment in the files you

@@ -48,28 +48,47 @@ def _walk_files():
             yield os.path.relpath(os.path.join(root, n), REPO)
 
 
-def _git_files():
-    """Tracked files plus new ones, minus anything .gitignore excludes.
-
-    Without this the scan reaches node_modules, which .gitignore lists, and
-    every dependency README becomes a failure the user cannot fix.
-    """
+def _gitignored(paths):
+    """Which of these paths git would ignore. Empty set when git cannot say."""
+    if not paths:
+        return set()
     try:
-        out = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-            cwd=REPO, capture_output=True, check=True).stdout
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return [f for f in out.decode("utf-8", "replace").split("\0") if f]
+        out = subprocess.run(["git", "check-ignore", "-z", "--stdin"],
+                             cwd=REPO, capture_output=True,
+                             input="\0".join(paths).encode()).stdout
+    except OSError:
+        return set()
+    return {f for f in out.decode("utf-8", "replace").split("\0") if f}
 
 
-_FILES = _git_files()
+def _scannable():
+    """The walk decides what exists; git only subtracts from it.
+
+    Deriving the list from `git ls-files` instead made the scan silently
+    empty whenever git returned nothing, for instance in a copy of this repo
+    vendored inside a project whose .gitignore excludes it. Every prose check
+    then passed over zero files and the script still printed success. The walk
+    cannot come back empty, so that failure mode is gone.
+    """
+    found = list(_walk_files())
+    kept = [f for f in found if f not in _gitignored(found)]
+    if not kept:
+        # Every file ignored means the rules belong to some enclosing repo,
+        # not to this one. Scanning everything beats scanning nothing.
+        warn("git reports every file as ignored, so .gitignore was not applied")
+        return found
+    return kept
+
+
+_FILES = None
 
 
 def text_files():
     """Every file worth scanning for prose violations, symlinks excluded."""
-    names = _FILES if _FILES is not None else list(_walk_files())
-    for rel in sorted(names):
+    global _FILES
+    if _FILES is None:
+        _FILES = _scannable()
+    for rel in sorted(_FILES):
         if not rel.lower().endswith(EXTS):
             continue
         full = os.path.join(REPO, rel)
@@ -100,20 +119,43 @@ def strip_code(text):
 def unwrap(text):
     """Join hard-wrapped lines so a phrase split across two lines is still seen.
 
-    Returns a list of (joined_paragraph, first_line_number).
+    Returns (joined_paragraph, offsets) where offsets maps a character index in
+    the joined text back to its source line, so a match on the fifth line of a
+    wrapped paragraph is not reported against the first.
     """
-    paras, cur, start = [], [], 0
+    paras, cur = [], []
+
+    def flush():
+        if not cur:
+            return
+        joined, offsets, pos = "", [], 0
+        for lineno, piece in cur:
+            if joined:
+                joined += " "
+                pos += 1
+            offsets.append((pos, lineno))
+            joined += piece
+            pos += len(piece)
+        paras.append((joined, offsets))
+
     for i, line in enumerate(text.split("\n"), 1):
         if line.strip():
-            if not cur:
-                start = i
-            cur.append(line.strip())
-        elif cur:
-            paras.append((re.sub(r"\s+", " ", " ".join(cur)), start))
+            cur.append((i, re.sub(r"\s+", " ", line.strip())))
+        else:
+            flush()
             cur = []
-    if cur:
-        paras.append((re.sub(r"\s+", " ", " ".join(cur)), start))
+    flush()
     return paras
+
+
+def line_of(offsets, index):
+    """The source line holding the character at `index` in a joined paragraph."""
+    hit = offsets[0][1]
+    for pos, lineno in offsets:
+        if pos > index:
+            break
+        hit = lineno
+    return hit
 
 
 def parse_frontmatter(text):
@@ -208,14 +250,18 @@ for path in text_files():
     if path in RULE_FILES:
         continue
     prose = strip_code(read(path))
-    for para, lineno in unwrap(prose):
+    for para, offsets in unwrap(prose):
         low = para.lower()
         for w in WORDS:
-            if re.search(rf"\b{re.escape(w)}\w*\b", low):
-                fail(f"{path}:{lineno} uses the banned word '{w}'", [para[:100]])
+            m = re.search(rf"\b{re.escape(w)}\w*\b", low)
+            if m:
+                fail(f"{path}:{line_of(offsets, m.start())} "
+                     f"uses the banned word '{w}'", [f"...{para[max(0, m.start() - 40):m.end() + 40]}..."])
         for p in PHRASES:
-            if re.search(rf"\b{re.escape(p.lower())}", low):
-                fail(f"{path}:{lineno} uses the banned phrase '{p}'", [para[:100]])
+            m = re.search(rf"\b{re.escape(p.lower())}", low)
+            if m:
+                fail(f"{path}:{line_of(offsets, m.start())} "
+                     f"uses the banned phrase '{p}'", [f"...{para[max(0, m.start() - 40):m.end() + 40]}..."])
 
 # --------------------------------------------------------------- skills
 

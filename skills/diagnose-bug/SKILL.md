@@ -112,16 +112,21 @@ name that says what broke, so the next person who breaks it knows what they
 did.
 
 Before committing anything, prove the test catches the bug. Stash only the
-files you changed in phase 5, by naming them:
+files you changed in phase 5, by naming them, and pass `-u` so a file the fix
+added goes with them:
 
 ```bash
-git stash push -- src/path/you/fixed.ts
+git stash push -u -- src/path/you/fixed.ts
 ```
 
-A bare `git stash` would take the new test with the fix, and a run with no test
-present reports nothing to do, which reads like a pass. With the fix stashed and
-the test still on disk, run the test and watch it fail. Then `git stash pop` and
-watch it pass.
+Two things this avoids. A bare `git stash` takes the new test along with the
+fix, and a run with no test present reports nothing to do, which reads like a
+pass. Without `-u`, a fix that added a new file is refused with "did not match
+any file(s) known to git", so nothing is stashed and the test passes when it
+should fail.
+
+With the fix stashed and the test still on disk, run the test and watch it
+fail. Then `git stash pop` and watch it pass.
 
 Run the full suite. Then remove the temporary logging from phase 4, and diff
 against the branch point rather than the working tree, because a commit empties

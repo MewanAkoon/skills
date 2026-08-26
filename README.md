@@ -74,7 +74,7 @@ Only fire when typed. Zero context cost.
 | [handoff](skills/handoff/SKILL.md) | `/handoff` | Compact this session for the next one |
 | [review-diff](skills/review-diff/SKILL.md) | `/review-diff` | Diff against repo standards, plus a smell baseline |
 | [how](skills/how/SKILL.md) | `/how` | Subsystem walkthrough, and where new code belongs |
-| [why](skills/why/SKILL.md) | `/why` | Design rationale from git history and the rest of the record, evidence kept apart from inference |
+| [why](skills/why/SKILL.md) | `/why` | Design rationale from the record, evidence apart from inference |
 | [verify-app](skills/verify-app/SKILL.md) | `/verify-app` | Generates a project-local skill that drives this app |
 | [wayfinder](skills/wayfinder/SKILL.md) | `/wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
 

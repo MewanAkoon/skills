@@ -72,7 +72,7 @@ Only fire when typed. Zero context cost.
 | [grill-me](skills/grill-me/SKILL.md) | `/grill-me` | Interview until the design has no open branches |
 | [architect](skills/architect/SKILL.md) | `/architect` | Types and module shape before implementation |
 | [handoff](skills/handoff/SKILL.md) | `/handoff` | Compact this session for the next one |
-| [code-review](skills/code-review/SKILL.md) | `/code-review` | Diff against repo standards, plus a smell baseline |
+| [review-diff](skills/review-diff/SKILL.md) | `/review-diff` | Diff against repo standards, plus a smell baseline |
 | [how](skills/how/SKILL.md) | `/how` | Subsystem walkthrough, and where new code belongs |
 | [why](skills/why/SKILL.md) | `/why` | Design rationale from git history and the rest of the record, evidence kept apart from inference |
 | [verify-app](skills/verify-app/SKILL.md) | `/verify-app` | Generates a project-local skill that drives this app |

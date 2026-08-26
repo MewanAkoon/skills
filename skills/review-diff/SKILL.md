@@ -1,10 +1,10 @@
 ---
-name: code-review
+name: review-diff
 description: A diff review against written repo standards, plus a fixed smell baseline.
 disable-model-invocation: true
 ---
 
-# Code review
+# Review diff
 
 ## What this does
 
@@ -27,8 +27,8 @@ Skip it when the question is "does this break something else". That is
 
 ## How to use it
 
-Type `/code-review` with a fixed point: `/code-review since main`,
-`/code-review since HEAD~5`, or a commit SHA. You get a list of findings and
+Type `/review-diff` with a fixed point: `/review-diff since main`,
+`/review-diff since HEAD~5`, or a commit SHA. You get a list of findings and
 one line saying which is the worst.
 
 If the change was supposed to do something specific, say what in one line

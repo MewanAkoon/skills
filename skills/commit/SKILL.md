@@ -20,6 +20,10 @@ not finished, and neither is a file saved while still exploring.
 Skip it while the user is still iterating on the same code, and when the user
 has not yet seen the changes.
 
+Skip it too while a merge, rebase, cherry-pick, or revert is in progress. The
+`merge-conflicts` skill finishes those and writes their commit itself. Step 1
+says how to spot one.
+
 ## How to use it
 
 Nothing to invoke. Type `/commit` to force a run, or `/commit push` to push
@@ -42,6 +46,21 @@ git diff --staged
 Stop with "Nothing to commit" only when `git status --porcelain -uall`
 prints nothing. Both diffs come back empty for a change made entirely of new
 files, so they cannot decide this on their own.
+
+Then check whether git is already part way through something:
+
+```bash
+ls "$(git rev-parse --git-dir)" \
+  | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
+```
+
+A hit means a merge, rebase, cherry-pick, or revert is mid-flight. Hand the
+run to `merge-conflicts` and stop, because a plain `git commit` during a
+rebase leaves the rebase sitting unfinished. The two `rebase-` entries are
+directories that last the whole rebase, which `REBASE_HEAD` does not.
+
+End condition: that probe printed nothing, and `git status --porcelain -uall`
+printed at least one path.
 
 ## 2. Stage the change
 

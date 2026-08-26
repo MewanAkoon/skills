@@ -62,18 +62,30 @@ The ref holding the other side depends on the operation, and `git log
 --merge` fails outside a plain merge, so name the ref first:
 
 ```bash
-OTHER=$(cat .git/MERGE_HEAD .git/REBASE_HEAD .git/CHERRY_PICK_HEAD 2>/dev/null | head -1)
+GITDIR=$(git rev-parse --git-dir)
+OTHER=$(cat "$GITDIR"/MERGE_HEAD "$GITDIR"/REBASE_HEAD "$GITDIR"/CHERRY_PICK_HEAD \
+  "$GITDIR"/REVERT_HEAD 2>/dev/null | head -1)
 # a stash pop has no such ref: the other side is stash@{0}
 
 git log --oneline --left-right "HEAD...$OTHER" -- <file>
 git log -p "HEAD...$OTHER" -- <file>
 ```
 
+Ask git for the directory rather than writing `.git/` by hand. In a linked
+worktree `.git` is a file, so every hardcoded path under it fails. A revert
+keeps its ref in `REVERT_HEAD`, which is why that name is in the list.
+
+Read `$OTHER` back before running the log commands. An empty value means the
+four `cat` reads all failed, and `HEAD...` with nothing after it compares
+HEAD to itself and prints nothing at all. Stop there and name the operation
+from step 1, unless it is the stash pop, where `stash@{0}` is the other side.
+
 Where a commit subject carries a PR or an issue number, read it with
 `gh pr view <n>` or `gh issue view <n>`.
 
-**Done when:** for every unmerged path, you can say in one sentence what each
-side was trying to do.
+**Done when:** `$OTHER` names a real commit or the operation is a stash pop,
+and for every unmerged path you can say in one sentence what each side was
+trying to do.
 
 ## Step 3: Resolve each hunk
 
@@ -142,6 +154,11 @@ Stage the resolved files and continue:
 git add <files>
 git merge --continue    # or: rebase, cherry-pick, revert, am
 ```
+
+This step owns the commit for the operation, so keep the `commit` skill out
+of it. Each `--continue` writes the message git already prepared, and a
+rebase or a cherry-pick needs its own continue rather than a fresh
+`git commit`.
 
 A rebase stops again on the next commit. Repeat from step 1 until it runs
 out.

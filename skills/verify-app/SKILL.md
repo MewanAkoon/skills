@@ -31,9 +31,9 @@ Type `/verify-app` in the repo. It reads the repo, asks only what it cannot
 find, writes `.claude/skills/verify-<app>/`, then runs its own output once to
 prove it works.
 
-`.claude/`, `.cursor/skills/`, and `.agents/` are all in the global
-gitignore, so the generated skill stays out of commits. To give it to the
-team, `git add -f .claude/skills/verify-<app>`.
+Whether the generated skill stays out of commits depends on this machine, not
+on this repo, so step 3 checks before writing rather than assuming. To give
+the skill to the team, `git add -f .claude/skills/verify-<app>`.
 
 ---
 
@@ -77,6 +77,18 @@ response, and the teardown command stopped it.
 
 ## Step 3: Write the skill
 
+Ask git whether the target path is ignored here, before anything is written to
+it. A global gitignore covering `.claude/` is one setup step on one machine,
+so a fresh clone or a teammate's checkout answers differently:
+
+```bash
+git check-ignore -q .claude/skills/verify-<app> && echo ignored || echo tracked
+```
+
+The path does not have to exist yet for this to answer. On `tracked`, say so
+and ask whether to add `.claude/` to the repo's own `.gitignore` first,
+because otherwise the generated skill lands in the next `git add -A`.
+
 Create `.claude/skills/verify-<app>/SKILL.md` with frontmatter carrying
 `name: verify-<app>`, a description naming the app and the surface, and
 `disable-model-invocation: true`. Add `agents/openai.yaml` with
@@ -116,8 +128,9 @@ Write these sections, each holding real commands from this repo:
 - **Helpers.** Any script it ships is executable, and the body shows how to
   call it.
 
-**Done when:** the file exists, its Launch and teardown commands are the ones
-that worked in step 2, every other section holds a command built from a real
+**Done when:** the ignore check has been run and its answer is on the record,
+the file exists, its Launch and teardown commands are the ones that worked in
+step 2, every other section holds a command built from a real
 path, port, or selector in this repo, and a grep for `TODO` and for
 `<placeholder>` style angle brackets returns nothing.
 

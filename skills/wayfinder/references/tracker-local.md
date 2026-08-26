@@ -96,19 +96,22 @@ for f in *.md; do
   takeable=yes
   for b in $(sed -n 's/^\*\*Blocked by:\*\* //p' "$f" | tr ',' ' '); do
     [ "$b" = "none" ] && continue
-    if ! ls "$b"-*.md >/dev/null 2>&1; then
+    blocker=$(find . -maxdepth 1 -name "$b-*.md" -print -quit)
+    if [ -z "$blocker" ]; then
       echo "$f: blocked by ticket $b, which does not exist"
       takeable=no
       continue
     fi
-    grep -q '^\*\*Status:\*\* closed' "$b"-*.md || takeable=no
+    grep -q '^\*\*Status:\*\* closed' "$blocker" || takeable=no
   done
   if [ "$takeable" = yes ]; then head -1 "$f"; fi
 done
 ```
 
 It prints the title line of every takeable ticket, and a line for any ticket
-pointing at a blocker that was deleted. An empty result with open tickets
+pointing at a blocker that was deleted. `find` does the existence test rather
+than a bare glob, because zsh fails an unmatched glob before the command runs
+and prints its own error that a redirect cannot swallow. An empty result with open tickets
 left means all of them are blocked or claimed, so the next move is to finish
 a blocker.
 

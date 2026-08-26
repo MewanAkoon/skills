@@ -79,14 +79,20 @@ Look for what this repo has written down: `AGENTS.md`, `CLAUDE.md`,
 `CONTRIBUTING.md`, `CODING_STANDARDS.md`, `.cursor/rules/`, ADRs under
 `docs/`, and the README of the package being changed.
 
-Then run the repo's lint and format commands in check mode, `eslint` with no
-`--fix` and `prettier --check`, and read the output. Anything the tooling
-already catches stays out of the review, and check mode keeps the review from
-editing the diff it just pinned.
+Then find the repo's own check commands and run them. Look in `package.json`
+scripts, the `Makefile`, `pyproject.toml`, or the CI workflow, and take the
+lint, format, and typecheck entries. Run each in the mode that reports without
+writing, so `eslint` with no `--fix` and `prettier --check` rather than the
+forms that edit files. Check mode keeps the review from editing the diff it
+just pinned, and anything the tooling already catches stays out of the review.
+
+Record that this repo has no such tooling when the search turns up none, and
+carry on to step 4. A repo of prose or config often has nothing to run, and
+that is an answer rather than a blocked step.
 
 **Done when:** the standards files are listed by path or the review records
-that this repo documents none, and the lint and format commands are listed
-with their exit codes.
+that this repo documents none, and every check command found is listed with
+its exit code, or the review records that the repo has none.
 
 ## Step 4: Review the diff
 

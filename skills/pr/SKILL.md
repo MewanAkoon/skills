@@ -110,8 +110,9 @@ Call the result `PR_DATA`.
   answer, or the resolved default on an empty reply. Work through steps 3 to
   5, then create the PR in step 6.
 
-End condition: the in-progress probe printed nothing, and either `PR_DATA` is
-on the record or the run has stopped with a reason.
+End condition: `PR_DATA` is on the record, or the run has stopped with its
+reason named, which is an operation in flight, a declined prompt, or no
+usable `gh`.
 
 ## 3. Read the diff
 

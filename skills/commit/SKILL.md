@@ -59,8 +59,10 @@ run to `merge-conflicts` and stop, because a plain `git commit` during a
 rebase leaves the rebase sitting unfinished. The two `rebase-` entries are
 directories that last the whole rebase, which `REBASE_HEAD` does not.
 
-End condition: that probe printed nothing, and `git status --porcelain -uall`
-printed at least one path.
+End condition: the probe printed nothing and `git status --porcelain -uall`
+printed at least one path, or the run has stopped with its reason named,
+which is either nothing to commit or an operation handed to
+`merge-conflicts`.
 
 ## 2. Stage the change
 

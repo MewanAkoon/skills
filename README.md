@@ -24,7 +24,14 @@ Re-run `link.sh` after adding, renaming, or removing a skill.
 
 ### 2. Add the prose block to your global instructions
 
-Append this to `~/.claude/CLAUDE.md`, which Claude Code loads at the start of
+A skill loads when something triggers it. Writing a commit message is a
+trigger, so `plain-writing` reaches commit messages and PR bodies from step 1
+alone. A plain chat reply is not a trigger, so nothing guarantees the
+description is consulted on that turn. This block is what closes that gap.
+
+Do it once per tool. The wording is the same, the skill path is not.
+
+**Claude Code.** Append to `~/.claude/CLAUDE.md`, which loads at the start of
 every session:
 
 ```markdown
@@ -33,16 +40,21 @@ Apply the plain-writing skill (`~/.claude/skills/plain-writing/SKILL.md`) to
 every piece of prose, chat replies included, before sending it.
 ```
 
-A skill loads when something triggers it. Writing a commit message is a
-trigger, so `plain-writing` reaches commit messages and PR bodies from step 1
-alone. A plain chat reply is not a trigger, so nothing guarantees the
-description is consulted on that turn. This block is what closes that gap.
+**Cursor.** Cursor keeps user rules in its settings rather than in a file, so
+there is nothing to append to. Paste the same two lines into its user rules,
+pointing at Cursor's own copy of the skill:
 
-Its own rules stay in `SKILL.md`, one copy. The block says only the thing the
-skill cannot make true about itself, that it always applies.
+```markdown
+Apply the plain-writing skill (`~/.cursor/skills/plain-writing/SKILL.md`) to
+every piece of prose, chat replies included, before sending it.
+```
 
-`./check.sh` warns when this step is missing. It never fails on it, because the
-file is per machine and lives outside the repo.
+The rules themselves stay in `SKILL.md`, one copy. Each block says only the
+thing the skill cannot make true about itself, that it always applies.
+
+`./check.sh` warns when the Claude Code file is missing the block. It never
+fails on it, because the file is per machine and lives outside the repo. It
+cannot see Cursor's user rules at all, so that half is on you.
 
 ### Keeping working repos clean
 

@@ -97,6 +97,20 @@ call at the top" is verifiable. "Validation is handled properly" is an
 invitation to stop early. Vague completion criteria are the main reason
 agents quit halfway.
 
+**An end condition admits every ending its step has.** A step that can stop
+early has more than one ending, and the condition has to name them all. "The
+probe printed nothing and there is at least one changed path" locks out the
+step's own "nothing to commit" exit, so an agent that hits it either loops
+looking for a state that will not arrive or drops the condition and moves on.
+Both are worse than having no condition, because the line looks like a check
+and is not one.
+
+Write the stops in: "..., or the run has stopped with its reason named, which
+is X or Y." Before writing the condition, list the step's endings, then read
+the condition back against that list. A condition that names one ending for a
+step that has three is the most common way this rule gets broken, and it
+survives review because the sentence reads fine on its own.
+
 **Say what to do, not what to avoid.** A prohibition pulls the banned
 behaviour into context and makes it more available, not less. Write "return
 early on invalid input", not "do not nest conditionals". Keep a ban only when
@@ -132,8 +146,8 @@ you will not remember which files were yours.
 ## Before committing
 
 1. The description would fire on a real prompt you would actually type.
-2. Every step has a checkable end condition, or the skill is pure reference
-   and has no steps.
+2. Every step has a checkable end condition that admits every ending the step
+   has, stops included, or the skill is pure reference and has no steps.
 3. No sentence states a default the model already follows.
 4. Reference material that only some runs need is in `references/`.
 5. No em dashes, no filler, no banned words.

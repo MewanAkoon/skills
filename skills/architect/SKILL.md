@@ -84,8 +84,13 @@ Then ask one question about a specific detail in the sketch, something a reader
 could only answer having looked at it. A decision in reply to that question is
 the approval.
 
-**Done when:** the user has answered that question with a decision. A question
-back, or "I don't know", means ask again rather than start.
+If the answer is a question back, or "I don't know", ask once more with the
+options spelled out. If that comes back empty too, pick the one you would
+defend, say which you picked and why, and carry that into phase 4 as a
+decision you made rather than one they made.
+
+**Done when:** the question has a decision against it, and the record says
+whether it was theirs or yours.
 
 ## Phase 4: Implement
 

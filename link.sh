@@ -7,7 +7,12 @@
 
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")" && pwd)"
+# Resolve through a symlink, so running this from a bin directory on PATH
+# still finds the clone. Without it REPO points at the symlink's directory,
+# every glob matches nothing, and the script reports success having linked
+# nothing at all.
+SELF="$(readlink -f "$0")"
+REPO="$(cd "$(dirname "$SELF")" && pwd)"
 
 # Add or remove destinations as you confirm where each tool reads from.
 DESTS=(

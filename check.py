@@ -26,7 +26,7 @@ DASH_ENTITIES = ("&mdash;", "&#8212;", "&ndash;", "&#8211;")
 
 # Files whose subject matter is the banned patterns themselves. They quote the
 # words in order to ban them, so the word check cannot apply to them.
-RULE_FILES = {"WRITING-RULES.md", "skills/plain-writing/SKILL.md", SELF}
+RULE_FILES = {"WRITING-RULES.md", "skills/plain-writing/SKILL.md"}
 
 failures = []
 warnings = []
@@ -40,10 +40,19 @@ def warn(msg):
     warnings.append(msg)
 
 
+# Scanned for dashes. A stray em dash in link.sh or in a yaml display_name is
+# a real violation.
 EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt", ".sh", ".py")
 
+# Scanned for banned words and filler. Code is left out: strip_code only knows
+# markdown fences, so every identifier in a .py or .sh file would read as
+# prose, and plain-writing's own skip condition says renaming a variable called
+# enhanceOrder is not this skill's business.
+PROSE_EXTS = (".md", ".markdown", ".yaml", ".yml", ".txt")
+
 # This file holds the dash characters as data, so the dash rule cannot apply to
-# it either. Adding .sh above is what brings link.sh under both rules.
+# it. Adding .sh and .py above is what brings link.sh and this file under the
+# dash rule at all.
 DASH_EXEMPT = {SELF}
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "dist", "build"}
 
@@ -257,7 +266,7 @@ for path in text_files():
 WORDS, PHRASES = banned_lists()
 
 for path in text_files():
-    if path in RULE_FILES:
+    if path in RULE_FILES or not path.lower().endswith(PROSE_EXTS):
         continue
     prose = strip_code(read(path))
     for para, offsets in unwrap(prose):

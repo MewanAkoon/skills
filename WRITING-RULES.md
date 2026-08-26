@@ -133,11 +133,12 @@ Checked by `./check.py`:
 
 1. No em dashes, en dashes, or horizontal bars, and no HTML entity that
    renders as one, in any Markdown, YAML, text, shell, or Python file.
-   `check.py` is exempt from the dash and word rules alone, because it holds
-   both lists as data in order to search for them.
-2. No banned words and no filler phrases, outside the three files that quote
-   the lists in order to ban them: this file, `plain-writing/SKILL.md`, and
-   `check.py`.
+   `check.py` is exempt, because it holds those characters as data in order to
+   search for them.
+2. No banned words and no filler phrases in Markdown, YAML, or text files,
+   outside the two that quote the lists in order to ban them: this file and
+   `plain-writing/SKILL.md`. Shell and Python are checked for dashes only,
+   because an identifier is not prose and `plain-writing` says so.
 3. The three opening headings, in order, and a skip condition somewhere in
    the second one.
 4. An attribution line on the last line of `SKILL.md`. The script warns here

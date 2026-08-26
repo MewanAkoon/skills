@@ -30,6 +30,24 @@ printf '.claude/\n.cursor/skills/\n.agents/\n.skills.json\n' >> ~/.gitignore_glo
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
+### Always-on prose
+
+A skill loads when something triggers it. Writing a commit message is a
+trigger. A plain chat reply is not, so nothing guarantees the description is
+consulted on that turn. Close the gap in each tool's always-loaded instructions,
+`~/.claude/CLAUDE.md` for Claude Code and the equivalent for other tools, with
+the skill path adjusted to where that tool reads skills from:
+
+```markdown
+# Prose
+Apply the plain-writing skill (`~/.claude/skills/plain-writing/SKILL.md`) to
+every piece of prose, chat replies included, before sending it.
+```
+
+The skill's description already asks for chat replies. The block is what makes
+that reach a turn where nothing else would have loaded the skill. The rules stay
+in `SKILL.md`, one copy.
+
 ### Sharing one skill with a client team
 
 Only when the team should have it too:
@@ -71,10 +89,17 @@ Only fire when typed. Zero context cost.
 Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
+Run `./check.sh` before committing. It needs `python3`, which ships with macOS.
+It enforces items 1 to 9 of the list at the end of `WRITING-RULES.md`, which is
+the mechanical half, and it derives its banned-word list from
+`plain-writing/SKILL.md` so the two cannot drift apart. Items 10 to 13 are
+judgement calls no script can make, and they are the ones that decide whether a
+skill actually fires.
+
 ## Attribution
 
-Skills here are adapted from two MIT-licensed repos. Each file names its
-source at the bottom.
+Skills here are adapted from two MIT-licensed repos. Each `SKILL.md` names its
+source on the last line, and files under `references/` inherit it.
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)
 - [cursor/plugins pstack](https://github.com/cursor/plugins/tree/main/pstack),

@@ -13,6 +13,11 @@ trigger conditions along with the content. A skill written from your own
 repeated correction fires, because the situation that produced it is a
 situation you are actually in.
 
+Adapting a skill from elsewhere is fine, and every skill here started that way.
+What does not carry over is the description. Keep the body, throw the
+description away, and write a new one from the prompts you actually type. The
+content is worth borrowing; the trigger has to be yours.
+
 ## The description
 
 This is the only part loaded on every turn, and it is the only thing that
@@ -111,19 +116,53 @@ skill files too. The short version:
 
 ## Attribution
 
-A skill adapted from somewhere else ends with one line naming the source and
-its licence. Six months from now you will want to diff against upstream and
-you will not remember which files were yours.
+A skill adapted from somewhere else names the source and its licence on the
+last line of `SKILL.md`. One line per skill, not per file, so files under
+`references/` inherit it. Six months from now you will want to diff against
+upstream and you will not remember which files were yours.
 
 ## Before committing
 
-1. The description would fire on a real prompt you would actually type.
-2. Every step has a checkable end condition, or the skill is pure reference
-   and has no steps.
-3. No sentence states a default the model already follows.
-4. Reference material that only some runs need is in `references/`.
-5. No em dashes, no filler, no banned words.
-6. The README table has a row for it.
+Every rule below still holds whether or not you run the script. `./check.sh`
+exits non-zero on the first group, apart from item 4 which warns, so you do not
+have to hold those in your head. Nothing runs it for you: there is no commit
+hook, and adding one is your call. Read the rules anyway before writing,
+because a rule you know is a rule you do not trip over.
+
+Checked by `./check.sh`:
+
+1. No em dashes, en dashes, or horizontal bars, and no HTML entity that
+   renders as one, in any Markdown, YAML, or text file. `check.sh` skips
+   itself, because it carries those characters as data.
+2. No banned words and no filler phrases, outside the two files that define
+   the lists.
+3. The three opening headings, in order.
+4. An attribution line on the last line of `SKILL.md`. The script warns here
+   instead of failing, because a skill you wrote yourself has no source to
+   name. Read the warning and confirm that is the case.
+5. A row in the README table.
+6. Frontmatter `name` matching the directory name, and a description that is
+   not empty.
+7. A user-invoked skill has `agents/openai.yaml` setting
+   `allow_implicit_invocation: false`, and its description names no trigger
+   condition.
+8. Every file in `references/` is linked from `SKILL.md`.
+9. Five model-invoked skills at most.
+
+Judged by you, because no script can:
+
+10. The description would fire on a real prompt you would actually type. Say
+    that prompt out loud, then read the description against it word by word.
+    If you are guessing, you have not tested it.
+11. Every step ends on something checkable, or the skill is pure reference and
+    has no steps. A step that ends on "handled properly", "as appropriate", or
+    "make sure it is correct" is the step that will be skipped. Rewrite it as
+    a thing you could see on a screen.
+12. No sentence states a default the model already follows. Read each one and
+    ask what an agent would do without it. Delete the whole sentence when the
+    answer is "the same thing".
+13. Reference material that only some runs need is in `references/`, pointed
+    to by a line saying when to read it, not just that it exists.
 
 ## After committing
 
@@ -133,6 +172,10 @@ completion criterion. Fix that one step and nothing else.
 
 ## Pruning
 
-Every two weeks, delete any skill that has not fired or been called. A
-model-invoked skill that never triggers is not neutral, its description costs
-tokens on every turn of every conversation.
+No tool reports which skills fired, so the test is recall, not a log. Every
+two weeks, read the README table and name one real occasion each skill changed
+what an agent did. A skill you cannot place a use for goes.
+
+Model-invoked skills go first. One that never triggers is not neutral, its
+description costs tokens on every turn of every conversation. Demote it to
+user-invoked before deleting it, and delete it if you never type it either.

@@ -66,11 +66,19 @@ explaining something 200 lines down will not be updated when that code moves.
 
 ## 5. Sweep before finishing
 
-Grep the files you changed and fix every hit. Drop the marker and keep the
-reason behind it.
+Grep the files you changed and read every hit. The pattern over-matches on
+purpose, so a CSS value like `#404` or a sentence about a design review will
+turn up alongside real leakage. Where the hit points at something a reader
+cannot open, drop the marker and keep the reason behind it. Where it does not,
+leave the line alone.
 
 ```bash
-grep -rniE "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}" <paths>
+git diff --name-only HEAD | xargs -r grep -niE \
+  "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}"
 ```
 
-End condition: both greps return nothing across the files you touched.
+That greps the files you have changed and stays quiet when there are none.
+Pass the paths yourself instead when the comments are already committed.
+
+End condition: every hit has been read, and no comment in the files you
+touched still points at something outside the repo.

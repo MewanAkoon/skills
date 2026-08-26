@@ -34,12 +34,18 @@ git remote
 git for-each-ref --format='%(upstream:remotename)' "$(git symbolic-ref -q HEAD)"
 ```
 
-The third command names the remote this branch already tracks. Take it when
-it prints something. Printing nothing also means the branch has no upstream,
-which is what step 6 needs to know. Otherwise take `origin` when `git remote` lists it, or
-the only name listed when there is exactly one. Ask the user which to use
-when several are listed and none is `origin`. Stop when `git remote` lists
-nothing at all, because there is nowhere to open a PR.
+The third command names the remote this branch already tracks. Take it when it
+prints something. Otherwise take `origin` when `git remote` lists it, or the
+only name listed when there is exactly one. Ask the user which to use when
+several are listed and none is `origin`. Stop when `git remote` lists nothing
+at all, because there is nowhere to open a PR.
+
+An empty third command also means the branch has no upstream, which is what
+step 6 checks before it pushes.
+
+Call that name `$REMOTE`. It, `$BASE` and `$CURRENT_BRANCH` are names to
+substitute into the commands below, not shell variables, because a variable
+set in one command does not survive into the next one.
 
 Then the base branch:
 
@@ -53,12 +59,11 @@ When that prints nothing, ask the remote itself:
 git remote show $REMOTE | sed -n '/HEAD branch/s/.*: //p'
 ```
 
-When that fails too, use the first of `main`, `master`, `develop`, or `trunk`
-that exists on the remote.
+When that fails too, take the first of these the remote actually has:
 
-`$REMOTE`, `$BASE` and `$CURRENT_BRANCH` stand for the three names you just
-resolved. Substitute the real names into every later command, because a shell
-variable set in one command does not survive into the next one.
+```bash
+git ls-remote --heads $REMOTE main master develop trunk
+```
 
 Stop and tell the user when the current branch is that default branch,
 because a PR cannot be opened from it.
@@ -98,12 +103,17 @@ Call the result `PR_DATA`.
 
 ```bash
 git fetch $REMOTE $BASE
-git log --oneline $REMOTE/$BASE...HEAD
+git log --oneline $REMOTE/$BASE..HEAD
 git diff --stat $REMOTE/$BASE...HEAD
 ```
 
 The fetch matters. Comparing against a stale `$REMOTE/$BASE` describes a diff
 that no longer exists.
+
+The dots differ on purpose. `git log` takes two, so it lists only the commits
+this branch adds. Three dots there would be the symmetric difference and would
+count commits that live only on the base. `git diff` takes three, so it
+compares against the merge base and ignores what the base did afterwards.
 
 Stop and tell the user there is nothing to open a PR for when no commits are
 ahead of the base.
@@ -205,6 +215,10 @@ For the body:
 Describe what the code does. The ticket and the branch name are not evidence
 of what landed.
 
+Tick the boxes that apply under Type of change and Testing, and replace the
+comment under "How to review locally" with the commands a reviewer actually
+runs. A template shipped with every box empty is worse than no template.
+
 Add a deployment notes section only when the diff touches infrastructure,
 environment variables, or database migrations. Look for paths matching
 `migrations/`, `migrate/`, `*.tf`, `Dockerfile`, `docker-compose*`, `helm/`,
@@ -231,9 +245,10 @@ The body ends at its last section, with no AI disclosure footer and no
 `Co-Authored-By` trailer.
 
 End condition: no angle-bracket placeholder such as `<edge case>` or
-`<focus area>` survives into the body. Every section holds real content or is
-deleted. The `<!-- -->` comments stay, since GitHub hides them when it renders
-the page.
+`<focus area>` survives into the body, every checklist has the boxes that
+apply ticked, and "How to review locally" holds real commands. Every section
+holds real content or is deleted. The `<!-- -->` comments stay, since GitHub
+hides them when it renders the page.
 
 ## 6. Create, when no PR exists
 

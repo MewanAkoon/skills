@@ -171,8 +171,9 @@ End condition: the subject fits in roughly 60 characters and someone scanning
 ## 6. Commit
 
 Record the output of `git status --porcelain -uall` first and keep it as the
-snapshot. Step 7 uses it to tell hook output apart from files the user had
-already left lying around.
+snapshot. Only its unstaged (` M`) and untracked (`??`) entries matter later:
+those are work the user already had in progress, and step 7 leaves them alone.
+Anything else that appears afterwards came from a hook.
 
 Commit with `-F` and a single-quoted heredoc, which keeps backticks and
 special characters literal and needs no temp file. The `EOF` terminator sits
@@ -197,18 +198,20 @@ first.
 ## 7. Handle what the hooks did
 
 - **Hook failed and files were modified.** The hook fixed things itself.
-  Re-stage only what changed since the step 6 snapshot, leaving anything the
-  snapshot already listed where it is, and retry the commit once.
+  Re-stage every path that now carries unstaged content and was not an
+  unstaged or untracked entry in the step 6 snapshot. A staged file that has
+  picked up a second status letter is the hook's work, whether that reads
+  `MM` for an edit or `AM` for a file this change adds. Retry the commit once.
 - **Hook failed and nothing was modified.** A real failure, such as a type
   error or a lint rule with no autofix. Print the hook output, stop, and tell
   the user what to fix. Do not retry.
 - **Hook passed but files were modified or created.** A hook rewrote files
-  silently. Run `git status --porcelain -uall` again, ignore everything that
-  was in the step 6 snapshot, stage what is left, and commit it as
-  `chore(lint): apply auto-fixes`.
+  silently. Run `git status --porcelain -uall` again, ignore the paths the
+  snapshot listed as unstaged or untracked, stage what is left, and commit it
+  as `chore(lint): apply auto-fixes`.
 
-End condition: `git status --porcelain -uall` returns nothing beyond what the
-step 6 snapshot held.
+End condition: `git status --porcelain -uall` returns nothing beyond the
+unstaged and untracked entries the step 6 snapshot held.
 
 ## 8. Push, when asked
 
@@ -230,8 +233,11 @@ does not survive into the next one. Then read the default branch:
 git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'
 ```
 
-When that prints nothing, fall back to the first of `main`, `master`,
-`develop`, or `trunk` that exists on the remote.
+When that prints nothing, fall back to the first of these the remote has:
+
+```bash
+git ls-remote --heads $REMOTE main master develop trunk
+```
 
 Push when the current branch is not that default branch. When it is the
 default branch, say so and let the user confirm before pushing.

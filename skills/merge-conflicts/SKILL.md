@@ -29,7 +29,12 @@ and re-run install, so only the two branches' own dependency changes move:
 ```bash
 git checkout --theirs pnpm-lock.yaml   # confirm which side that is, see step 1
 pnpm install
+git add pnpm-lock.yaml
 ```
+
+The `git add` is the part that finishes it. `git checkout --theirs` writes the
+file but leaves the path unmerged, so without it `git merge --continue`
+refuses with "Committing is not possible because you have unmerged files".
 
 ## How to use it
 
@@ -78,7 +83,17 @@ keeps its ref in `REVERT_HEAD`, which is why that name is in the list.
 Read `$OTHER` back before running the log commands. An empty value means the
 four `cat` reads all failed, and `HEAD...` with nothing after it compares
 HEAD to itself and prints nothing at all. Stop there and name the operation
-from step 1, unless it is the stash pop, where `stash@{0}` is the other side.
+from step 1, unless it is one of the two that keep no such ref.
+
+A stash pop is the first: the other side is `stash@{0}`. An applied patch is
+the second, because `git am` records no commit to compare against. Its other
+side is the patch, so read that instead of the log commands and then carry on
+to step 3:
+
+```bash
+cat "$GITDIR"/rebase-apply/info     # author, subject, date
+cat "$GITDIR"/rebase-apply/patch    # what it changes
+```
 
 Where a commit subject carries a PR or an issue number, read it with
 `gh pr view <n>` or `gh issue view <n>`.

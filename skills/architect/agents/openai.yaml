@@ -1,0 +1,5 @@
+interface:
+  display_name: "Architect"
+  short_description: "Types and module shape before code"
+policy:
+  allow_implicit_invocation: false

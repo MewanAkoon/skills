@@ -14,8 +14,8 @@ sentence shape, and structure.
 ## When it runs
 
 Automatically, whenever prose is being written or edited. That includes
-commit messages and PR descriptions, which people often forget count as
-prose.
+commit messages, PR descriptions, and code comments, which people often
+forget count as prose.
 
 ## How to use it
 
@@ -98,6 +98,16 @@ not have.
 
 End on a specific fact or a next step. "The future looks bright" and similar
 closers say nothing.
+
+## Code comments
+
+A comment in source code has to pass two checks the rest of this file does
+not cover: whether it earns its place at all, and whether every reference in
+it still resolves for someone with a fresh clone.
+
+Read [references/code-comments.md](references/code-comments.md) before
+writing or editing any comment in code. Skip it for every other kind of
+prose.
 
 ## Self-audit
 

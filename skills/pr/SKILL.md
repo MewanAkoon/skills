@@ -1,0 +1,294 @@
+---
+name: pr
+description: Use when a branch has commits ahead of its base and the work is ready for review, or when the user says open a PR, raise a PR, or update the PR description. Resolves the base branch, drafts a title and body from the real diff, and creates or updates the pull request.
+---
+
+# PR
+
+## What this does
+
+It reads everything the branch changed against its base, writes a title and a
+description from the diff rather than from the branch name, and either opens
+a pull request or updates the one that is already open.
+
+## When it runs
+
+When a branch has commits the base does not, and the work on it is finished.
+Finished means the branch is reviewable, not that every commit has landed.
+
+Skip it while commits are still going onto the branch, and when the branch
+already has an open PR whose description still matches the diff.
+
+## How to use it
+
+Nothing to invoke. Type `/pr` to force a run, or `/pr draft` to open it as a
+draft.
+
+---
+
+## 1. Resolve the base branch
+
+```bash
+git rev-parse --abbrev-ref HEAD
+git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||'
+```
+
+`$BASE` and `$CURRENT_BRANCH` below stand for the two names these print.
+Substitute the real names into every later command, because a shell variable
+set in one command does not survive into the next one.
+
+When the second command prints nothing, ask the remote:
+
+```bash
+git remote show origin | sed -n '/HEAD branch/s/.*: //p'
+```
+
+When that fails too, use the first of `main`, `master`, `develop`, or `trunk`
+that exists on the remote.
+
+Stop and tell the user when the current branch is that default branch,
+because a PR cannot be opened from it.
+
+## 2. Check the state of things
+
+```bash
+git status --porcelain
+gh auth status
+git remote get-url origin
+```
+
+Uncommitted changes mean asking: "You have uncommitted changes that will not
+be in the PR. Continue? (yes / no)". Stop on no.
+
+When `gh` is missing, unauthenticated, or the remote is not GitHub, work
+through steps 3 to 5, print the title and body for the user to paste in
+themselves, and stop. Say plainly that you did not create anything.
+
+Look for an existing PR in one call:
+
+```bash
+gh pr view --json baseRefName,number,url,title,body,state 2>/dev/null || true
+```
+
+Call the result `PR_DATA`.
+
+- `PR_DATA` has content and `state` is `OPEN`: take `baseRefName` as the
+  base, work through steps 3 to 5, then update the PR in step 7.
+- `PR_DATA` is empty, or `state` is `CLOSED` or `MERGED`: ask "What is the
+  base branch for this PR? (default: <resolved default>)" and take their
+  answer, or the resolved default on an empty reply. Work through steps 3 to
+  5, then create the PR in step 6.
+
+## 3. Read the diff
+
+```bash
+git fetch origin $BASE
+git log --oneline origin/$BASE...HEAD
+git diff --stat origin/$BASE...HEAD
+```
+
+The fetch matters. Comparing against a stale `origin/$BASE` describes a diff
+that no longer exists.
+
+Stop and tell the user there is nothing to open a PR for when no commits are
+ahead of the base.
+
+Read the full diff when the stat line shows 20 files or fewer:
+
+```bash
+git diff origin/$BASE...HEAD
+```
+
+Above 20 files, or above roughly 500 changed lines, read it one directory or
+one package at a time and summarise per unit instead of per line.
+
+End condition: you can name what every changed file does in the change, or
+you have deliberately grouped it under a unit you can name.
+
+## 4. Pick the template
+
+The repo's own template wins whenever one exists:
+
+```bash
+find . -maxdepth 3 -ipath '*pull_request_template*' \
+  -not -path './.git/*' -not -path './node_modules/*'
+```
+
+Found one? Fill in its sections and its checkboxes, keep its headings exactly
+as they are, and skip the body template in step 5. The title guidance in step
+5 still applies, and so does the deployment notes section when the diff calls
+for one.
+
+Found none? Use the body template in step 5.
+
+## 5. Draft the title and body
+
+For the title, match the convention already in use:
+
+```bash
+gh pr list --state merged --limit 20 --json title --jq '.[].title'
+```
+
+When most of those titles share a shape, such as a `[Type]` prefix, a
+`type:` prefix, or a ticket id, write the new title in that shape. When they
+share nothing, or the command returns nothing, use `[Type] Short description`
+at 70 characters or fewer, picking the type from:
+
+- `[Feat]` for a new feature or an improvement
+- `[Fix]` for a bug fix
+- `[Chore]` for maintenance, config, tooling, or dependencies
+- `[Refactor]` for a restructure with no behaviour change
+- `[Docs]` for documentation alone
+
+The description is title-cased and names the intent of the change. A list of
+the files touched is not an intent.
+
+For the body:
+
+````
+## What & why
+<!-- One paragraph. What changed and why, not how. -->
+<one paragraph summary>
+
+## Type of change
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactor (no behaviour change)
+- [ ] Dependency update
+- [ ] Config / infra / env change
+
+---
+
+## Testing
+- [ ] Unit tests added / updated
+- [ ] Integration tests added / updated
+- [ ] Manually tested
+
+**Edge cases covered:**
+<!-- Boundary conditions, failure modes, permission cases, unusual inputs. -->
+- <edge case>
+
+**How to review locally:**
+```sh
+# Commands to run and verify this PR
+```
+
+---
+
+## What should reviewers focus on?
+<!-- Skip style and syntax. Flag where you want human judgment. -->
+- <focus area>
+
+## What did you deliberately NOT do?
+<!-- Scope decisions, known trade-offs, follow-up tickets -->
+- <deliberate omission>
+````
+
+Describe what the code does. The ticket and the branch name are not evidence
+of what landed.
+
+Add a deployment notes section only when the diff touches infrastructure,
+environment variables, or database migrations. Look for paths matching
+`migrations/`, `migrate/`, `*.tf`, `Dockerfile`, `docker-compose*`, `helm/`,
+`k8s/`, `.github/workflows/`, or any `.env` example file. Leave the section
+out completely when none of them appear.
+
+```
+---
+
+## Deployment notes
+- [ ] Safe to deploy immediately
+- [ ] Infrastructure changes required -> describe: <description>
+- [ ] Env variable changes -> variable name(s): <names>
+- [ ] DB migration required
+      Migration file: `<path from the diff>`
+      Rollback strategy: simple revert / manual rollback / other: ___
+      Data impact on rollback: ___
+```
+
+Keep only the lines that apply. Tick "Safe to deploy immediately" only when
+none of the others do.
+
+The body ends at its last section, with no AI disclosure footer and no
+`Co-Authored-By` trailer.
+
+End condition: no angle-bracket placeholder such as `<edge case>` or
+`<focus area>` survives into the body. Every section holds real content or is
+deleted. The `<!-- -->` comments stay, since GitHub hides them when it renders
+the page.
+
+## 6. Create, when no PR exists
+
+Push first when the branch has no upstream:
+
+```bash
+git push -u origin $CURRENT_BRANCH
+```
+
+Then create it. The single-quoted heredoc keeps backticks and special
+characters literal, and process substitution avoids a temp file. Every `EOF`
+terminator sits at column 0, with no leading spaces or tabs. Add `--draft` on
+`/pr draft`:
+
+```bash
+gh pr create \
+  --title "$(cat <<'EOF'
+<title>
+EOF
+)" \
+  --body-file <(cat <<'EOF'
+<body>
+EOF
+) \
+  --base $BASE
+```
+
+## 7. Update, when a PR is open
+
+Show the user what changes before touching anything:
+
+```
+Existing PR: <url>
+
+Current title:  <existing title>
+Proposed title: <new title>
+
+Current summary:  <first line of existing body, or "(none)">
+Proposed summary: <new summary>
+```
+
+Ask "Apply these updates to the PR? (yes / no)" and stop on no.
+
+On yes:
+
+```bash
+gh pr edit \
+  --title "$(cat <<'EOF'
+<title>
+EOF
+)" \
+  --body-file <(cat <<'EOF'
+<body>
+EOF
+)
+```
+
+A non-zero exit here is usually a GraphQL deprecation. Fall back to REST,
+reading `{owner}` and `{repo}` out of the `url` field of `PR_DATA` and
+`number` from its own field:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{number} --method PATCH \
+  --field title="$(cat <<'EOF'
+<title>
+EOF
+)" \
+  --field body="$(cat <<'EOF'
+<body>
+EOF
+)"
+```
+
+## 8. Confirm
+
+Print the PR URL.

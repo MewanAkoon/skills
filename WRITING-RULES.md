@@ -49,8 +49,22 @@ carries triggers. Costs permanent context.
 Codex. The description becomes a plain one-line summary for a human browsing
 slash commands. Costs nothing.
 
-Keep the model-invoked set to four or five. When a sixth is worth having,
-demote one first.
+What caps the model-invoked set is overlap, not count. A description costs
+about seventy tokens, so the whole set is a few hundred. A false fire costs
+far more, because the agent reads an entire `SKILL.md` and then follows the
+wrong procedure.
+
+So the test is competition, not overlap. Two skills compete when they claim
+the same decision and the agent has to pick one. Two skills compose when they
+govern different parts of the same moment, and both should run. `commit`
+owns how a commit is staged and structured. `plain-writing` owns how the
+message reads. Both firing on one commit is the intended outcome.
+
+Before adding a model-invoked skill, read every description already in the
+set and look for a prompt where the new skill and an existing one would give
+conflicting instructions. When you find one, narrow the new description until
+they no longer collide, move the overlapping part into the existing skill's
+`references/`, or demote something.
 
 Note that `disable-model-invocation` is a Claude Code field and the YAML is a
 Codex file. An agent that reads neither will treat the skill as

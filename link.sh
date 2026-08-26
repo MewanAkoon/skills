@@ -24,6 +24,20 @@ for DEST in "${DESTS[@]}"; do
 
   mkdir -p "$DEST"
 
+  # Drop links this repo made whose target is gone, so a renamed skill does
+  # not leave the old name behind for every tool to keep listing.
+  for link in "$DEST"/*; do
+    [ -L "$link" ] || continue
+    case "$(readlink "$link")" in
+      "$REPO"/skills/*)
+        if [ ! -e "$link" ]; then
+          rm "$link"
+          echo "removed stale $(basename "$link") from $DEST"
+        fi
+        ;;
+    esac
+  done
+
   for src in "$REPO"/skills/*/; do
     [ -f "${src}SKILL.md" ] || continue
     name="$(basename "$src")"

@@ -216,6 +216,10 @@ Create a new commit every time. When the user wants a change folded into the
 commit before it, say that amending rewrites history and ask them to confirm
 first.
 
+End condition: the snapshot is written down before the commit runs, and
+`git commit` has returned with its exit status and any hook output captured.
+Step 7 reads both, so neither can be skipped here.
+
 ## 7. Handle what the hooks did
 
 - **Hook failed and files were modified.** The hook fixed things itself.
@@ -265,8 +269,15 @@ default branch, say so and let the user confirm before pushing.
 
 No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
 
+End condition: no push was asked for and the step was skipped, or `git push`
+exited zero and `git rev-parse --abbrev-ref --symbolic-full-name '@{u}'` names
+a branch on `$REMOTE`.
+
 ## 9. Confirm
 
 ```bash
 git log --oneline -3
 ```
+
+End condition: every commit this run created is in that output, newest first,
+and nothing the run did not create sits above them.

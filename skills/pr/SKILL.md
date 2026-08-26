@@ -71,6 +71,10 @@ git ls-remote --heads $REMOTE main master develop trunk
 Stop and tell the user when the current branch is that default branch,
 because a PR cannot be opened from it.
 
+End condition: `$REMOTE` is one of the names `git remote` printed, `$BASE`
+names a branch that remote actually has, and `$CURRENT_BRANCH` is not
+`$BASE`.
+
 ## 2. Check the state of things
 
 ```bash
@@ -163,6 +167,10 @@ as they are, and skip the body template in step 5. The title guidance in step
 for one.
 
 Found none? Use the body template in step 5.
+
+End condition: the `find` has run, and either a template path is on the record
+with its headings to be kept as they are, or the search printed nothing and
+step 5's body template applies.
 
 ## 5. Draft the title and body
 
@@ -291,6 +299,9 @@ EOF
   --base $BASE
 ```
 
+End condition: `gh pr create` printed a URL, and the branch now has an
+upstream on `$REMOTE`.
+
 ## 7. Update, when a PR is open
 
 Show the user what changes before touching anything:
@@ -339,6 +350,13 @@ EOF
 )"
 ```
 
+End condition: the user answered the prompt, and either they declined and
+nothing was sent, or one of the two commands exited zero.
+
 ## 8. Confirm
 
 Print the PR URL.
+
+End condition: `gh pr view --json state,title,url` returns the PR open, with
+the title step 5 drafted. A URL printed from memory proves nothing about what
+landed.

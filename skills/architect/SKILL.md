@@ -69,11 +69,12 @@ wrong, and you found out in thirty seconds instead of after the
 implementation.
 
 Read [references/design-red-flags.md](references/design-red-flags.md) and
-screen the sketch against its four flags before you show it in phase 3.
+screen every shape you sketched against its four flags before phase 3. A fork
+is exactly where the screen pays, so run it on both sides of one.
 
-**Done when:** the sketch compiles with no implementation in it, and each of
-the four flags is either absent or named alongside the revision that answers
-it.
+**Done when:** each shape you sketched compiles with no implementation in it,
+and carries the four flags either marked absent or named alongside the
+revision that answers them.
 
 ## Phase 3: Agree
 

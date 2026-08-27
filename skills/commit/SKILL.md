@@ -302,8 +302,8 @@ default branch, say so and let the user confirm before pushing.
 
 No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
 
-The first command printing the literal `HEAD` means the checkout is detached
-and there is no branch to push. Say so and stop.
+`git rev-parse --abbrev-ref HEAD` printing the literal `HEAD` means the
+checkout is detached and there is no branch to push. Say so and stop.
 
 A push the remote rejects as non-fast-forward means the branch moved since you
 last fetched. Say so, and let the user choose between `git pull --rebase` and

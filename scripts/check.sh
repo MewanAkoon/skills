@@ -24,6 +24,11 @@ section() {
   sed -n "/^### $1\$/,/^#\{2,3\} /p" README.md
 }
 
+# Does one of those sections hold a table row for this skill?
+row_in() {
+  printf '%s\n' "$1" | grep -q "^| \[$2\](skills/$2/SKILL\.md) |"
+}
+
 readme_model="$(section 'Model-invoked')"
 readme_user="$(section 'User-invoked')"
 
@@ -69,16 +74,16 @@ for dir in skills/*/; do
   if [ "$flagged" = yes ]; then
     # User-invoked: both halves of the pair, a row under User-invoked, none under the other.
     [ "$denied" = yes ] || bad "$name: user-invoked but $yaml is missing policy.allow_implicit_invocation: false"
-    printf '%s\n' "$readme_user" | grep -q "^| \[$name\](skills/$name/SKILL\.md) |" \
+    row_in "$readme_user" "$name" \
       || bad "$name: user-invoked but not listed under README '### User-invoked'"
-    printf '%s\n' "$readme_model" | grep -q "^| \[$name\](skills/$name/SKILL\.md) |" \
+    row_in "$readme_model" "$name" \
       && bad "$name: user-invoked but also listed under README '### Model-invoked'"
   else
     # Model-invoked: neither half, a row under Model-invoked, none under the other.
     [ "$policied" = no ] || bad "$name: model-invoked but $yaml carries a policy block"
-    printf '%s\n' "$readme_model" | grep -q "^| \[$name\](skills/$name/SKILL\.md) |" \
+    row_in "$readme_model" "$name" \
       || bad "$name: model-invoked but not listed under README '### Model-invoked'"
-    printf '%s\n' "$readme_user" | grep -q "^| \[$name\](skills/$name/SKILL\.md) |" \
+    row_in "$readme_user" "$name" \
       && bad "$name: model-invoked but also listed under README '### User-invoked'"
     model_count=$((model_count + 1))
   fi

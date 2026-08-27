@@ -74,9 +74,9 @@ first. Read the whole list, then take `main`, else `master`, else `develop`,
 else `trunk`.
 
 Stop and tell the user when the current branch is that default branch,
-because a PR cannot be opened from it. Stop too when the first command in this
-step printed the literal `HEAD`, because the checkout is detached and there is
-no branch to open a PR from.
+because a PR cannot be opened from it. Stop too when the checkout is
+detached, which is what `git rev-parse --abbrev-ref HEAD` printing the
+literal `HEAD` means, because there is no branch to open a PR from.
 
 End condition: `$REMOTE` is one of the names `git remote` printed and `$BASE`
 names a branch that remote actually has, or the run has stopped with its

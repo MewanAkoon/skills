@@ -52,5 +52,6 @@ repo's own files too.
 | `skills/*/agents/openai.yaml` | Codex |
 
 Anything true for all three harnesses belongs in this file. The two rules
-directories carry one body in each harness's own format, and both fire on
-`skills/**`.
+directories carry one body in each harness's own format. Both fire on
+`skills/**`. Cursor can also pull its copy in by description, where the
+Claude rule has no equivalent.

@@ -8,7 +8,7 @@ A source of agent skills, not an application. There is nothing to build and no
 test suite. Every `SKILL.md` loads into some other repo's session, so a change
 here changes how an agent behaves everywhere.
 
-Three scripts and four commands, all bash, nothing to install:
+Three scripts, all bash, nothing to install:
 
 | Command | What it does |
 |---|---|
@@ -17,8 +17,11 @@ Three scripts and four commands, all bash, nothing to install:
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
 | `./link.sh` | Links every skill into `~/.claude/skills`. |
 
-`package.json` carries the same four as `npm run check`, `doctor`, `fired`,
-and `link`. It declares no dependencies, so there is nothing to install.
+`package.json` carries those as `npm run check`, `doctor`, `fired`, and
+`link`, plus `npm run lint`, which runs shellcheck over both scripts. It
+declares no dependencies. `lint` fetches a pinned shellcheck through `npx`,
+and CI runs that same pinned version rather than the runner image's, which
+moves on its own and disagreed with a local one about `A && B || C`.
 
 `link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude
 Code owns and Cursor also loads. Skills are never copied into a working repo.

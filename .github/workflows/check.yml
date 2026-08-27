@@ -33,4 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: shellcheck link.sh scripts/*.sh
+      # The version is pinned in package.json rather than taken from the
+      # runner image, whose shellcheck moves on its own and disagreed with a
+      # local 0.11.0 about SC2015. Printing it keeps the next disagreement
+      # visible in the log instead of only in the failure.
+      - run: npx --yes shellcheck@4.1.0 --version
+      - run: npm run lint

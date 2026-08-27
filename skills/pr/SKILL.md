@@ -19,6 +19,9 @@ Finished means the branch is reviewable, not that every commit has landed.
 Skip it while commits are still going onto the branch, and when the branch
 already has an open PR whose description still matches the diff.
 
+Skip it too while a merge, rebase, cherry-pick, or revert is in progress.
+Step 2 says how to spot one.
+
 ## How to use it
 
 Nothing to invoke. Type `/pr` to force a run, or `/pr draft` to open it as a
@@ -68,13 +71,31 @@ git ls-remote --heads $REMOTE main master develop trunk
 Stop and tell the user when the current branch is that default branch,
 because a PR cannot be opened from it.
 
+End condition: `$REMOTE` is one of the names `git remote` printed and `$BASE`
+names a branch that remote actually has, or the run has stopped with its
+reason named, which is either no remote at all or a current branch that is
+already `$BASE`.
+
 ## 2. Check the state of things
 
 ```bash
 git status --porcelain -uall
+ls "$(git rev-parse --git-dir)" \
+  | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
 gh auth status
 git remote get-url $REMOTE
 ```
+
+A hit on the second command means a merge, rebase, cherry-pick, or revert is
+mid-flight. Stop and say which one. `HEAD` is part way through the operation,
+so the diff you would describe is not the diff that will land, and a rebase
+still to finish rewrites every commit the PR would show. The
+`merge-conflicts` skill finishes the operation.
+
+An unmerged path in the first command's output stops the run the same way,
+even with no operation in flight, which is the state `git apply --3way`
+leaves behind. Its status codes are the ones carrying a `U`, plus `AA` and
+`DD`.
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
 be in the PR. Continue? (yes / no)". Stop on no.
@@ -98,6 +119,10 @@ Call the result `PR_DATA`.
   base branch for this PR? (default: <resolved default>)" and take their
   answer, or the resolved default on an empty reply. Work through steps 3 to
   5, then create the PR in step 6.
+
+End condition: `PR_DATA` is on the record, or the run has stopped with its
+reason named, which is an operation in flight, an unmerged path, a declined
+prompt, or no usable `gh`.
 
 ## 3. Read the diff
 
@@ -128,7 +153,9 @@ Above 20 files, or above roughly 500 changed lines, read it one directory or
 one package at a time and summarise per unit instead of per line.
 
 End condition: you can name what every changed file does in the change, or
-you have deliberately grouped it under a unit you can name.
+you have deliberately grouped it under a unit you can name, or the run has
+stopped because no commits are ahead of the base and there is nothing to open
+a PR for.
 
 ## 4. Pick the template
 
@@ -148,6 +175,10 @@ as they are, and skip the body template in step 5. The title guidance in step
 for one.
 
 Found none? Use the body template in step 5.
+
+End condition: the `find` has run, and either a template path is on the record
+with its headings to be kept as they are, or the search printed nothing and
+step 5's body template applies.
 
 ## 5. Draft the title and body
 
@@ -276,6 +307,9 @@ EOF
   --base $BASE
 ```
 
+End condition: `gh pr create` printed a URL, and the branch now has an
+upstream on `$REMOTE`.
+
 ## 7. Update, when a PR is open
 
 Show the user what changes before touching anything:
@@ -324,6 +358,14 @@ EOF
 )"
 ```
 
+End condition: the user answered the prompt, and either they declined and
+nothing was sent, or one of the two commands exited zero.
+
 ## 8. Confirm
 
 Print the PR URL.
+
+End condition: `gh pr view --json state,title,url` returns the PR open, and
+its title is the one step 5 drafted, or the one it already carried when the
+user declined the update in step 7. A URL printed from memory proves nothing
+about what landed.

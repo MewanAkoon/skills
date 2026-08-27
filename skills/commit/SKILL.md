@@ -20,6 +20,10 @@ not finished, and neither is a file saved while still exploring.
 Skip it while the user is still iterating on the same code, and when the user
 has not yet seen the changes.
 
+Skip it too while a merge, rebase, cherry-pick, or revert is in progress. The
+`merge-conflicts` skill finishes those and writes their commit itself. Step 1
+says how to spot one.
+
 ## How to use it
 
 Nothing to invoke. Type `/commit` to force a run, or `/commit push` to push
@@ -42,6 +46,36 @@ git diff --staged
 Stop with "Nothing to commit" only when `git status --porcelain -uall`
 prints nothing. Both diffs come back empty for a change made entirely of new
 files, so they cannot decide this on their own.
+
+Then check whether git is already part way through something:
+
+```bash
+ls "$(git rev-parse --git-dir)" \
+  | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
+```
+
+A hit means a merge, rebase, cherry-pick, or revert is mid-flight. Hand the
+run to `merge-conflicts` and stop, because a plain `git commit` during a
+rebase leaves the rebase sitting unfinished. The two `rebase-` entries are
+directories that last the whole rebase, which `REBASE_HEAD` does not.
+
+Then ask separately whether anything is unmerged, because a conflict can
+outlive its operation:
+
+```bash
+git diff --name-only --diff-filter=U
+```
+
+Hand the run to `merge-conflicts` for any path this lists too. `git add` on a
+conflicted path clears the unmerged flag without resolving a thing, so
+staging first and committing after puts the conflict markers into history and
+nothing later in this skill looks for them. `git apply --3way` is how you
+reach this state with the probe above still silent: it leaves unmerged paths
+and starts no operation at all.
+
+End condition: both checks printed nothing and `git status --porcelain -uall`
+printed at least one path, or the run has stopped with its reason named,
+which is either nothing to commit or work handed to `merge-conflicts`.
 
 ## 2. Stage the change
 
@@ -67,7 +101,9 @@ and commit them one at a time: stage the group, derive its scope, write its
 message, commit, then move to the next.
 
 End condition: every staged path belongs to the change named in the message
-you are about to write.
+you are about to write, or the run has stopped with the secret it found named,
+which is a `.env` file other than the example, or a `*.pem`, `*.key`, `id_rsa`
+or `credentials` path.
 
 ## 3. Match the repo's convention
 
@@ -105,8 +141,10 @@ conventional commits shape.
 Whichever shape you pick, step 5 supplies the length, the body rule, and the
 ending. Only the shape itself is decided here.
 
-End condition: the subject you draft matches the same pattern as most of the
-last 30 subjects.
+End condition: the subject you draft satisfies the commitlint config when the
+repo has one, and otherwise matches the same pattern as most of the last 30
+subjects. A repo that has just adopted commitlint has a history that
+disagrees with its own config, and the config wins.
 
 ## 4. Derive the scope
 
@@ -195,6 +233,10 @@ Create a new commit every time. When the user wants a change folded into the
 commit before it, say that amending rewrites history and ask them to confirm
 first.
 
+End condition: the snapshot is written down before the commit runs, and
+`git commit` has returned with its exit status and any hook output captured.
+Step 7 reads both, so neither can be skipped here.
+
 ## 7. Handle what the hooks did
 
 - **Hook failed and files were modified.** The hook fixed things itself.
@@ -211,7 +253,9 @@ first.
   as `chore(lint): apply auto-fixes`.
 
 End condition: `git status --porcelain -uall` returns nothing beyond the
-unstaged and untracked entries the step 6 snapshot held.
+unstaged and untracked entries the step 6 snapshot held, or the run has
+stopped on a hook failure that changed no files, with the hook output printed
+and the staged change left exactly as it was for the user to fix.
 
 ## 8. Push, when asked
 
@@ -244,8 +288,19 @@ default branch, say so and let the user confirm before pushing.
 
 No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
 
+End condition: `git push` exited zero and `git rev-parse --abbrev-ref
+--symbolic-full-name '@{u}'` names a branch on `$REMOTE`, or the step was
+skipped with its reason named, which is either no push asked for or a push
+onto the default branch that the user declined.
+
 ## 9. Confirm
 
+Print one line per commit this run created, so a run that split three groups
+prints three and a run that added a hook fix-up in step 7 prints that too:
+
 ```bash
-git log --oneline -3
+git log --oneline -<commits this run created>
 ```
+
+End condition: every commit this run created is in that output, newest first,
+and nothing the run did not create sits above them.

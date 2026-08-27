@@ -43,7 +43,7 @@ dates() {
 # Every skill invocation in every transcript, as "path:<match>". One pass over
 # the tree rather than one pass per skill.
 hits() {
-  grep -rHoE '"skill":"[a-z0-9_-]+"' "$TRANSCRIPTS" --include='*.jsonl' 2>/dev/null
+  grep -rHoE '"skill":"[a-z0-9_-]+"' "$TRANSCRIPTS" --include='*.jsonl' 2>/dev/null || true
 }
 
 names=""
@@ -55,22 +55,34 @@ sessions="$(find "$TRANSCRIPTS" -name '*.jsonl' -type f | wc -l | tr -d ' ')"
 
 printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "$SHOWN"
 
-awk -v skills="$names" '
-  # First input: "date<tab>path". Splitting on the tab keeps a path holding
-  # spaces intact.
-  NR == FNR {
-    i = index($0, "\t")
-    if (i > 0) day[substr($0, i + 1)] = substr($0, 1, i - 1)
+# One tagged stream rather than two inputs. The usual NR==FNR idiom decides
+# which input a line came from by counting records, and when the first input is
+# empty it reads every line of the second as though it belonged to the first.
+# Here that would silently count no skill at all and report the whole set as
+# never fired, which is the input to a rule that deletes skills. A `stat` that
+# does not support either format is enough to empty the date list, so the tag
+# carries the answer instead of the record count.
+{
+  dates | sed 's/^/D /'
+  hits | sed 's/^/H /'
+} | awk -v skills="$names" '
+  # "D <date><tab><path>". Splitting on the tab keeps a path holding spaces
+  # intact.
+  substr($0, 1, 2) == "D " {
+    rest = substr($0, 3)
+    i = index(rest, "\t")
+    if (i > 0) day[substr(rest, i + 1)] = substr(rest, 1, i - 1)
     next
   }
 
-  # Second input: grep -H output, "path:<match>". The match always begins at
-  # the first `:"skill":"`, so splitting there survives a path with a colon.
+  # "H <path>:<match>", from grep -H. The match always begins at the first
+  # `:"skill":"`, so splitting there survives a path with a colon.
   {
-    i = index($0, ":\"skill\":\"")
+    rest = substr($0, 3)
+    i = index(rest, ":\"skill\":\"")
     if (i == 0) next
-    path = substr($0, 1, i - 1)
-    name = substr($0, i + 10)
+    path = substr(rest, 1, i - 1)
+    name = substr(rest, i + 10)
     sub(/".*$/, "", name)
 
     count[name]++
@@ -90,7 +102,9 @@ awk -v skills="$names" '
       if (s == "") continue
       total++
       if (count[s] > 0) {
-        printf "%-18s %6d  %s\n", s, count[s], last[s]
+        # Blank when the date list came back empty, which the tag above keeps
+        # from costing the count itself.
+        printf "%-18s %6d  %s\n", s, count[s], last[s] ? last[s] : "unknown"
       } else {
         printf "%-18s %6d  %s\n", s, 0, "never"
         never++
@@ -103,4 +117,4 @@ awk -v skills="$names" '
       print "Check ./scripts/check.sh --doctor first: an unlinked skill cannot fire."
     }
   }
-' <(dates) <(hits)
+'

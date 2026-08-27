@@ -43,6 +43,14 @@ delve, enhance, robust, leverage, utilize, facilitate, seamless,
 comprehensive, pivotal, underscore, showcase, testament, intricate,
 landscape (as a metaphor), tapestry, ecosystem (as a metaphor), garner.
 
+Reach for the plain word under a technical-sounding metaphor. Substrate
+becomes base, wedge in becomes add, vector becomes way, gold-plating becomes
+more than the job needs, evacuate becomes move out, endgame becomes the last
+phase, and ratchet becomes the mechanism's real name or a limit that only
+tightens. Write "the API" rather than "the API surface". Also drop nexus,
+locus, bedrock, paradigm, modality, vantage, north star, flywheel,
+scaffolding as a metaphor, and primitive as a noun.
+
 Use "is" and "has" directly. "Serves as", "stands as", "boasts", and
 "features" are longer ways of saying the same thing.
 
@@ -64,6 +72,11 @@ it in two.
 
 Cut adverbs or use a stronger verb. "Runs quickly" becomes "is fast" or the
 actual number. An adverb propping up a weak verb means the verb is wrong.
+
+Cut a trailing -ing clause that carries no fact: "highlighting the need
+for", "ensuring reliability", "reflecting the team's priorities". State the
+fact it gestures at, or delete the clause. This one slips past the other
+rules, because it is active voice, one idea, and contains no banned word.
 
 State the point directly instead of writing "not just X, but Y".
 

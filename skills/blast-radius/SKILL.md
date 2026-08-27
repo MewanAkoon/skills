@@ -51,8 +51,10 @@ list as is cheap, then say where it stopped.
 4. **You ran it.** A script, a query, a test that would fail if the claim
    were false, and it passed.
 
-Label every claim with its level. A report where the critical fact sits at
-level 1 is a report that has not done its job.
+Label every claim with its level. Any safety fact that stopped below level 4
+gets written down as unproven, not as settled. Level 4 is usually one small
+script that imports the same library the app ships and calls the exact
+function you are worried about.
 
 ## Where to look
 
@@ -73,15 +75,28 @@ Grep finds direct callers. These are the things it does not find:
 
 ## Output
 
-Keep it short. For each risk:
+Keep it short. Under **Risks**, for each one:
 
 - What breaks
 - Why you think so, with a `file:line` or the query you ran
 - Evidence level, 1 to 4
 - What would settle it, if it is below 4
 
+Then **Cleared**: what you checked that turned out fine, one line each naming
+what you checked it with. Without this a reader cannot tell a risk you cleared
+from one you never looked at.
+
+Then **Before you merge**: the cheapest test or repro that would catch the
+real bug, including the script you wrote.
+
 Then one line at the end: the single fact this change's safety rests on, and
 whether it is proven.
+
+**Done when:** every risk carries an evidence level, every source you touched
+appears under either Risks or Cleared, Before you merge names a test or repro
+that would fail if the safety fact were false, and that fact is either
+labelled proven by a level 4 run, or labelled unproven with the run that was
+attempted and what stopped it.
 
 ---
 

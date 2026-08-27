@@ -1,2 +1,9 @@
 node_modules/
 .DS_Store
+
+# A global ignore of .claude/ (see the README setup) would hide this repo's
+# own rules. Un-ignore that one directory and nothing else, so worktree
+# checkouts and local settings stay out.
+!.claude/
+.claude/*
+!.claude/rules/

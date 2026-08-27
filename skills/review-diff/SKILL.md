@@ -28,8 +28,9 @@ Skip it when the question is "does this break something else". That is
 ## How to use it
 
 Type `/review-diff` with a fixed point: `/review-diff since main`,
-`/review-diff since HEAD~5`, or a commit SHA. You get a list of findings and
-one line saying which is the worst.
+`/review-diff since HEAD~5`, or a commit SHA. You get findings grouped under
+their heading, and each heading closes with its own count and its own worst
+one.
 
 If the change was supposed to do something specific, say what in one line
 when you invoke it. That turns on step 5.
@@ -53,11 +54,16 @@ The last two commands catch the work that is not committed yet. Review it
 alongside the range, or say it is excluded. A review of a branch that ignores
 the working tree misses whatever the author is holding.
 
-If the user named no fixed point, ask for one.
+If the user named no fixed point, ask for one and stop until they answer.
 
-**Done when:** the ref resolves, the diff lists at least one file, the commit
-list is on the record, and uncommitted changes are either in the review or
-named as excluded.
+Stop when the diff lists no file and the working tree is clean, because there
+is nothing to review.
+
+**Done when:** the ref resolves, the diff and the commit list are on the
+record, and uncommitted changes are either in the review or named as excluded,
+or the review has stopped with its reason named, which is a diff that lists no
+file and so has nothing to review, or a fixed point the user has yet to
+name.
 
 ## Step 2: Get the intent in one line
 
@@ -159,16 +165,19 @@ Group findings by file. For each one:
 - What is wrong, in one sentence
 - Violation of a named standard, or judgement call on a named smell
 
-Then one closing line: the count of findings, and the single worst one. When
-step 5 ran, keep its findings under their own heading rather than mixed in,
-because "this breaks a convention" and "this builds the wrong thing" are for
-different readers.
+When step 5 ran, keep its findings under their own heading rather than mixed
+in, because "this breaks a convention" and "this builds the wrong thing" are
+for different readers.
 
-**Done when:** every finding has a `file:line` and a named source, and the
-closing line names the worst one.
+Close each heading with its own count and its own worst finding. Neither
+heading's worst outranks the other's, because ranking the two together is the
+mixing the separate headings exist to prevent.
+
+**Done when:** every finding has a `file:line` and a named source, and each
+heading holding findings ends on its own count and its own worst one.
 
 ---
 
 Adapted from the `code-review` skill in mattpocock/skills (MIT), with the
-parallel sub-agents and the separate spec axis removed. The smell baseline is
-condensed from Martin Fowler, *Refactoring*, chapter 3.
+parallel sub-agents removed and the spec axis folded in as step 5. The smell
+baseline is condensed from Martin Fowler, *Refactoring*, chapter 3.

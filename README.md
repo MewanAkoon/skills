@@ -83,10 +83,25 @@ Only fire when typed. Zero context cost.
 Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
+Run the checker before committing:
+
+```bash
+./scripts/check.sh
+```
+
+It covers the mechanical half of that standard. [AGENTS.md](AGENTS.md) lists
+what it checks. CI runs the same script on every pull request and on every
+push to `main`.
+
+## Instructions for agents
+
+[AGENTS.md](AGENTS.md) holds the rules for any agent working in this repo, and
+its table says which file each harness reads.
+
 ## Attribution
 
-Skills here are adapted from two MIT-licensed repos. Each file names its
-source at the bottom.
+Most skills here are adapted from two MIT-licensed repos, and each of those
+names its source at the bottom. The rest were written for this repo.
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)
 - [cursor/plugins pstack](https://github.com/cursor/plugins/tree/main/pstack),

@@ -1,6 +1,6 @@
 ---
 name: merge-conflicts
-description: Use when git reports unmerged paths, after a merge, rebase, cherry-pick, revert, stash pop, or applied patch, or when the user says a pull left both versions inside a file. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
+description: Use when git reports unmerged paths, whether they came from a merge, rebase, cherry-pick, revert, stash pop, or applied patch, or when the user says a pull left both versions inside a file. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
 ---
 
 # Merge conflicts
@@ -38,8 +38,8 @@ refuses with "Committing is not possible because you have unmerged files".
 
 ## How to use it
 
-Nothing to invoke. It says which step it is on, and it prints a line for
-every hunk where the two sides contradicted each other.
+Nothing to invoke. It prints a line for every hunk where the two sides
+contradicted each other.
 
 ---
 
@@ -152,9 +152,13 @@ git has no way to flag:
 - Both sides added a route, a queue consumer, or an event handler under the
   same name.
 
-**Done when:** the symbols changed on either side are listed by name, each
-one has its caller count on the record, and every caller outside the unmerged
-paths has been opened.
+Past 20 callers for one symbol, open the ones under the directories this
+operation touched and record how many you left unopened.
+
+**Done when:** every symbol either side changed is listed by name with its
+caller count, and every caller outside the unmerged paths is either opened or
+counted under the 20-caller rule, or the record says neither side changed a
+symbol.
 
 ## Step 5: Run the project's own checks
 
@@ -162,12 +166,18 @@ Find them rather than guessing: `package.json` scripts, the CI workflow
 files, `turbo.json` or the workspace config. Run typecheck, then tests, then
 lint and format.
 
+Record that this repo defines no such checks when the search turns up none,
+and carry on to step 6. A repo of prose or config often has nothing to run,
+and that is an answer rather than a blocked step.
+
 Report each command and its exit code. Fix the failures this operation
 caused. For a failure that was already red on both parent commits, say so and
 leave it.
 
-**Done when:** each check is listed with its exit code, and every failure
-introduced by the operation is fixed.
+**Done when:** each check is listed with its exit code and every failure the
+operation introduced is fixed, or the record says this repo defines no checks,
+or a failure resisted the fix and the run has stopped with that command, its
+output, and what was tried on the record.
 
 ## Step 6: Finish the operation
 
@@ -178,16 +188,17 @@ git add <files>
 git merge --continue    # or: rebase, cherry-pick, revert, am
 ```
 
-This step owns the commit for the operation, so keep the `commit` skill out
-of it. Each `--continue` writes the message git already prepared, and a
-rebase or a cherry-pick needs its own continue rather than a fresh
-`git commit`.
+Each `--continue` writes the message git already prepared, so the `commit`
+skill stays out of those paths. A rebase or a cherry-pick needs its own
+continue rather than a fresh `git commit`.
 
 A rebase stops again on the next commit. Repeat from step 1 until it runs
 out.
 
 A bare `git apply --3way` started no operation, so there is nothing to
-continue. Stage the resolved files and commit them as an ordinary change.
+continue and git prepared no message. Stage the resolved files and hand the
+run to the `commit` skill, which scans them for secrets, matches the repo's
+message convention, and recovers from a hook that rewrites files.
 
 A stash pop has no continue. Stage the resolved files, confirm the working
 tree holds what you want, then drop the entry git kept:
@@ -200,8 +211,11 @@ Finish the operation rather than backing out of it. When the right move is
 `--abort`, say why and wait for the user to answer.
 
 **Done when:** `git status` reports no operation in progress and no unmerged
-paths, and for a stash pop, `git stash list` no longer holds the entry that
-produced the conflict.
+paths, and for a stash pop `git stash list` no longer holds the entry that
+produced the conflict, or the run has handed off with its destination named,
+which is a rebase that stopped on its next commit and restarted at step 1, an
+`apply --3way` passed to the `commit` skill, or an `--abort` waiting on the
+user's answer.
 
 ---
 

@@ -70,6 +70,32 @@ type Range = { start: Date; durationMs: number };
 
 There is no way to express an end before a start, so no validator is needed.
 
+## Simplest total type
+
+Keep the loose type while every operation on it stays total:
+
+```ts
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0); // [] is 0
+```
+
+Strengthen where the loose type forces a lie at a use site. The tells are `!`,
+`xs[0] as T`, and a "cannot happen" throw:
+
+```ts
+// partiality smuggled past the compiler
+function newest(sessions: Session[]): Session {
+  return sessions.at(0)!;
+}
+
+// strengthen the input and the assertion disappears
+function newest(sessions: NonEmpty<Session>): Session {
+  return sessions[0];
+}
+```
+
+Returning `Session | undefined` is the other total signature. Either way the
+empty case lands at the call site, the one place that knows what empty means.
+
 ## unknown over any
 
 ```ts
@@ -81,6 +107,30 @@ async function loadConfig(): Promise<AppConfig> {
 
 `unknown` forces the parse. `any` would let the raw value flow into the rest
 of the app untouched.
+
+## No `as` casts
+
+```ts
+// a crash waiting for the wrong payload
+const user = data as User;
+
+// the cast earned, sitting after the checks that make it true
+function parseUser(data: unknown): User {
+  if (typeof data !== "object" || data === null) throw new Error("expected object");
+  const raw = data as Record<string, unknown>;
+  if (typeof raw.id !== "string") throw new Error("expected id");
+  // ... every other field
+  return data as User;
+}
+```
+
+When taking an `as` out of existing code, find why the compiler cannot infer
+the type:
+
+- No discriminant. Add one and switch to a discriminated union.
+- Source type too wide, such as `Record<string, unknown>`. Narrow it.
+- Untyped boundary. Add a parse function or a schema.
+- Genuinely inexpressible. Reach for a branded type or `satisfies`.
 
 ## Narrowing order
 
@@ -113,9 +163,20 @@ function isMongoDuplicateKeyError(err: unknown): err is { code: 11000 } {
 }
 ```
 
-That guard checks everything it claims. A guard that returns
-`typeof err === "object"` while claiming `err is MongoError` is lying, and
-the lie is invisible at the call site.
+## Honest type guards
+
+The guard above checks everything it claims. This one does not:
+
+```ts
+function isMongoError(err: unknown): err is MongoError {
+  return typeof err === "object" && err !== null;
+}
+```
+
+Every caller now treats any object as a `MongoError`, and the lie is invisible
+at the call site, because the name says it is safe. Prefer discriminant
+narrowing wherever a discriminant exists, since a guard adds a layer the
+reader has to follow.
 
 ## Exhaustiveness
 
@@ -152,6 +213,23 @@ routes.health.method; // "GET", the literal, still narrow
 
 With `as Record<string, RouteDef>` the literal widens to `string` and you
 lose the narrowing. `satisfies` checks the shape and keeps the literals.
+
+## Parse at the boundary
+
+Validate once where the data crosses in, then trust the type inside.
+
+```ts
+// the edge: parse once, then trust the result
+export function handle(raw: unknown): Result {
+  const input = InputSchema.parse(raw); // throws here, nowhere deeper
+  return process(input);                // process takes Input, not unknown
+}
+```
+
+A wire format such as protobuf parses with `ignoreUnknownFields`, so a
+forward-compatible field addition does not break an old client. A persisted
+JSON blob carries a version and parses inside a try/catch. Deeper in the call
+chain, use the parsed type as it stands.
 
 ## Derive, do not redeclare
 

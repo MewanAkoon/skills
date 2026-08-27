@@ -136,15 +136,18 @@ share:
   name has none.
 
 Fewer than five commits, or no shape shared by most of them, means use the
-conventional commits shape.
+conventional commits shape. So does `git log` exiting 128, which is what a
+repo with no commits yet returns.
 
 Whichever shape you pick, step 5 supplies the length, the body rule, and the
 ending. Only the shape itself is decided here.
 
 End condition: the subject you draft satisfies the commitlint config when the
 repo has one, and otherwise matches the same pattern as most of the last 30
-subjects. A repo that has just adopted commitlint has a history that
-disagrees with its own config, and the config wins.
+subjects, or it uses the conventional commits shape because `git log` failed
+on a repo with no commits or the subjects share no shape. A repo that has just
+adopted commitlint has a history that disagrees with its own config, and the
+config wins.
 
 ## 4. Derive the scope
 
@@ -203,8 +206,10 @@ type(scope): short description
 Types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `chore`, `style`,
 `build`, `ci`.
 
-End condition: the subject fits in roughly 60 characters and someone scanning
-`git log` learns what changed from it without opening the diff.
+End condition: the subject fits in roughly 60 characters, carries the shape
+step 3 picked, and has no full stop; the body runs to two bullets at most and
+stops at the last one; or the draft needed a third bullet and the run has gone
+back to step 2 to split the commit.
 
 ## 6. Commit
 
@@ -244,6 +249,8 @@ Step 7 reads both, so neither can be skipped here.
   unstaged or untracked entry in the step 6 snapshot. A staged file that has
   picked up a second status letter is the hook's work, whether that reads
   `MM` for an edit or `AM` for a file this change adds. Retry the commit once.
+  When the retry fails too, print its output, stop, and tell the user what to
+  fix.
 - **Hook failed and nothing was modified.** A real failure, such as a type
   error or a lint rule with no autofix. Print the hook output, stop, and tell
   the user what to fix. Do not retry.
@@ -254,8 +261,10 @@ Step 7 reads both, so neither can be skipped here.
 
 End condition: `git status --porcelain -uall` returns nothing beyond the
 unstaged and untracked entries the step 6 snapshot held, or the run has
-stopped on a hook failure that changed no files, with the hook output printed
-and the staged change left exactly as it was for the user to fix.
+stopped with the hook output printed for the user to fix, which is either a
+hook failure that changed no files and left the staged change exactly as it
+was, or a retry that failed after the hook rewrote them and those rewritten
+files were re-staged.
 
 ## 8. Push, when asked
 
@@ -277,21 +286,34 @@ does not survive into the next one. Then read the default branch:
 git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'
 ```
 
-When that prints nothing, fall back to the first of these the remote has:
+When that prints nothing, ask the remote which of these it carries:
 
 ```bash
 git ls-remote --heads $REMOTE main master develop trunk
 ```
+
+That output is sorted by ref name rather than by the order the names were
+asked for, so a remote holding both `develop` and `main` prints `develop`
+first. Read the whole list, then take `main`, else `master`, else `develop`,
+else `trunk`.
 
 Push when the current branch is not that default branch. When it is the
 default branch, say so and let the user confirm before pushing.
 
 No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
 
+`git rev-parse --abbrev-ref HEAD` printing the literal `HEAD` means the
+checkout is detached and there is no branch to push. Say so and stop.
+
+A push the remote rejects as non-fast-forward means the branch moved since you
+last fetched. Say so, and let the user choose between `git pull --rebase` and
+leaving it where it is.
+
 End condition: `git push` exited zero and `git rev-parse --abbrev-ref
---symbolic-full-name '@{u}'` names a branch on `$REMOTE`, or the step was
-skipped with its reason named, which is either no push asked for or a push
-onto the default branch that the user declined.
+--symbolic-full-name '@{u}'` names a branch on `$REMOTE`, or the step has
+stopped with its reason named, which is no push asked for, a detached `HEAD`
+with no branch to push, a push onto the default branch that the user declined,
+or a non-fast-forward rejection with the user's answer still to come.
 
 ## 9. Confirm
 

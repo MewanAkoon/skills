@@ -8,8 +8,8 @@ description: Use when a branch has commits ahead of its base and the work is rea
 ## What this does
 
 It reads everything the branch changed against its base, writes a title and a
-description from the diff rather than from the branch name, and either opens
-a pull request or updates the one that is already open.
+description from the diff, and either opens a pull request or updates the one
+that is already open.
 
 ## When it runs
 
@@ -62,19 +62,26 @@ When that prints nothing, ask the remote itself:
 git remote show $REMOTE | sed -n '/HEAD branch/s/.*: //p'
 ```
 
-When that fails too, take the first of these the remote actually has:
+When that fails too, ask the remote which of these it carries:
 
 ```bash
 git ls-remote --heads $REMOTE main master develop trunk
 ```
 
+That output is sorted by ref name rather than by the order the names were
+asked for, so a remote holding both `develop` and `main` prints `develop`
+first. Read the whole list, then take `main`, else `master`, else `develop`,
+else `trunk`.
+
 Stop and tell the user when the current branch is that default branch,
-because a PR cannot be opened from it.
+because a PR cannot be opened from it. Stop too when the checkout is
+detached, which is what `git rev-parse --abbrev-ref HEAD` printing the
+literal `HEAD` means, because there is no branch to open a PR from.
 
 End condition: `$REMOTE` is one of the names `git remote` printed and `$BASE`
 names a branch that remote actually has, or the run has stopped with its
-reason named, which is either no remote at all or a current branch that is
-already `$BASE`.
+reason named, which is no remote at all, a detached `HEAD`, or a current
+branch that is already `$BASE`.
 
 ## 2. Check the state of things
 
@@ -82,6 +89,7 @@ already `$BASE`.
 git status --porcelain -uall
 ls "$(git rev-parse --git-dir)" \
   | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
+git diff --name-only --diff-filter=U
 gh auth status
 git remote get-url $REMOTE
 ```
@@ -92,10 +100,10 @@ so the diff you would describe is not the diff that will land, and a rebase
 still to finish rewrites every commit the PR would show. The
 `merge-conflicts` skill finishes the operation.
 
-An unmerged path in the first command's output stops the run the same way,
-even with no operation in flight, which is the state `git apply --3way`
-leaves behind. Its status codes are the ones carrying a `U`, plus `AA` and
-`DD`.
+Any path the third command lists stops the run the same way, even with no
+operation in flight, which is the state `git apply --3way` leaves behind. That
+probe reports every unmerged path, including the `AA` and `DD` cases that
+carry no `U` in the status output.
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
 be in the PR. Continue? (yes / no)". Stop on no.
@@ -182,6 +190,9 @@ step 5's body template applies.
 
 ## 5. Draft the title and body
 
+The title and the body both describe what the code does. The ticket and the
+branch name are not evidence of what landed.
+
 For the title, match the convention already in use:
 
 ```bash
@@ -199,13 +210,13 @@ at 70 characters or fewer, picking the type from:
 - `[Refactor]` for a restructure with no behaviour change
 - `[Docs]` for documentation alone
 
-The description is title-cased and names the intent of the change. A list of
-the files touched is not an intent.
+The description is title-cased and names what the change makes true. A list
+of the files touched is not that.
 
 For the body:
 
 ````
-## What & why
+## What and why
 <!-- One paragraph. What changed and why, not how. -->
 <one paragraph summary>
 
@@ -238,13 +249,10 @@ For the body:
 <!-- Skip style and syntax. Flag where you want human judgment. -->
 - <focus area>
 
-## What did you deliberately NOT do?
+## What did you deliberately not do?
 <!-- Scope decisions, known trade-offs, follow-up tickets -->
 - <deliberate omission>
 ````
-
-Describe what the code does. The ticket and the branch name are not evidence
-of what landed.
 
 Tick the boxes that apply under Type of change and Testing, and replace the
 comment under "How to review locally" with the commands a reviewer actually
@@ -307,8 +315,15 @@ EOF
   --base $BASE
 ```
 
-End condition: `gh pr create` printed a URL, and the branch now has an
-upstream on `$REMOTE`.
+`gh pr create` fails outright when the base branch refuses new pull requests,
+when the token cannot push the branch, and when this branch already has one
+open. Print what `gh` said and stop. For a PR already open, name its number so
+the user can rerun and take step 7 instead.
+
+End condition: `gh pr create` printed a URL and the branch now has an upstream
+on `$REMOTE`, or the run has stopped with what `gh` reported printed, which is
+a protected base, no permission to push the branch, or a PR already open for
+this branch.
 
 ## 7. Update, when a PR is open
 

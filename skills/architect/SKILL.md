@@ -39,8 +39,8 @@ happens at each hop.
 Name what already exists that this change has to live alongside: existing
 types it must match, existing patterns in this codebase, existing callers.
 
-**Done when:** you can describe the current flow without reading the files
-again, and you have named the constraints the design has to satisfy.
+**Done when:** the flow is written out hop by hop with a `file:line` at each
+hop, and the constraints the design has to satisfy are listed by name.
 
 ## Phase 2: Sketch
 
@@ -68,7 +68,13 @@ before you write the thing. If the call site is awkward, the interface is
 wrong, and you found out in thirty seconds instead of after the
 implementation.
 
-**Done when:** the sketch compiles, with no implementation in it.
+Read [references/design-red-flags.md](references/design-red-flags.md) and
+screen every shape you sketched against its four flags before phase 3. A fork
+is exactly where the screen pays, so run it on both sides of one.
+
+**Done when:** each shape you sketched compiles with no implementation in it,
+and carries the four flags either marked absent or named alongside the
+revision that answers them.
 
 ## Phase 3: Agree
 
@@ -78,7 +84,9 @@ rejected alternative was.
 Wait for approval. Do not start implementing on a "looks good" that came
 before the user read it.
 
-**Done when:** the user has approved this specific sketch.
+**Done when:** the user has approved this specific sketch, or has named
+changes and approved the amended one, or has rejected the shape, which sends
+you back to phase 2.
 
 ## Phase 4: Implement
 
@@ -92,8 +100,17 @@ phase 5.
 
 ## Phase 5: Scrap when it is wrong
 
-If the implementation shows the sketch was wrong, say so out loud and say
-what it got wrong. Then go back to phase 2 and redesign.
+The trigger is a repeating pattern of friction, not one hard case. The tells:
+
+- The same shape of workaround turning up in unrelated places.
+- Several unrelated edge cases that each need their own branch.
+- Types that need `any`, a cast, or an always-set optional field to compile.
+- Reaching for a lock where the sketch said the state was not shared.
+- Callers having to know the abstraction's internal rules to use it.
+
+Complexity in the data is not complexity in the design, so a few hard cases
+leave the shape standing. When the pattern is there, say so out loud and say
+what the sketch got wrong. Then go back to phase 2 and redesign.
 
 Do not bend the implementation around a bad sketch. A sketch that survives by
 being worked around is worse than no sketch, because the shape is now wrong
@@ -105,4 +122,5 @@ confirmed as still correct.
 ---
 
 Adapted from the `architect` skill in cursor/plugins pstack, by Lauren Tan
-(MIT). The Cursor subagent and model-routing steps are removed.
+(MIT). The Cursor subagent, model-routing, and arena steps are removed, and
+the phase 3 approval is always on rather than opt-in.

@@ -57,17 +57,19 @@ update the four callers listed above".
 **Open questions.** Anything a human needs to decide before the work can
 finish, with the options.
 
+The document gets pasted into another tool, so write `<REDACTED>` in place of
+any key, token, password, connection string, or personal data.
+
 ## What stays out
 
-Do not paste code that is already in the branch. Reference `file:line`
-instead. The next agent can read the repo, and pasted code goes stale the
-moment someone commits.
+Point at code with `file:line` rather than pasting it. The next agent can
+read the repo, and pasted code goes stale the moment someone commits.
 
-Do not summarise the conversation. Nobody needs to know what order things
-were discussed in.
+Write the state the conversation arrived at. The order things were discussed
+in stays out.
 
-Do not include reasoning that led nowhere and taught nothing. Dead ends are
-worth recording, wandering is not.
+Record a failed approach when it taught something. Reasoning that reached no
+conclusion has nothing to teach, so it stays out.
 
 ## Checking it
 
@@ -76,6 +78,11 @@ no memory, could I do the next step?
 
 If the answer needs anything from the session that is not written down, add
 it.
+
+**Done when:** every file, function, and decision the next step names appears
+elsewhere in the document as a real path or a real name, each section above
+holds content or one line saying it is empty, and every key, token, password,
+connection string, and piece of personal data reads `<REDACTED>`.
 
 ---
 

@@ -76,8 +76,14 @@ List the sources this repo can reach before searching any of them: an issue
 tracker, ADRs and specs under `docs/` or `.scratch/`, a Notion or Slack
 workspace where a connector is available.
 
+When the target is one of the shapes named in "When to use it", add two more:
+error tracking and metrics, where a connector reaches them.
+
 Search each one on the symbol name, the constant's value, the ticket key, and
-the week the change shipped.
+the week the change shipped. In error tracking, look for issues first seen in
+the weeks before the commit whose stack passes through the target. In metrics,
+look for a monitor threshold matching the constant. A monitor created the same
+day as the change is usually the whole answer.
 
 An empty search carries information. "Searched the tracker for the retry
 threshold, nothing" says the number was chosen in a PR rather than in a plan.

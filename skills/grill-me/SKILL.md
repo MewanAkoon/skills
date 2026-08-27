@@ -52,6 +52,9 @@ variable names.
 is not an answer. Ask what the caller sees, what gets logged, and what
 happens to the half-finished work.
 
+**Find the facts yourself.** Read the repo, open the manifest, run the tool.
+The user's time is for the decisions only they can make.
+
 **Propose when asked.** If the user says they do not know, give two concrete
 options with the trade-off, and let them pick. Do not stall on a question
 they cannot answer.
@@ -84,10 +87,15 @@ Work through these, skipping the ones that do not apply:
 ## Ending
 
 Stop when the remaining questions are ones whose answers would not change the
-build.
+build, or when the user says "enough".
 
 Then write the summary: the decisions made, the options rejected and why, and
 anything still open. Short. It is a record, not a document.
+
+**Done when:** the summary is written and the user has confirmed it, or has
+named a correction that is now in it, or the run has stopped because the user
+said "enough" and the summary went out unconfirmed. That confirmation is what
+releases the agent to build.
 
 ---
 

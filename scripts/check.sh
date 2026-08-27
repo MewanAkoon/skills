@@ -7,7 +7,10 @@
 
 set -uo pipefail
 
-cd "$(dirname "$0")/.." || exit 1
+# Resolve through a symlink, so invoking this from a bin directory on PATH
+# still finds the clone rather than the symlink's own directory.
+SELF="$(readlink -f "$0")"
+cd "$(dirname "$SELF")/.." || exit 1
 
 doctor=no
 for arg in "$@"; do

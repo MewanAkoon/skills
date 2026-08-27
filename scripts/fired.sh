@@ -12,9 +12,17 @@
 
 set -uo pipefail
 
-cd "$(dirname "$0")/.." || exit 1
+# Resolve through a symlink, so invoking this from a bin directory on PATH
+# still finds the clone rather than the symlink's own directory.
+SELF="$(readlink -f "$0")"
+cd "$(dirname "$SELF")/.." || exit 1
 
 TRANSCRIPTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
+
+# ~/.claude/projects reads better than the absolute path, and $HOME is the
+# only part worth shortening.
+SHOWN="$TRANSCRIPTS"
+case "$SHOWN" in "$HOME"/*) SHOWN="~${SHOWN#"$HOME"}" ;; esac
 
 if [ ! -d "$TRANSCRIPTS" ]; then
   echo "no transcripts at $TRANSCRIPTS, so nothing to count" >&2
@@ -45,7 +53,7 @@ done
 
 sessions="$(find "$TRANSCRIPTS" -name '*.jsonl' -type f | wc -l | tr -d ' ')"
 
-printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "${TRANSCRIPTS/#$HOME/\~}"
+printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "$SHOWN"
 
 awk -v skills="$names" '
   # First input: "date<tab>path". Splitting on the tab keeps a path holding

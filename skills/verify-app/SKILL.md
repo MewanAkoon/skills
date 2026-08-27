@@ -83,12 +83,24 @@ it. A global gitignore covering `.claude/` is one setup step on one machine,
 so a fresh clone or a teammate's checkout answers differently:
 
 ```bash
-git check-ignore -q .claude/skills/verify-<app> && echo ignored || echo tracked
+git check-ignore -q .claude/skills/verify-<app>
+case $? in
+  0) echo "ignored" ;;
+  1) echo "not ignored" ;;
+  *) echo "check-ignore failed" ;;
+esac
 ```
 
-The path does not have to exist yet for this to answer. On `tracked`, say so
-and ask whether to add `.claude/` to the repo's own `.gitignore` first,
-because otherwise the generated skill lands in the next `git add -A`.
+Read the exit status rather than whether the command succeeded, because `-q`
+prints nothing either way and a run outside a repository exits 128 like any
+other error.
+
+The path does not have to exist yet for this to answer. On `not ignored`, say
+so and ask whether to add `.claude/` to the repo's own `.gitignore` first,
+because otherwise the generated skill lands in the next `git add -A`. Add it
+on yes. On no, say the generated skill will be committed along with everything
+else, and carry on. On `check-ignore failed`, print what git said and stop,
+because there is no repository to write a skill into.
 
 Create `.claude/skills/verify-<app>/SKILL.md` with frontmatter carrying
 `name: verify-<app>`, a description naming the app and the surface, and
@@ -96,11 +108,12 @@ Create `.claude/skills/verify-<app>/SKILL.md` with frontmatter carrying
 `policy.allow_implicit_invocation: false`. Without frontmatter the skill
 never registers.
 
-Then link it for the other two tools, so one file serves all three:
+Then link it once for Codex, so one file serves all three. Cursor already
+reads `.claude/skills` and `.agents/skills`, so a third link under
+`.cursor/skills` would list the skill three times in its picker:
 
 ```bash
-mkdir -p .cursor/skills .agents/skills
-ln -sfn ../../.claude/skills/verify-<app> .cursor/skills/verify-<app>
+mkdir -p .agents/skills
 ln -sfn ../../.claude/skills/verify-<app> .agents/skills/verify-<app>
 ```
 
@@ -129,11 +142,13 @@ Write these sections, each holding real commands from this repo:
 - **Helpers.** Any script it ships is executable, and the body shows how to
   call it.
 
-**Done when:** the ignore check has been run and its answer is on the record,
-the file exists, its Launch and teardown commands are the ones that worked in
-step 2, every other section holds a command built from a real
-path, port, or selector in this repo, and a grep for `TODO` and for
-`<placeholder>` style angle brackets returns nothing.
+**Done when:** the ignore check has been run, its answer is on the record
+along with what the user chose when it said `not ignored`, the file exists,
+its Launch and teardown commands are the ones that worked in step 2, every
+other section holds a command built from a real path, port, or selector in
+this repo, and a grep for `TODO` and for `<placeholder>` style angle brackets
+returns nothing; or nothing was written because `check-ignore failed` and the
+run stopped with git's message printed.
 
 ## Step 4: Seed the feature map
 
@@ -160,13 +175,16 @@ each file has all four headings filled with content from this repo.
 
 Follow only the text in the generated file: launch, doctor, drive one mapped
 feature, capture evidence, clean up. Where a step needs a fact the file does
-not hold, add that fact to the file and start the run again.
+not hold, add that fact to the file and start the run again. Three runs is the
+ceiling. A fourth means the gap is larger than a missing fact.
 
 Run the cleanup after failed attempts too, so a broken run does not leave a
 port held.
 
-**Done when:** the run completed from the file alone, and the evidence still
-exists at its named location after cleanup.
+**Done when:** the run completed from the file alone and the evidence still
+exists at its named location after cleanup, or three runs have been spent and
+the run has stopped naming the step that failed and the fact the file still
+does not hold.
 
 ## Step 6: Hand it over
 

@@ -45,6 +45,14 @@ before creating or updating anything in the map.
 
 ---
 
+## A session produces decisions
+
+Every ticket resolves a decision, so a session produces decisions rather than
+deliverables. The pull to just go and do the work is usually the signal that
+the map has reached its edge, and that is the point to hand off. An effort
+that wants execution inside the map says so under the map's notes, and then
+this section does not apply to it.
+
 ## The map
 
 The map is one file, `.scratch/<slug>/map.md`, built from the template in the
@@ -68,24 +76,28 @@ One ticket is one question whose answer is a decision, sized so that
 answering it fits in one session. Each ticket is a file under `tickets/`,
 with the fields the template names.
 
+Every ticket is either HITL, worked live with the human, or AFK, driven by
+the agent alone. A HITL ticket resolves only through that live exchange, and
+the human supplies every answer on their side of it. An agent that answers
+its own grilling questions has broken the ticket.
+
 Four types:
 
-- **Research.** An answer that exists somewhere outside this repo: a
+- **Research** (AFK). An answer that exists somewhere outside this repo: a
   third-party API's real behaviour, a library's constraints, what the data
-  actually looks like. The agent resolves it alone.
-- **Prototype.** The question is "how should this look" or "how should this
-  behave", and prose keeps going in circles. Build the cheapest rough thing
-  that can be reacted to, and link it from the ticket. Needs the user in the
-  loop.
-- **Grilling.** A decision that gets made by talking it through. The default
-  type. Ask one question at a time and follow the answer. Where the ticket
-  needs a harder interrogation than this, ask the user to run `/grill-me` on
-  it and bring back the result. Where the answer is a shape rather than a
-  choice, ask them to run `/architect`.
-- **Task.** Manual work that unblocks a decision without being one: getting
-  an API key so the API can be judged, moving data so its shape can be seen,
-  provisioning access. The answer records what was done and any facts later
-  tickets depend on.
+  actually looks like.
+- **Prototype** (HITL). The question is "how should this look" or "how should
+  this behave", and prose keeps going in circles. Build the cheapest rough
+  thing that can be reacted to, and link it from the ticket.
+- **Grilling** (HITL). A decision that gets made by talking it through. The
+  default type. Ask one question at a time and follow the answer. Where the
+  ticket needs a harder interrogation than this, ask the user to run
+  `/grill-me` on it and bring back the result. Where the answer is a shape
+  rather than a choice, ask them to run `/architect`.
+- **Task** (HITL or AFK). Manual work that unblocks a decision without being
+  one: getting an API key so the API can be judged, moving data so its shape
+  can be seen, provisioning access. The answer records what was done and any
+  facts later tickets depend on.
 
 A session claims a ticket before doing any work.
 
@@ -147,8 +159,13 @@ nothing is written and the run has said the effort fits in one session.
 2. **Pick a ticket.** The one the user named, or the first line printed by
    the takeable-tickets loop in the reference. **Claim it before anything
    else.**
-3. **Resolve it.** Open closed tickets on demand when you need the detail
-   behind a decision. Use the skills the map's notes name.
+3. **Resolve it.** Work out who answers before anything else. Research runs
+   afk, prototype and grilling run hitl, and a task ticket carries its own
+   `Driver` field. An hitl ticket waits for the human on every question, an
+   afk ticket runs to its answer without one. Open closed tickets on demand when
+   you need the detail behind a decision, and use the skills the map's notes
+   name. Where the answer turns out to wait on something this session cannot
+   get, unclaim the ticket and write one line on it naming what it waits on.
 4. **Record the answer** in the ticket file, mark it closed, and append one
    line of gist plus the link to the map's decisions.
 5. **Update the route.** Four things, each of which gets a line saying what
@@ -156,10 +173,17 @@ nothing is written and the run has said the effort fits in one session.
    into tickets, anything the answer put past the destination, and open
    tickets the answer invalidated. Deleting a ticket includes removing its
    number from every blocked-by line that names it.
+6. **Check whether the map cleared.** When no ticket is open and nothing is
+   left under "not yet specified", write out what the map produced: the
+   destination, and the decisions that make the way to it clear.
 
-**Done when:** the ticket is closed with its answer written down, the map's
-decisions has one new line linking it, and each of step 5's four updates has
-a line saying what changed or that nothing did.
+**Done when:** the ticket is closed with its answer written down and an hitl
+ticket's answers came from the human rather than from the agent, the map's
+decisions has one new line linking it, each of step 5's four updates has a
+line saying what changed or that nothing did, and step 6 has either written
+the map out or named what is still open, whether a ticket or a patch of fog.
+Or the ticket is back to unclaimed with a line naming what it waits on, and
+the map is unchanged.
 
 ---
 

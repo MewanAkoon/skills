@@ -22,7 +22,7 @@ code exists.
 ## How to use it
 
 Nothing to invoke. If a suggested type feels loose, say "check this against
-ts-types" and the agent will walk the table.
+ts-types" and the agent will walk the table and the tests.
 
 ---
 
@@ -41,12 +41,27 @@ ts-types" and the agent will walk the table.
 | Exhaustiveness | Put `const _exhaustive: never = value;` in the default arm so adding a variant breaks the build. |
 | `satisfies` over `as` | It validates the value against the type without widening the literals. |
 | Parse at the boundary | Data crossing into the process gets parsed into a named domain type at the edge. See the `api-boundaries` skill for where that edge is. |
-| Derive, do not redeclare | Reach for `Pick`, `Omit`, `Parameters`, `ReturnType`, `Awaited`, and `typeof` before writing a new interface that duplicates an existing shape. |
+| Derive, do not redeclare | Reach for `Pick`, `Omit`, `Parameters`, `ReturnType`, `Awaited`, and `typeof` before writing a new interface that duplicates an existing shape. When a `.proto`, an OpenAPI or GraphQL schema, a database migration, or a design-token file already defines the shape, derive from the generated type. A hand-written parallel drifts the moment the schema moves. |
 | Object arguments | Pass an object rather than three positional parameters, so call sites document themselves. Skip this on hot paths such as parsers and per-request loops. |
 
 Worked examples for each rule are in
 [references/patterns.md](references/patterns.md). Read that file when a rule
 is unclear or when you need the exact syntax.
+
+## The tests
+
+Run these against a type before committing to it:
+
+- Try writing the comment that explains when this combination of fields is
+  valid. If it can be written, split the type into a union.
+- Look for two parameters that share a primitive type and mean different
+  things. Brand them.
+- Trace every `any`, `as`, and `!` back to the boundary it came from, and
+  validate there instead.
+- Add a variant in your head. The compiler has to point at every match that
+  now needs a case.
+- Ask what would throw if the type stayed loose. When nothing would, keep the
+  plain type.
 
 ## Where this does not apply
 

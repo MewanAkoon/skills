@@ -63,6 +63,11 @@ preferences for this effort.>
 <The decision this ticket resolves, in a few sentences.>
 ```
 
+`**Type:**` fixes who resolves the ticket: research runs afk, prototype and
+grilling run hitl, and an hitl ticket resolves only with the human answering
+in person. A task ticket adds `**Driver:** hitl` or `**Driver:** afk`,
+because it is the one type that goes either way.
+
 `**Blocked by:**` holds ticket numbers separated by commas, or `none`.
 `**Claimed:**` holds `none` until a session takes it, then the date and who
 is driving, such as `2026-08-26 mewan`.

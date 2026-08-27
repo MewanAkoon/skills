@@ -8,9 +8,29 @@ on:
 permissions:
   contents: read
 
+# A second push to the same branch cancels the run still in flight.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
+    # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
+    # run. --doctor is left out: CI has no populated $HOME to inspect.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Pinned to a commit, because a moving tag on the only gate this repo
+      # has is a gate someone else can change.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: bash --version | head -1
+      - run: ./scripts/check.sh
+
+  shellcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: ./scripts/check.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: shellcheck link.sh scripts/*.sh

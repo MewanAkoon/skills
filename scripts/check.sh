@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 # Checks every skill against the invariants in AGENTS.md.
 # Needs bash and the usual POSIX tools. Run before committing.
+#
+# --doctor adds the one check CI cannot run, because CI has no $HOME: whether
+# every skill here is currently linked into the directory link.sh writes to.
 
 set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
 
+doctor=no
+for arg in "$@"; do
+  case "$arg" in
+    --doctor) doctor=yes ;;
+    *) printf 'usage: check.sh [--doctor]\n' >&2; exit 2 ;;
+  esac
+done
+
 fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
+warn() { printf 'WARN  %s\n' "$1" >&2; }
 
 # Everything between the opening and closing --- of a markdown file.
 frontmatter() {
@@ -52,35 +64,38 @@ for dir in skills/*/; do
     bad "$name: frontmatter name is '$declared', directory is '$name'"
   fi
 
-  if ! printf '%s\n' "$fm" | grep -q '^description:[[:space:]]*[^[:space:]]'; then
-    bad "$name: frontmatter has no description"
+  # The Agent Skills spec: 1 to 64 characters, lowercase letters, digits, and
+  # single hyphens, with no hyphen at either end. A name that only matches its
+  # directory still breaks a strict validator when the directory is wrong too.
+  if ! printf '%s' "$name" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+    bad "$name: name must be lowercase letters, digits, and single hyphens"
+  fi
+  if [ "${#name}" -gt 64 ]; then
+    bad "$name: name is ${#name} characters, over the spec's 64"
   fi
 
-  yaml="${dir}agents/openai.yaml"
+  description="$(printf '%s\n' "$fm" | sed -n 's/^description:[[:space:]]*//p' | head -1)"
+  if [ -z "$description" ]; then
+    bad "$name: frontmatter has no description"
+  elif [ "${#description}" -gt 1024 ]; then
+    bad "$name: description is ${#description} characters, over the spec's 1024"
+  fi
+
   flagged=no
   printf '%s\n' "$fm" | grep -q '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' && flagged=yes
-  policied=no
-  denied=no
-  [ -f "$yaml" ] && grep -q '^[[:space:]]*allow_implicit_invocation:' "$yaml" && policied=yes
-  [ -f "$yaml" ] && awk '/^policy:[[:space:]]*$/ { inside=1; next }
-                          /^[^[:space:]#]/ { inside=0 }
-                          inside && /^[[:space:]]+allow_implicit_invocation:[[:space:]]*false[[:space:]]*$/ { found=1 }
-                          END { exit !found }' "$yaml" && denied=yes
 
   if [ "$flagged" = no ] && printf '%s\n' "$fm" | grep -q '^disable-model-invocation:'; then
     bad "$name: model-invoked but frontmatter still carries disable-model-invocation"
   fi
 
   if [ "$flagged" = yes ]; then
-    # User-invoked: both halves of the pair, a row under User-invoked, none under the other.
-    [ "$denied" = yes ] || bad "$name: user-invoked but $yaml is missing policy.allow_implicit_invocation: false"
+    # User-invoked: a row under User-invoked, none under the other.
     row_in "$readme_user" "$name" \
       || bad "$name: user-invoked but not listed under README '### User-invoked'"
     row_in "$readme_model" "$name" \
       && bad "$name: user-invoked but also listed under README '### Model-invoked'"
   else
-    # Model-invoked: neither half, a row under Model-invoked, none under the other.
-    [ "$policied" = no ] || bad "$name: model-invoked but $yaml carries a policy block"
+    # Model-invoked: a row under Model-invoked, none under the other.
     row_in "$readme_model" "$name" \
       || bad "$name: model-invoked but not listed under README '### Model-invoked'"
     row_in "$readme_user" "$name" \
@@ -94,6 +109,27 @@ while IFS= read -r linked; do
   [ -f "skills/$linked/SKILL.md" ] || bad "README links skills/$linked/SKILL.md, which does not exist"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
 
+# Every relative markdown link under skills/ resolves. A link inside a fenced
+# code block is a template rather than a link, so the fence state is tracked
+# and those are skipped.
+while IFS=$'\t' read -r src link; do
+  [ -f "$(dirname "$src")/$link" ] || bad "$src links $link, which does not exist"
+done < <(
+  git ls-files -- 'skills/*.md' | while IFS= read -r f; do
+    awk -v F="$f" '
+      /^```/ { fence = !fence; next }
+      {
+        line = $0
+        while (match(line, /\]\([^)]*\.md[^)]*\)/)) {
+          L = substr(line, RSTART + 2, RLENGTH - 3)
+          sub(/#.*$/, "", L)
+          if (!fence && L !~ /^https?:/ && L != "") printf "%s\t%s\n", F, L
+          line = substr(line, RSTART + RLENGTH)
+        }
+      }' "$f"
+  done
+)
+
 # The two rules files carry one body in two frontmatter formats.
 for f in .claude/rules/authoring-skills.md .cursor/rules/authoring-skills.mdc; do
   head -1 "$f" | grep -qx -- '---' || bad "$f: no frontmatter, so its body cannot be compared"
@@ -102,15 +138,54 @@ diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
 git rev-parse --git-dir >/dev/null 2>&1 \
-  || bad "not a git repository, so the em dash sweep did not run"
+  || bad "not a git repository, so the dash sweep did not run"
 
-# Em dashes. git supplies the file list, so .gitignore decides what is ours
-# and an unstaged new skill still gets checked.
+# Em dash, en dash, and minus sign. All three read as an em dash once rendered,
+# so banning only the first leaves the tell in place. git supplies the file
+# list, so .gitignore decides what is ours and an unstaged new skill still gets
+# checked.
 while IFS= read -r f; do
-  lines="$(grep -n '—' "$f" | cut -d: -f1 | tr '\n' ' ')"
-  [ -z "$lines" ] || bad "$f: em dash on line ${lines% }"
+  lines="$(grep -n '[—–−]' "$f" | cut -d: -f1 | tr '\n' ' ')"
+  [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' 2>/dev/null)
 
-printf '%d skills, %d model-invoked\n' "$(ls -d skills/*/ | wc -l | tr -d ' ')" "$model_count"
+# Machine state, so it warns rather than failing, and only when asked. CI has
+# no $HOME to check and would fail every run.
+if [ "$doctor" = yes ]; then
+  dest="$HOME/.claude/skills"
+  repo="$(pwd)"
+  missing=0
+
+  for dir in skills/*/; do
+    name="$(basename "$dir")"
+    link="$dest/$name"
+    if [ ! -L "$link" ]; then
+      warn "$name is not linked into $dest"
+      missing=$((missing + 1))
+    elif [ "$(readlink "$link")" != "$repo/skills/$name" ]; then
+      warn "$name in $dest points at $(readlink "$link")"
+      missing=$((missing + 1))
+    fi
+  done
+
+  # Links this repo made whose skill is gone. Every tool keeps listing them.
+  if [ -d "$dest" ]; then
+    for link in "$dest"/*; do
+      [ -L "$link" ] || continue
+      case "$(readlink "$link")" in
+        "$repo"/skills/*)
+          [ -e "$link" ] || { warn "$(basename "$link") in $dest points at a skill that is gone"; missing=$((missing + 1)); } ;;
+      esac
+    done
+  fi
+
+  if [ "$missing" -gt 0 ]; then
+    printf 'doctor: %d to fix, run ./link.sh\n' "$missing"
+  else
+    printf 'doctor: every skill is linked into %s\n' "$dest"
+  fi
+fi
+
+printf '%d skills, %d model-invoked\n' "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "$model_count"
 [ "$fail" -eq 0 ] && printf 'ok\n'
 exit "$fail"

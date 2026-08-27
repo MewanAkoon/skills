@@ -104,18 +104,12 @@ because there is no repository to write a skill into.
 
 Create `.claude/skills/verify-<app>/SKILL.md` with frontmatter carrying
 `name: verify-<app>`, a description naming the app and the surface, and
-`disable-model-invocation: true`. Add `agents/openai.yaml` with
-`policy.allow_implicit_invocation: false`. Without frontmatter the skill
-never registers.
+`disable-model-invocation: true`. Without frontmatter the skill never
+registers.
 
-Then link it once for Codex, so one file serves all three. Cursor already
-reads `.claude/skills` and `.agents/skills`, so a third link under
-`.cursor/skills` would list the skill three times in its picker:
-
-```bash
-mkdir -p .agents/skills
-ln -sfn ../../.claude/skills/verify-<app> .agents/skills/verify-<app>
-```
+One file serves both tools. Cursor reads `.claude/skills` alongside its own
+directories, so a second link under `.cursor/skills` would list the skill
+twice in its picker.
 
 Write these sections, each holding real commands from this repo:
 

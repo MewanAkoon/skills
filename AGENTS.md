@@ -5,11 +5,26 @@ For any agent working in this repo.
 ## What this repo is
 
 A source of agent skills, not an application. There is nothing to build and no
-test suite, only `./scripts/check.sh`. Every `SKILL.md` loads into some other
-repo's session, so a change here changes how an agent behaves everywhere.
+test suite. Every `SKILL.md` loads into some other repo's session, so a change
+here changes how an agent behaves everywhere.
 
-`link.sh` symlinks each skill directory into the global skill directory of
-Claude Code, Codex, and Cursor. Skills are never copied into a working repo.
+Three scripts, all bash, nothing to install:
+
+| Command | What it does |
+|---|---|
+| `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
+| `./scripts/check.sh --doctor` | Adds the linking check, which needs a `$HOME`. |
+| `./scripts/fired.sh` | Counts how often each skill has fired. |
+| `./link.sh` | Links every skill into `~/.claude/skills`. |
+
+`package.json` carries those as `npm run check`, `doctor`, `fired`, and
+`link`, plus `npm run lint`, which runs shellcheck over both scripts. It
+declares no dependencies. `lint` fetches a pinned shellcheck through `npx`,
+and CI runs that same pinned version rather than the runner image's, which
+moves on its own and disagreed with a local one about `A && B || C`.
+
+`link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude
+Code owns and Cursor also loads. Skills are never copied into a working repo.
 
 ## Before changing a skill
 
@@ -20,19 +35,29 @@ follows, and enforcing it is what this repo is for.
 
 `./scripts/check.sh` verifies these, so run it before committing.
 
-- The `name` in the frontmatter matches the directory name.
-- A user-invoked skill sets `disable-model-invocation: true` and has an
-  `agents/openai.yaml` carrying `policy.allow_implicit_invocation: false`.
-- A model-invoked skill has neither the flag nor the `policy` block.
+- The `name` in the frontmatter matches the directory name, and both satisfy
+  the Agent Skills spec: 1 to 64 characters, lowercase letters, digits, and
+  single hyphens, with no hyphen at either end.
+- The `description` is present and at most 1024 characters, which is the cap
+  the spec sets.
+- A user-invoked skill sets `disable-model-invocation: true`. A model-invoked
+  skill omits the field.
 - Every skill has a row in the `README.md` table, under the heading matching
   its invocation mode and not under the other one.
 - Every `README.md` table row points at a skill that exists.
+- Every relative markdown link under `skills/` resolves to a file that
+  exists, ignoring the ones inside fenced code blocks, which are templates.
 - The two rules files carry the same body.
-- No markdown file contains an em dash.
+- No markdown file contains an em dash, an en dash, or a minus sign.
 
 What limits the model-invoked set is conflict, not count. Before adding one,
 work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
 "Invocation". No script checks that.
+
+`./scripts/check.sh --doctor` adds one check CI cannot run, because CI has no
+`$HOME`: whether every skill in this repo is currently linked into
+`~/.claude/skills`. Run it when a skill has been added, renamed, or removed,
+and run `./link.sh` when it reports a gap.
 
 ## Prose
 
@@ -44,14 +69,13 @@ repo's own files too.
 
 | Path | Read by |
 |---|---|
-| `AGENTS.md` | Cursor, Codex |
+| `AGENTS.md` | Cursor |
 | `CLAUDE.md` | Claude Code, which imports `AGENTS.md` |
 | `.cursor/rules/*.mdc` | Cursor |
 | `.claude/rules/*.md` | Claude Code |
-| `skills/*/SKILL.md` | all three, through `link.sh` |
-| `skills/*/agents/openai.yaml` | Codex |
+| `skills/*/SKILL.md` | both, through `link.sh` |
 
-Anything true for all three harnesses belongs in this file. The two rules
+Anything true for both harnesses belongs in this file. The two rules
 directories carry one body in each harness's own format. Both fire on
 `skills/**`. Cursor can also pull its copy in by description, where the
 Claude rule has no equivalent.

@@ -1,5 +1,0 @@
-interface:
-  display_name: "Verify app"
-  short_description: "Generate a verification skill for this repo"
-policy:
-  allow_implicit_invocation: false

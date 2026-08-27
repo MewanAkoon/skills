@@ -1,5 +1,0 @@
-interface:
-  display_name: "How"
-  short_description: "Explain a subsystem and where code goes"
-policy:
-  allow_implicit_invocation: false

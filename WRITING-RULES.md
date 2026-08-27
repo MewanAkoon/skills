@@ -44,10 +44,9 @@ One question decides it: could the agent usefully reach for this on its own?
 **Yes, model-invoked.** Omit `disable-model-invocation`. The description
 carries triggers. Costs permanent context.
 
-**No, user-invoked.** Set `disable-model-invocation: true`, and add
-`agents/openai.yaml` with `policy.allow_implicit_invocation: false` for
-Codex. The description becomes a plain one-line summary for a human browsing
-slash commands. Costs nothing.
+**No, user-invoked.** Set `disable-model-invocation: true`. The description
+becomes a plain one-line summary for a human browsing slash commands. Costs
+nothing.
 
 What caps the model-invoked set is conflict, not count. A description costs
 about seventy tokens, so the whole set is a few hundred. A false fire costs
@@ -66,15 +65,15 @@ conflicting instructions. When you find one, narrow the new description until
 they no longer collide, move the overlapping part into the existing skill's
 `references/`, or demote something.
 
-Claude Code and Cursor both read `disable-model-invocation`, and the YAML is
-for Codex. The Agent Skills spec allows only `name`, `description`, `license`,
-`compatibility`, `metadata`, and `allowed-tools`, so a strict validator
-rejects the flag outright. That is the trade a user-invoked skill makes: it
-works in all three harnesses from disk, and it will not upload to claude.ai.
+Claude Code and Cursor both read `disable-model-invocation`. The Agent Skills
+spec allows only `name`, `description`, `license`, `compatibility`,
+`metadata`, and `allowed-tools`, so a strict validator rejects the flag
+outright. That is the trade a user-invoked skill makes: it works in both
+harnesses from disk, and it will not upload to claude.ai.
 
-An agent that reads neither the flag nor the YAML treats the skill as
-model-invoked. So for anything that must not auto-fire, also keep the
-description free of trigger phrases. The flag alone is not a guarantee.
+An agent that does not read the flag treats the skill as model-invoked. So
+for anything that must not auto-fire, also keep the description free of
+trigger phrases. The flag alone is not a guarantee.
 
 ## Structure
 
@@ -173,3 +172,10 @@ completion criterion. Fix that one step and nothing else.
 Every two weeks, delete any skill that has not fired or been called. A
 model-invoked skill that never triggers is not neutral, its description costs
 tokens on every turn of every conversation.
+
+`./scripts/fired.sh` counts the firings, reading the `"skill":"<name>"` lines
+Claude Code writes into its session transcripts. Read two things off it before
+deleting anything. A skill that is not linked cannot fire, so check
+`./scripts/check.sh --doctor` first. A skill named in `~/.claude/CLAUDE.md`
+gets followed without being invoked, so its count reads lower than its
+influence.

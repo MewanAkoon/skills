@@ -1,7 +1,7 @@
 # skills
 
-My agent skills. One clone on disk, symlinked into every AI tool's global
-skill directory. Nothing gets committed into working repos.
+My agent skills. One clone on disk, symlinked into the global skill directory
+Claude Code and Cursor read. Nothing gets committed into working repos.
 
 ## Setup
 
@@ -13,11 +13,18 @@ cd ~/Work/Personal/skills
 ./link.sh
 ```
 
-`link.sh` symlinks every skill folder into each agent's global skill
-directory. Because they are symlinks, editing a file here takes effect
-immediately, and `git pull` updates every tool at once.
+`link.sh` symlinks every skill folder into `~/.claude/skills`. Claude Code
+owns that directory and Cursor loads it too, so one destination serves both.
+Because they are symlinks, editing a file here takes effect immediately, and
+`git pull` updates both tools at once. The script also drops links whose skill
+has been renamed or deleted.
 
-Re-run `link.sh` only after adding or renaming a skill.
+Re-run `link.sh` after adding, renaming, or removing a skill. To find out
+whether you need to:
+
+```bash
+./scripts/check.sh --doctor
+```
 
 ### Keeping working repos clean
 
@@ -26,7 +33,7 @@ work, and the symlinks live under `$HOME`. Nothing lands in a project. As a
 safety net:
 
 ```bash
-printf '.claude/\n.cursor/skills/\n.agents/\n.scratch/\n.skills.json\n' >> ~/.gitignore_global
+printf '.claude/\n.cursor/skills/\n.scratch/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
@@ -91,7 +98,25 @@ Run the checker before committing:
 
 It covers the mechanical half of that standard. [AGENTS.md](AGENTS.md) lists
 what it checks. CI runs the same script on every pull request and on every
-push to `main`.
+push to `main`, on Linux and on macOS, without `--doctor`, since CI has no
+`$HOME` to inspect.
+
+## Pruning
+
+`WRITING-RULES.md` says to delete a skill that has not fired in two weeks.
+To see which those are:
+
+```bash
+./scripts/fired.sh
+```
+
+It reads the session transcripts Claude Code leaves under `~/.claude/projects`
+and counts the times each skill was invoked. Two caveats, both printed with
+the report: an unlinked skill cannot fire, so run `--doctor` first, and a
+skill named in `~/.claude/CLAUDE.md` gets followed without being invoked.
+
+Every script is also an `npm run` target, which is the only reason
+`package.json` exists. It declares no dependencies.
 
 ## Instructions for agents
 

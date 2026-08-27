@@ -89,23 +89,19 @@ Run the checker before committing:
 ./scripts/check.sh
 ```
 
-It verifies the invariants that are easy to get wrong: the frontmatter name
-matches the directory, a user-invoked skill carries both halves of its
-invocation pair, every skill has a README row under the right heading, the
-model-invoked set is still five or fewer, and no markdown file has an em
-dash. CI runs the same script on every push.
+It covers the mechanical half of that standard. [AGENTS.md](AGENTS.md) lists
+what it checks. CI runs the same script on every pull request and on every
+push to `main`.
 
 ## Instructions for agents
 
-[AGENTS.md](AGENTS.md) holds the rules for any agent working in this repo.
-Cursor and Codex read it directly. Claude Code reads [CLAUDE.md](CLAUDE.md),
-which imports it. Both `.cursor/rules/` and `.claude/rules/` carry one rule
-that fires on `skills/**` and sends the agent to WRITING-RULES.md.
+[AGENTS.md](AGENTS.md) holds the rules for any agent working in this repo, and
+its table says which file each harness reads.
 
 ## Attribution
 
-Skills here are adapted from two MIT-licensed repos. Each file names its
-source at the bottom.
+Most skills here are adapted from two MIT-licensed repos, and each of those
+names its source at the bottom. The rest were written for this repo.
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)
 - [cursor/plugins pstack](https://github.com/cursor/plugins/tree/main/pstack),

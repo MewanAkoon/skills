@@ -9,12 +9,23 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 
-# Add or remove destinations as you confirm where each tool reads from.
+# Two destinations, not three. Cursor reads ~/.agents/skills as well as
+# ~/.claude/skills, so adding ~/.cursor/skills would put every skill in three
+# directories Cursor scans and list each one three times in its picker.
 DESTS=(
-  "$HOME/.claude/skills"   # Claude Code
-  "$HOME/.agents/skills"   # Codex and other Agent Skills compatible tools
-  "$HOME/.cursor/skills"   # Cursor
+  "$HOME/.claude/skills"   # Claude Code, and Cursor for compatibility
+  "$HOME/.agents/skills"   # Codex, and Cursor
 )
+
+# ~/.cursor/skills was a destination until the duplicate-loading fix. Say so
+# once if links from this repo are still sitting there, and leave them alone:
+# removing files under $HOME is the user's call, not this script's.
+STALE="$HOME/.cursor/skills"
+if [ -d "$STALE" ] && ls "$STALE" 2>/dev/null | grep -q .; then
+  echo "note: $STALE still holds skill links. Cursor also reads ~/.agents/skills," >&2
+  echo "      so those are duplicates now. Remove them with: rm -rf $STALE" >&2
+  echo >&2
+fi
 
 for DEST in "${DESTS[@]}"; do
   if [ -L "$DEST" ] && [[ "$(readlink -f "$DEST")" == "$REPO"* ]]; then

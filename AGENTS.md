@@ -84,9 +84,14 @@ nearest the change. Comments, headings, and the strings a script prints all
 count, and the twin is usually in another file.
 
 Mark a command block `bash checked` when its content can rot, and
-`./scripts/check.sh` runs it. A bare script invocation earns no marker. A
-pipeline that encodes an assumption does, and so does anything a reader is
-told to type.
+`./scripts/check.sh` runs it. A pipeline that encodes an assumption earns the
+marker. A bare script invocation does not, because there is nothing in it to
+go stale.
+
+A marked block runs in CI too, which has only the checkout and the usual
+POSIX tools. No `$HOME`, no installed plugins, no `claude` CLI, and no
+`~/.claude/projects` to read. A block needing any of those belongs in its own
+fence with no marker, next to the one that can run anywhere.
 
 ## Prose
 

@@ -176,8 +176,7 @@ diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring
 # A block is free to run check.sh. The variable below is set while blocks are
 # running and skips this section when it is already set, so the inner run
 # finishes instead of recursing. Matching the name in the block text would
-# refuse a block that only mentions it, and in a repo of documentation that is
-# most of them.
+# refuse a block that only mentions it, and README.md holds two that do.
 if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
   export CHECK_SH_RUNNING_BLOCKS=1
   blocks="$(mktemp -d)"

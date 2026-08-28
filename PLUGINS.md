@@ -61,15 +61,16 @@ What competes is the `description` in a component's frontmatter, not the
 summary a table carries, so read the real ones side by side:
 
 ```bash
-grep -h '^description:' skills/*/SKILL.md
+grep -L '^disable-model-invocation: true' skills/*/SKILL.md | xargs grep -h '^description:'
 ./scripts/plugins.sh --descriptions
 ```
 
 The first is what this repo loads, the second what the installed plugins load,
 because a candidate can collide with another plugin as easily as with a skill.
-Both lists hold only what a model can reach on its own, since a user-invoked
-component competes with nothing until someone types its name. The candidate's
-own are in the marketplace clone you opened for check 1.
+Both commands drop what a model cannot reach on its own, which is why the
+first one filters rather than reading every file: a user-invoked component
+competes with nothing until someone types its name. The candidate's own are in
+the marketplace clone you opened for check 1.
 
 Two components compete when they claim the same decision and the agent has to
 pick one, which is the test in [WRITING-RULES.md](WRITING-RULES.md) under
@@ -93,8 +94,10 @@ rather than a promise inside it.
 Every description in a listing rides every turn of every conversation, whether
 or not the plugin runs. `./scripts/plugins.sh` prints a figure per plugin and
 one for the set, so a candidate can be weighed against what is already being
-paid for. A plugin earning its place one session a month rarely earns a
-permanent line in the prompt.
+paid for. It counts descriptions and nothing else, so a plugin carrying an MCP
+server or a hook costs more than its figure says, and the script names those
+rather than pricing them. A plugin earning its place one session a month
+rarely earns a permanent line in the prompt.
 
 ## Decisions on record
 

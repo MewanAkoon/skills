@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Lists the plugins running alongside these skills, and answers the parts of
-# the test in PLUGINS.md that a machine can answer: what each plugin costs on
-# every turn and what the set costs together, what they let an agent do
-# without asking, and where they overlap what is already here.
+# the test in PLUGINS.md that a machine can answer: what each plugin's
+# descriptions cost on every turn and what the set costs together, what they
+# let an agent do without asking, and where they overlap what is already here.
+# An MCP server and a hook cost context too, in tool schemas rather than
+# descriptions, and this counts neither. It names them instead.
 #
 # The roster is read from the installed plugins rather than written down, for
 # the same reason check.sh --doctor reads $HOME and fired.sh reads the
@@ -92,6 +94,7 @@ while IFS=$'\t' read -r id version scope path; do
 
   found=0
   per_plugin=0
+  unmeasured=""
 
   # skills/<name>/SKILL.md, agents/<name>.md, commands/<name>.md. A file under
   # a skill's references/ is read on demand rather than listed, so the find is
@@ -172,12 +175,18 @@ while IFS=$'\t' read -r id version scope path; do
   if [ -f "$path/.mcp.json" ]; then
     printf '    %-8s .mcp.json\n' "mcp"
     undescribed="$undescribed$id -> an MCP server"$'\n'
+    unmeasured="an MCP server"
     found=$((found + 1))
     components=$((components + 1))
   fi
   if [ -d "$path/hooks" ]; then
     printf '    %-8s hooks/\n' "hooks"
     undescribed="$undescribed$id -> hooks, which run uninvoked"$'\n'
+    if [ -n "$unmeasured" ]; then
+      unmeasured="$unmeasured and hooks"
+    else
+      unmeasured="hooks"
+    fi
     found=$((found + 1))
     components=$((components + 1))
   fi
@@ -191,6 +200,12 @@ while IFS=$'\t' read -r id version scope path; do
     # than a share of the total below.
     printf '    costs %d characters on every turn, near %d tokens\n' \
       "$per_plugin" "$((per_plugin / 4))"
+    # An MCP server loads its tool schemas on every turn and a hook runs on
+    # its event, and neither is counted above. Without this line a plugin made
+    # only of those reads as free, which is the opposite of true.
+    if [ -n "$unmeasured" ]; then
+      printf '          plus %s, whose cost this does not measure\n' "$unmeasured"
+    fi
   fi
 done < <(printf '%s' "$roster" | jq -r '
   .[] | select(.enabled) | [.id, .version, .scope, .installPath] | @tsv

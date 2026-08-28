@@ -57,13 +57,22 @@ looking like it does.
 
 ### 3. Does it re-cover something already here?
 
-Read the new descriptions against the skills in [README.md](README.md) and
-against the components `./scripts/plugins.sh` already lists, because a plugin
-can collide with another plugin as easily as with a skill. Two components
-compete when they claim the same decision and the agent has to pick one, which
-is the test in [WRITING-RULES.md](WRITING-RULES.md) under "Invocation".
-Composing is fine. Competing is not, because the agent reads a whole file and
-then follows the wrong procedure.
+What competes is the `description` in a component's frontmatter, not the
+summary a table carries, so read the real ones side by side:
+
+```bash
+grep -h '^description:' skills/*/SKILL.md
+./scripts/plugins.sh --descriptions
+```
+
+The first is what this repo loads, the second what the installed plugins load,
+because a candidate can collide with another plugin as easily as with a skill.
+The candidate's own are in the marketplace clone you opened for check 1.
+
+Two components compete when they claim the same decision and the agent has to
+pick one, which is the test in [WRITING-RULES.md](WRITING-RULES.md) under
+"Invocation". Composing is fine. Competing is not, because the agent reads a
+whole file and then follows the wrong procedure.
 
 `superpowers` failed here. Its descriptions rode every turn to re-cover six
 skills that exist here already, written for this work rather than in general.

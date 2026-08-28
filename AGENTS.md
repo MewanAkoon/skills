@@ -16,6 +16,7 @@ Four scripts, all bash, no build step:
 | `./scripts/check.sh --doctor` | Adds the linking check, which needs a `$HOME`. |
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
 | `./scripts/plugins.sh` | Lists the installed plugins and what they grant. |
+| `./scripts/plugins.sh --descriptions` | Adds the text that competes for an invocation. |
 | `./link.sh` | Links every skill into `~/.claude/skills`. |
 
 Three of them need nothing but bash and the usual POSIX tools. `plugins.sh`

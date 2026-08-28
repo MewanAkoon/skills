@@ -19,6 +19,17 @@ set -uo pipefail
 SELF="$(readlink -f "$0")"
 cd "$(dirname "$SELF")/.." || exit 1
 
+# Descriptions are what compete for an invocation, so check 3 in PLUGINS.md
+# needs to read them side by side. They are long enough to drown the listing,
+# so they are off by default.
+descriptions=no
+for arg in "$@"; do
+  case "$arg" in
+    --descriptions) descriptions=yes ;;
+    *) printf 'usage: plugins.sh [--descriptions]\n' >&2; exit 2 ;;
+  esac
+done
+
 for tool in claude jq; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     printf '%s is not on PATH, so the installed plugins cannot be read\n' "$tool" >&2
@@ -117,6 +128,10 @@ while IFS=$'\t' read -r id version scope path; do
       esac
 
       printf '    %-8s %s%s\n' "$kind" "$name" "$note"
+
+      if [ "$descriptions" = yes ] && [ -n "$description" ]; then
+        printf '             %s\n' "$description"
+      fi
 
       if [ -n "$allowed" ]; then
         printf '             grants %s\n' "$allowed"

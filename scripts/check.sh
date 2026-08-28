@@ -112,13 +112,16 @@ while IFS= read -r linked; do
   [ -f "skills/$linked/SKILL.md" ] || bad "README links skills/$linked/SKILL.md, which does not exist"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
 
-# Every relative markdown link under skills/ resolves. A link inside a fenced
-# code block is a template rather than a link, so the fence state is tracked
-# and those are skipped.
+# Every relative markdown link resolves, in the root files as well as the
+# skills, because the root ones point at each other and nothing else catches a
+# rename. A link inside a fenced code block is a template rather than a link,
+# so the fence state is tracked and those are skipped. git supplies the file
+# list the way the dash sweep below does, so a new file is checked before it
+# is committed.
 while IFS=$'\t' read -r src link; do
   [ -f "$(dirname "$src")/$link" ] || bad "$src links $link, which does not exist"
 done < <(
-  git ls-files -- 'skills/*.md' | while IFS= read -r f; do
+  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' | while IFS= read -r f; do
     awk -v F="$f" '
       /^```/ { fence = !fence; next }
       {

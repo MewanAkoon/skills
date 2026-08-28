@@ -43,13 +43,18 @@ artifacts, installed from different marketplaces into different directories,
 and the two trees do not overlap. Adopting either would serve one harness and
 be dead weight in the other. Recommendations of that kind live in
 [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md), which no session loads and nothing
-depends on. Anything that would make a skill work in one harness and not the
-other belongs there instead, or nowhere.
+depends on. Anything that would make a skill run its procedure in one harness
+and not the other belongs there instead, or nowhere.
 
-A maintenance script is the exception, because it runs on one machine rather
-than in a session, and it may read a harness's own files. `link.sh` writes to
+Two exceptions, both narrow. A maintenance script runs on one machine rather
+than in a session, so it may read a harness's own files: `link.sh` writes to
 `~/.claude/skills` and `fired.sh` reads `~/.claude/projects`, and both say so
-where they do it. Take that as licence for a script, never for a skill.
+where they do it. And a skill may carry a harness-specific frontmatter field
+when it is a second lock over a body that is already right without it, which
+is why `review-diff` sets `disallowed-tools` that Cursor does not read.
+[WRITING-RULES.md](WRITING-RULES.md) under "Tool access" holds that trade and
+the condition on it. Neither exception covers a procedure that only works in
+one harness.
 
 ## What an agent here never does
 

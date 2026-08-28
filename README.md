@@ -5,11 +5,13 @@ Claude Code and Cursor read. Nothing gets committed into working repos.
 
 ## Scope
 
-Everything this repo ships into a session works in both Claude Code and
-Cursor, and anything added has to. A skill is plain markdown that either
-harness can read, which is the whole reason one clone serves both. The
-maintenance scripts are the exception and say so where they read one tool's
-files, since `fired.sh` can only count what Claude Code writes down.
+Every skill here runs the same procedure in both Claude Code and Cursor, and
+anything added has to. A skill is plain markdown that either harness can read,
+which is the whole reason one clone serves both. Two narrow exceptions, both
+named in [AGENTS.md](AGENTS.md) under "What belongs here": the maintenance
+scripts read one tool's own files, since `fired.sh` can only count what Claude
+Code writes down, and `review-diff` carries a Claude Code frontmatter field as
+a lock over a body that is right without it.
 
 Tool-specific machinery stays out, plugins included.
 [AGENTS.md](AGENTS.md) under "What belongs here" carries the rule and the

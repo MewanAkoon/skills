@@ -39,7 +39,7 @@ follows, and enforcing it is what this repo is for.
 ## Before installing a plugin
 
 Read [PLUGINS.md](PLUGINS.md). It says what a plugin brings into a session,
-the five checks one passes before it joins the set, and the verdicts already
+the checks one passes before it joins the set, and the verdicts already
 reached. `./scripts/plugins.sh` answers the half of that test a machine can
 answer.
 

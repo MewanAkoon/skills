@@ -18,17 +18,16 @@ check could catch it, because CI has neither plugins nor a `$HOME`.
 
 ## Before installing one
 
-Install nothing on the strength of its README. Adding a marketplace clones
-every plugin in it, installed or not, so the files are readable before
-anything is enabled:
+Install nothing on the strength of its README. Adding a marketplace, the first
+command under "Installing and removing" below, clones every plugin in it,
+installed or not, so the files are readable before anything is enabled:
 
 ```bash
-claude plugin marketplace add <owner>/<repo>
 ls ~/.claude/plugins/marketplaces/<marketplace>/plugins/<name>/
 ```
 
-A plugin the marketplace only points at sits under `external_plugins/`
-instead, alongside that `plugins/` directory.
+A plugin the marketplace only points at, rather than holding itself, sits
+under `external_plugins/` alongside that `plugins/` directory.
 
 Read the files, then work through these in order. The first check it fails is
 the answer.
@@ -41,8 +40,10 @@ describing it.
 
 `code-review` failed here. The last step of its `commands/code-review.md`
 posts the result with `gh pr comment`. Posting is what that command is for
-rather than a side effect of it, and no approval unlocks a rule that is
-categorical.
+rather than a side effect of it, and the rule it runs into is categorical:
+nothing here posts a comment or a review to a pull request, whoever asks and
+however they ask. A plugin whose purpose is the forbidden step has no
+configuration that saves it.
 
 ### 2. Does it grant itself tools?
 
@@ -64,8 +65,8 @@ is the test in [WRITING-RULES.md](WRITING-RULES.md) under "Invocation".
 Composing is fine. Competing is not, because the agent reads a whole file and
 then follows the wrong procedure.
 
-`superpowers` failed here. It carried about 688 tokens on every turn to
-re-cover six skills that exist here in a form written for this work.
+`superpowers` failed here. Its descriptions rode every turn to re-cover six
+skills that exist here already, written for this work rather than in general.
 
 ### 4. Is it safe by construction or only by instruction?
 
@@ -86,8 +87,8 @@ place one session a month rarely earns a permanent line in the prompt.
 
 A decision stays true after the thing it was about is gone, which is why these
 are written down and the roster is not. Add a line rather than editing one
-when a verdict changes, so a plugin can appear in both lists. The later entry
-is the standing verdict.
+when a verdict changes, so a plugin can appear under more than one heading.
+The later entry is the standing verdict.
 
 ### Kept
 
@@ -100,10 +101,18 @@ is the standing verdict.
   on a turn. It needs a global `typescript-language-server` and a `typescript`
   on the 5.x line, because TypeScript 7 is the native port and ships no
   `tsserver.js`.
-- **`claude-md-management`, `claude-code-setup`.** Enabled with no reason
-  recorded at the time. `revise-claude-md` grants itself `Read, Edit, Glob`,
-  so it edits files with no prompt. Both are owed a verdict the next time this
-  file is read.
+
+### Installed but not yet judged
+
+Enabled before this test existed, so neither passed nor failed it. They sit
+here rather than under "Kept", because a verdict nobody reached is not a
+verdict.
+
+- **`claude-md-management`.** `revise-claude-md` grants itself `Read, Edit,
+  Glob`, which is check 2 exactly, so it edits files with no prompt. Decide
+  whether editing `CLAUDE.md` unprompted is wanted before this moves.
+- **`claude-code-setup`.** One skill, and no grant. Owes only check 3, read
+  against the skills here.
 
 ### Removed, 2026-08-28
 

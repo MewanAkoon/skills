@@ -58,19 +58,24 @@ looking like it does.
 ### 3. Does it re-cover something already here?
 
 What competes is the `description` in a component's frontmatter, not the
-summary a table carries, so read the real ones side by side:
+summary a table carries, so read the real ones side by side. What this repo
+loads:
+
+```bash checked
+grep -L '^disable-model-invocation: true' skills/*/SKILL.md | xargs -r grep -h '^description:'
+```
+
+What the installed plugins load:
 
 ```bash
-grep -L '^disable-model-invocation: true' skills/*/SKILL.md | xargs -r grep -h '^description:'
 ./scripts/plugins.sh --descriptions
 ```
 
-The first is what this repo loads, the second what the installed plugins load,
-because a candidate can collide with another plugin as easily as with a skill.
-Both commands drop what a model cannot reach on its own, which is why the
-first one filters rather than reading every file: a user-invoked component
-competes with nothing until someone types its name. The candidate's own are in
-the marketplace clone you opened for check 1.
+A candidate can collide with another plugin as easily as with a skill, so read
+both. Each drops what a model cannot reach on its own, which is why the first
+filters rather than reading every file: a user-invoked component competes with
+nothing until someone types its name. The candidate's own are in the
+marketplace clone you opened for check 1.
 
 Two components compete when they claim the same decision and the agent has to
 pick one, which is the test in [WRITING-RULES.md](WRITING-RULES.md) under

@@ -148,8 +148,30 @@ Four things are worth a specific look, each one where the diff has them:
 To fork this for one repo, name that repo's real frameworks in these four
 lines. A generic skill cannot know them. A fork can.
 
-**Done when:** every changed file has been opened in full, and each finding
-names the standard or the smell it came from.
+### Claims
+
+Prose is the code's twin and rots the same way. For every sentence the diff
+adds or changes that says what something does, name the `file:line` that makes
+it true. A sentence with nothing behind it is a finding, and so is one whose
+backing line says something narrower than the sentence claims.
+
+The strings a script prints are claims as well. `costs 0 characters` is a
+sentence about behaviour that happens to be printed rather than written down.
+
+Three shapes cover most of them:
+
+- **Half a system.** The diff changed one of two commands, and a sentence
+  above them still describes both.
+- **A twin left behind.** One fact sits in a comment, a heading, and a README,
+  and the diff updated one of the three. Search for the fact, not for the file
+  you were already in.
+- **A mechanism nobody checked.** "A hook costs context in tool schemas" reads
+  plausibly and is wrong. An explanation of why something behaves as it does
+  needs a source the same way a measurement does.
+
+**Done when:** every changed file has been opened in full, each finding names
+the standard or the smell it came from, and every behavioural claim the diff
+adds or changes either has a `file:line` behind it or is one of the findings.
 
 ## Step 5: Check the diff against the intent
 

@@ -17,7 +17,9 @@ Three scripts, all bash, no build step. The commands they carry:
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
 | `./link.sh` | Links every skill into `~/.claude/skills`. |
 
-None of them needs anything but bash and the usual POSIX tools.
+None of them needs a package installed. All three resolve their own path
+with `readlink -f`, and `check.sh` takes its file list from `git`, so those
+two are the requirements beyond bash and the usual POSIX tools.
 
 `package.json` carries those as `npm run check`, `doctor`, `fired`, and
 `link`, plus `npm run lint`, which runs shellcheck over every one of them.
@@ -48,6 +50,14 @@ A maintenance script is the exception, because it runs on one machine rather
 than in a session, and it may read a harness's own files. `link.sh` writes to
 `~/.claude/skills` and `fired.sh` reads `~/.claude/projects`, and both say so
 where they do it. Take that as licence for a script, never for a skill.
+
+## What an agent here never does
+
+Post a comment or a review to a pull request, whoever asks and however they
+ask. Reading stays open: viewing a pull request, its diff, and its review
+threads are all unaffected, and so is opening one. The rule is categorical
+because the mistake is public and cannot be taken back, so anything whose
+whole purpose is that step has no configuration that saves it.
 
 ## Before changing a skill
 

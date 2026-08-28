@@ -5,16 +5,17 @@ Claude Code and Cursor read. Nothing gets committed into working repos.
 
 ## Scope
 
-Everything here works in both Claude Code and Cursor, and anything added has
-to. A skill is plain markdown that either harness can read, which is the whole
-reason one clone serves both.
+Everything this repo ships into a session works in both Claude Code and
+Cursor, and anything added has to. A skill is plain markdown that either
+harness can read, which is the whole reason one clone serves both. The
+maintenance scripts are the exception and say so where they read one tool's
+files, since `fired.sh` can only count what Claude Code writes down.
 
-Tool-specific machinery stays out. A Claude Code plugin and a Cursor plugin
-are different artifacts installed from different marketplaces into trees that
-do not overlap, so taking either one on would serve half the setup and weigh
-on the rest. Install what you like in your own tool.
-[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what pairs well with these
-skills in each, as a recommendation rather than a dependency.
+Tool-specific machinery stays out, plugins included.
+[AGENTS.md](AGENTS.md) under "What belongs here" carries the rule and the
+reason. Install what you like in your own tool:
+[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what pairs well with each, as a
+recommendation rather than a dependency.
 
 ## Setup
 

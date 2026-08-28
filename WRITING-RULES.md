@@ -95,9 +95,15 @@ its first step runs `git diff` and its third runs the repo's own lint
 commands. A restriction that breaks the skill gets deleted the first time it
 bites.
 
-`disallowed-tools` sits outside the Agent Skills spec, so it carries the same
-trade as `disable-model-invocation`: both harnesses read it from disk, and the
-skill will not upload to claude.ai.
+`disallowed-tools` is a Claude Code field, and the trade is worse than the one
+`disable-model-invocation` makes. Cursor reads that flag; its frontmatter has
+no `disallowed-tools` and no `allowed-tools`, so a skill leaning on either is
+restricted in one harness and wide open in the other. Both fields also sit
+outside the Agent Skills spec, so the skill will not upload to claude.ai.
+
+Write the body so the skill is right without the field, then add the field as
+a second lock. A limit that holds in only one of the two harnesses this repo
+links into is not one the body can leave unsaid.
 
 ## Structure
 

@@ -16,6 +16,11 @@ smells that applies even when the repo has written nothing down.
 Every finding cites a `file:line` and names the standard or the smell it came
 from, so you can disagree with it in one step.
 
+It reports and changes nothing. Findings go in the reply for you to act on, so
+the diff reads the same at the end of the review as at the start. The
+frontmatter takes the editing tools away in Claude Code, and Cursor reads no
+such field, so there this sentence is the only thing holding it.
+
 ## When to use it
 
 On your own branch before opening a PR, on someone else's branch you are

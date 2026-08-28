@@ -3,8 +3,10 @@
 # the test in PLUGINS.md that a machine can answer: what each plugin's
 # descriptions cost on every turn and what the set costs together, what they
 # let an agent do without asking, and where they overlap what is already here.
-# An MCP server and a hook cost context too, in tool schemas rather than
-# descriptions, and this counts neither. It names them instead.
+# Neither an MCP server nor a hook is counted, and they cost differently. An
+# MCP server loads its tool schemas on every turn. A hook costs only what it
+# prints when its event fires, which is often nothing. Both get named rather
+# than priced.
 #
 # The roster is read from the installed plugins rather than written down, for
 # the same reason check.sh --doctor reads $HOME and fired.sh reads the
@@ -63,6 +65,17 @@ field() {
       }
     }
   ' "$1"
+}
+
+# One phrase added to a list, so every caller reads the same whether it is
+# the first or the third. An assignment for the first and an append for the
+# rest reads fine with two and clobbers the first the day a third arrives.
+joined() {
+  if [ -n "$1" ]; then
+    printf '%s and %s' "$1" "$2"
+  else
+    printf '%s' "$2"
+  fi
 }
 
 # The skills in this repo, to match plugin component names against.
@@ -175,18 +188,14 @@ while IFS=$'\t' read -r id version scope path; do
   if [ -f "$path/.mcp.json" ]; then
     printf '    %-8s .mcp.json\n' "mcp"
     undescribed="$undescribed$id -> an MCP server"$'\n'
-    unmeasured="an MCP server"
+    unmeasured="$(joined "$unmeasured" 'an MCP server')"
     found=$((found + 1))
     components=$((components + 1))
   fi
   if [ -d "$path/hooks" ]; then
     printf '    %-8s hooks/\n' "hooks"
     undescribed="$undescribed$id -> hooks, which run uninvoked"$'\n'
-    if [ -n "$unmeasured" ]; then
-      unmeasured="$unmeasured and hooks"
-    else
-      unmeasured="hooks"
-    fi
+    unmeasured="$(joined "$unmeasured" 'hooks')"
     found=$((found + 1))
     components=$((components + 1))
   fi

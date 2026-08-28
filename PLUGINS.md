@@ -61,7 +61,7 @@ What competes is the `description` in a component's frontmatter, not the
 summary a table carries, so read the real ones side by side:
 
 ```bash
-grep -L '^disable-model-invocation: true' skills/*/SKILL.md | xargs grep -h '^description:'
+grep -L '^disable-model-invocation: true' skills/*/SKILL.md | xargs -r grep -h '^description:'
 ./scripts/plugins.sh --descriptions
 ```
 
@@ -94,10 +94,12 @@ rather than a promise inside it.
 Every description in a listing rides every turn of every conversation, whether
 or not the plugin runs. `./scripts/plugins.sh` prints a figure per plugin and
 one for the set, so a candidate can be weighed against what is already being
-paid for. It counts descriptions and nothing else, so a plugin carrying an MCP
-server or a hook costs more than its figure says, and the script names those
-rather than pricing them. A plugin earning its place one session a month
-rarely earns a permanent line in the prompt.
+paid for. It counts descriptions and nothing else. An MCP server loads its
+tool schemas on every turn, so a plugin carrying one costs more than its
+figure says. A hook costs only what it prints when its event fires, which is
+often nothing. The script names both rather than pricing either. A plugin
+earning its place one session a month rarely earns a permanent line in the
+prompt.
 
 ## Decisions on record
 

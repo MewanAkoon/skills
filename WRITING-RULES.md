@@ -75,6 +75,30 @@ An agent that does not read the flag treats the skill as model-invoked. So
 for anything that must not auto-fire, also keep the description free of
 trigger phrases. The flag alone is not a guarantee.
 
+## Tool access
+
+Two frontmatter fields govern tools and they pull in opposite directions.
+
+`allowed-tools` grants. It pre-approves the listed tools for the turn that
+invokes the skill, so they run without a permission prompt. Every other tool
+stays callable, and the grant clears on your next message. Reach for it when a
+skill runs a bundled script and the prompt would be noise.
+
+`disallowed-tools` restricts. It takes the listed tools out of the pool while
+the skill is active. Reach for it when a skill must not do something, so the
+limit holds whatever the body says. `review-diff` lists `Edit, Write,
+NotebookEdit` for that reason: a review that can edit the diff it just pinned
+is reviewing a moving target.
+
+Name only what the skill can do without. `review-diff` keeps `Bash`, because
+its first step runs `git diff` and its third runs the repo's own lint
+commands. A restriction that breaks the skill gets deleted the first time it
+bites.
+
+`disallowed-tools` sits outside the Agent Skills spec, so it carries the same
+trade as `disable-model-invocation`: both harnesses read it from disk, and the
+skill will not upload to claude.ai.
+
 ## Structure
 
 Every skill opens with three short headings, in this order:

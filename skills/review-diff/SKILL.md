@@ -2,6 +2,7 @@
 name: review-diff
 description: A diff review against written repo standards, plus a fixed smell baseline.
 disable-model-invocation: true
+disallowed-tools: Edit, Write, NotebookEdit
 ---
 
 # Review diff

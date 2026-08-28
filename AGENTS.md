@@ -8,7 +8,7 @@ A source of agent skills, not an application. There is nothing to build and no
 test suite. Every `SKILL.md` loads into some other repo's session, so a change
 here changes how an agent behaves everywhere.
 
-Four scripts, all bash, no build step:
+Four scripts, all bash, no build step. The commands they carry:
 
 | Command | What it does |
 |---|---|

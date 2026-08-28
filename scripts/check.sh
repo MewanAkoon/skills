@@ -34,6 +34,12 @@ body() {
   awk 'NR==1 && $0=="---" { inside=1; next } inside && $0=="---" { inside=0; started=1; next } started' "$1"
 }
 
+# Every markdown file this repo owns, committed or not, so .gitignore decides
+# what counts and a new file is checked before anyone commits it.
+markdown() {
+  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' 2>/dev/null
+}
+
 # The README table rows under one heading, used to check where a skill is listed.
 section() {
   sed -n "/^### $1\$/,/^#\{2,3\} /p" README.md
@@ -115,13 +121,11 @@ done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/
 # Every relative markdown link resolves, in the root files as well as the
 # skills, because the root ones point at each other and nothing else catches a
 # rename. A link inside a fenced code block is a template rather than a link,
-# so the fence state is tracked and those are skipped. git supplies the file
-# list the way the dash sweep below does, so a new file is checked before it
-# is committed.
+# so the fence state is tracked and those are skipped.
 while IFS=$'\t' read -r src link; do
   [ -f "$(dirname "$src")/$link" ] || bad "$src links $link, which does not exist"
 done < <(
-  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' | while IFS= read -r f; do
+  markdown | while IFS= read -r f; do
     awk -v F="$f" '
       /^```/ { fence = !fence; next }
       {
@@ -147,13 +151,11 @@ git rev-parse --git-dir >/dev/null 2>&1 \
   || bad "not a git repository, so the dash sweep did not run"
 
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
-# so banning only the first leaves the tell in place. git supplies the file
-# list, so .gitignore decides what is ours and an unstaged new skill still gets
-# checked.
+# so banning only the first leaves the tell in place.
 while IFS= read -r f; do
   lines="$(grep -n '[—–−]' "$f" | cut -d: -f1 | tr '\n' ' ')"
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
-done < <(git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' 2>/dev/null)
+done < <(markdown)
 
 # Machine state, so it warns rather than failing, and only when asked. CI has
 # no $HOME to check and would fail every run.

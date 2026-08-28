@@ -53,15 +53,15 @@ field() {
 }
 
 # The skills in this repo, to match plugin component names against.
-mine=""
+repo_skills=""
 for dir in skills/*/; do
-  mine="$mine $(basename "$dir")"
+  repo_skills="$repo_skills $(basename "$dir")"
 done
 
 grants=""      # components that pre-approve tools
 bounded=""     # agents that name a tool list, so they cannot exceed it
 collisions=""  # component names that match a skill in this repo
-silent=""      # parts that widen reach while carrying no description
+undescribed="" # parts that widen reach while carrying no description
 listing=0      # characters of name and description carried on every turn
 components=0
 
@@ -104,7 +104,6 @@ while IFS=$'\t' read -r id version scope path; do
 
       description="$(field "$file" description)"
       allowed="$(field "$file" allowed-tools)"
-      tools="$(field "$file" tools)"
       hidden="$(field "$file" disable-model-invocation)"
 
       note=""
@@ -124,14 +123,20 @@ while IFS=$'\t' read -r id version scope path; do
         grants="$grants$id:$name -> $allowed"$'\n'
       fi
 
-      # Only an agent's tools field restricts anything. On a skill the field
-      # is not part of the frontmatter Claude Code reads.
-      if [ "$kind" = agent ] && [ -n "$tools" ]; then
-        printf '             limited to %s\n' "$tools"
-        bounded="$bounded$id:$name -> $tools"$'\n'
+      # Only an agent's tools field restricts anything, so only an agent is
+      # read for it. On a skill the field is not frontmatter Claude Code acts
+      # on.
+      if [ "$kind" = agent ]; then
+        tools="$(field "$file" tools)"
+        if [ -n "$tools" ]; then
+          printf '             limited to %s\n' "$tools"
+          bounded="$bounded$id:$name -> $tools"$'\n'
+        fi
       fi
 
-      case " $mine " in
+      # The quotes make the expansion literal, so a name is compared rather
+      # than treated as a pattern.
+      case " $repo_skills " in
         *" $name "*) collisions="$collisions$id:$name"$'\n' ;;
       esac
     done <<< "$files"
@@ -143,13 +148,15 @@ while IFS=$'\t' read -r id version scope path; do
   # reported rather than only printed here.
   if [ -f "$path/.mcp.json" ]; then
     printf '    %-8s .mcp.json\n' "mcp"
-    silent="$silent$id -> an MCP server"$'\n'
+    undescribed="$undescribed$id -> an MCP server"$'\n'
     found=$((found + 1))
+    components=$((components + 1))
   fi
   if [ -d "$path/hooks" ]; then
     printf '    %-8s hooks/\n' "hooks"
-    silent="$silent$id -> hooks, which run uninvoked"$'\n'
+    undescribed="$undescribed$id -> hooks, which run uninvoked"$'\n'
     found=$((found + 1))
+    components=$((components + 1))
   fi
 
   # Says what was looked for rather than what the plugin does. A plugin can
@@ -177,7 +184,7 @@ report() {
 }
 
 report 'Pre-approve tools, so these run without a prompt' "$grants"
-report 'Reach further while carrying no description' "$silent"
+report 'Reach further while carrying no description' "$undescribed"
 report 'Bounded by a tool list, so they cannot exceed it' "$bounded"
 report 'Share a name with a skill in this repo' "$collisions"
 

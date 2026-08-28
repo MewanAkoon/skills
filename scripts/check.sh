@@ -35,9 +35,11 @@ body() {
 }
 
 # Every markdown file this repo owns, committed or not, so .gitignore decides
-# what counts and a new file is checked before anyone commits it.
+# what counts and a new file is checked before anyone commits it. git's own
+# errors are left to print, because a file list that comes back empty makes
+# every check reading it pass without opening a thing.
 markdown() {
-  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' 2>/dev/null
+  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc'
 }
 
 # The README table rows under one heading, used to check where a skill is listed.
@@ -118,6 +120,13 @@ while IFS= read -r linked; do
   [ -f "skills/$linked/SKILL.md" ] || bad "README links skills/$linked/SKILL.md, which does not exist"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
 
+# The link check and the dash sweep both take their file list from git, and an
+# empty list is indistinguishable from a clean run. So this sits ahead of both
+# rather than after them, where it would report a repository that was never
+# read as a pass.
+git rev-parse --git-dir >/dev/null 2>&1 \
+  || bad "not a git repository, so the link check and the dash sweep read nothing"
+
 # Every relative markdown link resolves, in the root files as well as the
 # skills, because the root ones point at each other and nothing else catches a
 # rename. A link inside a fenced code block is a template rather than a link,
@@ -146,9 +155,6 @@ for f in .claude/rules/authoring-skills.md .cursor/rules/authoring-skills.mdc; d
 done
 diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
-
-git rev-parse --git-dir >/dev/null 2>&1 \
-  || bad "not a git repository, so the dash sweep did not run"
 
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
 # so banning only the first leaves the tell in place.

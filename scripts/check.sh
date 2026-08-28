@@ -42,6 +42,14 @@ markdown() {
   git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc'
 }
 
+# The same list without the untracked files. The block runner below executes
+# what it finds, so it reads only what someone has staged or committed rather
+# than whatever happens to be sitting in the tree. Staged counts, so a new
+# file is checked after `git add` and before the commit.
+tracked_markdown() {
+  git ls-files --cached -- '*.md' '*.mdc'
+}
+
 # The README table rows under one heading, used to check where a skill is listed.
 section() {
   sed -n "/^### $1\$/,/^#\{2,3\} /p" README.md
@@ -164,31 +172,38 @@ diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring
 # Each block runs from the repo root with stdin closed. A command that falls
 # back to reading standard input then ends rather than waiting, which is the
 # shape the xargs bug took: silent on BSD, a wait for input on GNU.
-blocks="$(mktemp -d)"
-while IFS= read -r f; do
-  count="$(grep -c '^```bash checked$' "$f")"
-  [ "$count" -gt 0 ] || continue
+#
+# A block is free to run check.sh. The variable below is set while blocks are
+# running and skips this section when it is already set, so the inner run
+# finishes instead of recursing. Matching the name in the block text would
+# refuse a block that only mentions it, and in a repo of documentation that is
+# most of them.
+if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
+  export CHECK_SH_RUNNING_BLOCKS=1
+  blocks="$(mktemp -d)"
 
-  i=1
-  while [ "$i" -le "$count" ]; do
-    awk -v want="$i" '
-      /^```bash checked$/ { n++; if (n == want) inside = 1; next }
-      /^```/ { if (inside) exit; next }
-      inside { print }
-    ' "$f" > "$blocks/block.sh"
+  while IFS= read -r f; do
+    count="$(grep -c '^```bash checked$' "$f")"
+    [ "$count" -gt 0 ] || continue
 
-    # check.sh running check.sh runs forever, so a block naming it is a
-    # marking mistake rather than something to execute.
-    if grep -q 'check\.sh' "$blocks/block.sh"; then
-      bad "$f: block $i is marked checked and names check.sh, which would recurse"
-    elif ! bash -e "$blocks/block.sh" >/dev/null 2>&1 </dev/null; then
-      bad "$f: block $i is marked checked and exits non-zero"
-    fi
+    i=1
+    while [ "$i" -le "$count" ]; do
+      awk -v want="$i" '
+        /^```bash checked$/ { n++; if (n == want) inside = 1; next }
+        /^```/ { if (inside) exit; next }
+        inside { print }
+      ' "$f" > "$blocks/block.sh"
 
-    i=$((i + 1))
-  done
-done < <(markdown)
-rm -rf "$blocks"
+      bash -e "$blocks/block.sh" >/dev/null 2>&1 </dev/null \
+        || bad "$f: block $i is marked checked and exits non-zero"
+
+      i=$((i + 1))
+    done
+  done < <(tracked_markdown)
+
+  rm -rf "$blocks"
+  unset CHECK_SH_RUNNING_BLOCKS
+fi
 
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
 # so banning only the first leaves the tell in place.

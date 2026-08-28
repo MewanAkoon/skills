@@ -62,8 +62,9 @@ answer.
   file that exists, ignoring the ones inside fenced code blocks, which are
   templates.
 - The two rules files carry the same body.
-- Every command block whose fence reads `bash checked` runs from the repo root
-  with stdin closed and exits zero.
+- Every command block whose fence reads `bash checked`, in a staged or
+  committed markdown file, runs from the repo root with stdin closed and exits
+  zero. The checker executes these, so an untracked file is left alone.
 - No markdown file contains an em dash, an en dash, or a minus sign.
 
 What limits the model-invoked set is conflict, not count. Before adding one,
@@ -85,13 +86,14 @@ count, and the twin is usually in another file.
 
 Mark a command block `bash checked` when its content can rot, and
 `./scripts/check.sh` runs it. A pipeline that encodes an assumption earns the
-marker. A bare script invocation does not, because there is nothing in it to
-go stale.
+marker, because the assumption is what goes stale.
 
-A marked block runs in CI too, which has only the checkout and the usual
-POSIX tools. No `$HOME`, no installed plugins, no `claude` CLI, and no
-`~/.claude/projects` to read. A block needing any of those belongs in its own
-fence with no marker, next to the one that can run anywhere.
+Mark it only when it runs anywhere, because CI runs it too, with the checkout
+and the usual POSIX tools and little else. A fresh runner has no `~/.claude`,
+so nothing reading installed plugins or session transcripts will work there.
+`./scripts/plugins.sh` reads the installed plugins, and marking its block
+turned CI red until the fence was split. A block that needs an environment
+belongs in its own fence with no marker, beside the one that runs anywhere.
 
 ## Prose
 

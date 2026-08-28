@@ -118,6 +118,19 @@ skill named in `~/.claude/CLAUDE.md` gets followed without being invoked.
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.
 
+## Plugins
+
+Plugins load into the same sessions these skills do. To see which are
+installed and what they let an agent do:
+
+```bash
+./scripts/plugins.sh
+```
+
+It reads the installed set rather than a list in a file, so it cannot go
+stale. [PLUGINS.md](PLUGINS.md) holds the test a plugin has to pass before it
+joins them, and the decisions already taken.
+
 ## Instructions for agents
 
 [AGENTS.md](AGENTS.md) holds the rules for any agent working in this repo, and

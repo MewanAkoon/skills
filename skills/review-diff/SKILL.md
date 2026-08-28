@@ -2,6 +2,7 @@
 name: review-diff
 description: A diff review against written repo standards, plus a fixed smell baseline.
 disable-model-invocation: true
+disallowed-tools: Edit, Write, NotebookEdit
 ---
 
 # Review diff
@@ -14,6 +15,9 @@ smells that applies even when the repo has written nothing down.
 
 Every finding cites a `file:line` and names the standard or the smell it came
 from, so you can disagree with it in one step.
+
+It reports and changes nothing. Findings go in the reply for you to act on, so
+the diff reads the same at the end of the review as at the start.
 
 ## When to use it
 

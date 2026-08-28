@@ -120,9 +120,8 @@ Every script is also an `npm run` target, which is the only reason
 
 ## Plugins
 
-A plugin loads skills, agents, commands, MCP servers and hooks into the same
-session these skills load into, so one can change agent behaviour without a
-commit here. To see what is installed and what it lets an agent do:
+Plugins load into the same sessions these skills do. To see which are
+installed and what they let an agent do:
 
 ```bash
 ./scripts/plugins.sh

@@ -38,10 +38,10 @@ follows, and enforcing it is what this repo is for.
 
 ## Before installing a plugin
 
-Read [PLUGINS.md](PLUGINS.md). A plugin loads skills, agents, commands, MCP
-servers and hooks into the same session these skills load into, so it changes
-agent behaviour without a commit here. `./scripts/plugins.sh` answers the half
-of that test a machine can answer.
+Read [PLUGINS.md](PLUGINS.md). It says what a plugin brings into a session,
+the five checks one passes before it joins the set, and the verdicts already
+reached. `./scripts/plugins.sh` answers the half of that test a machine can
+answer.
 
 ## Invariants
 

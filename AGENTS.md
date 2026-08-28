@@ -62,6 +62,8 @@ answer.
   file that exists, ignoring the ones inside fenced code blocks, which are
   templates.
 - The two rules files carry the same body.
+- Every command block whose fence reads `bash checked` runs from the repo root
+  with stdin closed and exits zero.
 - No markdown file contains an em dash, an en dash, or a minus sign.
 
 What limits the model-invoked set is conflict, not count. Before adding one,
@@ -72,6 +74,19 @@ work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
 `$HOME`: whether every skill in this repo is currently linked into
 `~/.claude/skills`. Run it when a skill has been added, renamed, or removed,
 and run `./link.sh` when it reports a gap.
+
+## When a change makes a claim false
+
+Behaviour and the prose describing it come apart one sentence at a time. After
+changing what something does, search for every place that says what it does
+and re-derive each from the new behaviour, rather than editing the sentence
+nearest the change. Comments, headings, and the strings a script prints all
+count, and the twin is usually in another file.
+
+Mark a command block `bash checked` when its content can rot, and
+`./scripts/check.sh` runs it. A bare script invocation earns no marker. A
+pipeline that encodes an assumption does, and so does anything a reader is
+told to type.
 
 ## Prose
 

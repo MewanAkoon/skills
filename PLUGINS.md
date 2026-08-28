@@ -60,7 +60,7 @@ looking like it does.
 What competes is the `description` in a component's frontmatter, not the
 summary a table carries, so read the real ones side by side:
 
-```bash
+```bash checked
 grep -L '^disable-model-invocation: true' skills/*/SKILL.md | xargs -r grep -h '^description:'
 ./scripts/plugins.sh --descriptions
 ```

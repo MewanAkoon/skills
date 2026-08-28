@@ -156,6 +156,40 @@ done
 diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
+# Every command block marked runnable actually runs. A block opts in with
+# `bash checked` on its fence, because most blocks in this repo are templates
+# carrying <placeholders> or commands with side effects, and running those
+# would be worse than checking nothing.
+#
+# Each block runs from the repo root with stdin closed. A command that falls
+# back to reading standard input then ends rather than waiting, which is the
+# shape the xargs bug took: silent on BSD, a wait for input on GNU.
+blocks="$(mktemp -d)"
+while IFS= read -r f; do
+  count="$(grep -c '^```bash checked$' "$f")"
+  [ "$count" -gt 0 ] || continue
+
+  i=1
+  while [ "$i" -le "$count" ]; do
+    awk -v want="$i" '
+      /^```bash checked$/ { n++; if (n == want) inside = 1; next }
+      /^```/ { if (inside) exit; next }
+      inside { print }
+    ' "$f" > "$blocks/block.sh"
+
+    # check.sh running check.sh runs forever, so a block naming it is a
+    # marking mistake rather than something to execute.
+    if grep -q 'check\.sh' "$blocks/block.sh"; then
+      bad "$f: block $i is marked checked and names check.sh, which would recurse"
+    elif ! bash -e "$blocks/block.sh" >/dev/null 2>&1 </dev/null; then
+      bad "$f: block $i is marked checked and exits non-zero"
+    fi
+
+    i=$((i + 1))
+  done
+done < <(markdown)
+rm -rf "$blocks"
+
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
 # so banning only the first leaves the tell in place.
 while IFS= read -r f; do

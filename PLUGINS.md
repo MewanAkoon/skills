@@ -67,7 +67,9 @@ grep -h '^description:' skills/*/SKILL.md
 
 The first is what this repo loads, the second what the installed plugins load,
 because a candidate can collide with another plugin as easily as with a skill.
-The candidate's own are in the marketplace clone you opened for check 1.
+Both lists hold only what a model can reach on its own, since a user-invoked
+component competes with nothing until someone types its name. The candidate's
+own are in the marketplace clone you opened for check 1.
 
 Two components compete when they claim the same decision and the agent has to
 pick one, which is the test in [WRITING-RULES.md](WRITING-RULES.md) under
@@ -89,8 +91,10 @@ rather than a promise inside it.
 ### 5. What does it cost while doing nothing?
 
 Every description in a listing rides every turn of every conversation, whether
-or not the plugin runs. `./scripts/plugins.sh` totals it. A plugin earning its
-place one session a month rarely earns a permanent line in the prompt.
+or not the plugin runs. `./scripts/plugins.sh` prints a figure per plugin and
+one for the set, so a candidate can be weighed against what is already being
+paid for. A plugin earning its place one session a month rarely earns a
+permanent line in the prompt.
 
 ## Decisions on record
 

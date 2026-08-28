@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Lists the plugins running alongside these skills, and answers the parts of
 # the test in PLUGINS.md that a machine can answer: what each plugin costs on
-# every turn, what it lets an agent do without asking, and where it overlaps
-# what is already here.
+# every turn and what the set costs together, what they let an agent do
+# without asking, and where they overlap what is already here.
 #
 # The roster is read from the installed plugins rather than written down, for
 # the same reason check.sh --doctor reads $HOME and fired.sh reads the
@@ -91,6 +91,7 @@ while IFS=$'\t' read -r id version scope path; do
   fi
 
   found=0
+  per_plugin=0
 
   # skills/<name>/SKILL.md, agents/<name>.md, commands/<name>.md. A file under
   # a skill's references/ is read on demand rather than listed, so the find is
@@ -118,18 +119,25 @@ while IFS=$'\t' read -r id version scope path; do
       hidden="$(field "$file" disable-model-invocation)"
 
       note=""
+      competes=yes
       # A component the model cannot reach on its own is absent from the
-      # listing, so it costs nothing until someone types it. Claude Code takes
-      # any of these in any letter case, so the value is folded before the
-      # comparison.
+      # listing, so it costs nothing until someone types it and it never
+      # competes for an invocation. Claude Code takes any of these in any
+      # letter case, so the value is folded before the comparison.
       case "$(printf '%s' "$hidden" | tr '[:upper:]' '[:lower:]')" in
-        true|yes|on|1) note="  user-invoked" ;;
-        *) listing=$((listing + ${#name} + ${#description})) ;;
+        true|yes|on|1) note="  user-invoked"; competes=no ;;
+        *)
+          listing=$((listing + ${#name} + ${#description}))
+          per_plugin=$((per_plugin + ${#name} + ${#description}))
+          ;;
       esac
 
       printf '    %-8s %s%s\n' "$kind" "$name" "$note"
 
-      if [ "$descriptions" = yes ] && [ -n "$description" ]; then
+      # Only what competes is worth reading side by side, which is the whole
+      # point of check 3. A description the model never sees would pad the
+      # comparison with text that cannot collide with anything.
+      if [ "$descriptions" = yes ] && [ "$competes" = yes ] && [ -n "$description" ]; then
         printf '             %s\n' "$description"
       fi
 
@@ -178,6 +186,11 @@ while IFS=$'\t' read -r id version scope path; do
   # still deliver something by another route, as an LSP integration does.
   if [ "$found" -eq 0 ]; then
     printf '    nothing under skills/, agents/, commands/, .mcp.json or hooks/\n'
+  else
+    # Check 5 asks what one plugin costs, so it gets its own figure rather
+    # than a share of the total below.
+    printf '    costs %d characters on every turn, near %d tokens\n' \
+      "$per_plugin" "$((per_plugin / 4))"
   fi
 done < <(printf '%s' "$roster" | jq -r '
   .[] | select(.enabled) | [.id, .version, .scope, .installPath] | @tsv

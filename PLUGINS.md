@@ -88,7 +88,10 @@ place one session a month rarely earns a permanent line in the prompt.
 A decision stays true after the thing it was about is gone, which is why these
 are written down and the roster is not. Add a line rather than editing one
 when a verdict changes, so a plugin can appear under more than one heading.
-The later entry is the standing verdict.
+The entry further down the file is the standing one.
+
+"Installed but not yet judged" is the exception, and the one heading entries
+leave: judging a plugin is what empties it.
 
 ### Kept
 

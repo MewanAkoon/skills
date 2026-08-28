@@ -183,7 +183,7 @@ report() {
   fi
 }
 
-report 'Pre-approve tools, so these run without a prompt' "$grants"
+report 'Pre-approve tools for the turn that invokes them, so no prompt' "$grants"
 report 'Reach further while carrying no description' "$undescribed"
 report 'Bounded by a tool list, so they cannot exceed it' "$bounded"
 report 'Share a name with a skill in this repo' "$collisions"

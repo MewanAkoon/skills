@@ -8,23 +8,21 @@ A source of agent skills, not an application. There is nothing to build and no
 test suite. Every `SKILL.md` loads into some other repo's session, so a change
 here changes how an agent behaves everywhere.
 
-Four scripts, all bash, no build step. The commands they carry:
+Three scripts, all bash, no build step. The commands they carry:
 
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
 | `./scripts/check.sh --doctor` | Adds the linking check, which needs a `$HOME`. |
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
-| `./scripts/plugins.sh` | Lists the installed plugins and what they grant. |
-| `./scripts/plugins.sh --descriptions` | Adds the text that competes for an invocation. |
 | `./link.sh` | Links every skill into `~/.claude/skills`. |
 
-Three of them need nothing but bash and the usual POSIX tools. `plugins.sh`
-is the exception: it needs `jq`, and the `claude` CLI to say what is
-installed.
+None of them needs a package installed. All three resolve their own path
+with `readlink -f`, and `check.sh` takes its file list from `git`, so those
+two are the requirements beyond bash and the usual POSIX tools.
 
-`package.json` carries those as `npm run check`, `doctor`, `fired`, `plugins`,
-and `link`, plus `npm run lint`, which runs shellcheck over every one of them.
+`package.json` carries those as `npm run check`, `doctor`, `fired`, and
+`link`, plus `npm run lint`, which runs shellcheck over every one of them.
 It declares no dependencies. `lint` fetches a pinned shellcheck through `npx`,
 and CI runs that same pinned version rather than the runner image's, which
 moves on its own and disagreed with a local one about `A && B || C`.
@@ -32,17 +30,44 @@ moves on its own and disagreed with a local one about `A && B || C`.
 `link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude
 Code owns and Cursor also loads. Skills are never copied into a working repo.
 
+## What belongs here
+
+Everything this repo ships loads into both Claude Code and Cursor, so anything
+added has to work in both. The skill is the unit that travels: plain markdown
+under `skills/`, read by whichever harness picked it up, carrying no machinery
+of its own.
+
+Tool-specific machinery stays out, even when it is useful on the machine you
+are sitting at. A Claude Code plugin and a Cursor plugin are different
+artifacts, installed from different marketplaces into different directories,
+and the two trees do not overlap. Adopting either would serve one harness and
+be dead weight in the other. Recommendations of that kind live in
+[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md), which no session loads and nothing
+depends on. Anything that would make a skill run its procedure in one harness
+and not the other belongs there instead, or nowhere.
+
+Two exceptions, both narrow. A maintenance script runs on one machine rather
+than in a session, so it may read a harness's own files: `link.sh` writes to
+`~/.claude/skills` and `fired.sh` reads `~/.claude/projects`, and both say so
+where they do it. And a skill may carry a harness-specific frontmatter field
+when it is a second lock over a body that is already right without it, which
+is why `review-diff` sets `disallowed-tools` that Cursor does not read.
+[WRITING-RULES.md](WRITING-RULES.md) under "Tool access" holds that trade and
+the condition on it. Neither exception covers a procedure that only works in
+one harness.
+
+## What an agent here never does
+
+Post a comment or a review to a pull request, whoever asks and however they
+ask. Reading stays open: viewing a pull request, its diff, and its review
+threads are all unaffected, and so is opening one. The rule is categorical
+because the mistake is public and cannot be taken back, so anything whose
+whole purpose is that step has no configuration that saves it.
+
 ## Before changing a skill
 
 Read [WRITING-RULES.md](WRITING-RULES.md). It is the standard every file here
 follows, and enforcing it is what this repo is for.
-
-## Before installing a plugin
-
-Read [PLUGINS.md](PLUGINS.md). It says what a plugin brings into a session,
-the checks one passes before it joins the set, and the verdicts already
-reached. `./scripts/plugins.sh` answers the half of that test a machine can
-answer.
 
 ## Invariants
 
@@ -90,10 +115,10 @@ marker, because the assumption is what goes stale.
 
 Mark it only when it runs anywhere, because CI runs it too, with the checkout
 and the usual POSIX tools and little else. A fresh runner has no `~/.claude`,
-so nothing reading installed plugins or session transcripts will work there.
-`./scripts/plugins.sh` reads the installed plugins, and marking its block
-turned CI red until the fence was split. A block that needs an environment
-belongs in its own fence with no marker, beside the one that runs anywhere.
+so nothing reading session transcripts or a tool's own installed files will
+work there. `./scripts/fired.sh` reads `~/.claude/projects`, so a block
+calling it stays unmarked. A block that needs an environment belongs in its
+own fence with no marker, beside the one that runs anywhere.
 
 ## Prose
 

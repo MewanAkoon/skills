@@ -3,6 +3,22 @@
 My agent skills. One clone on disk, symlinked into the global skill directory
 Claude Code and Cursor read. Nothing gets committed into working repos.
 
+## Scope
+
+Every skill here runs the same procedure in both Claude Code and Cursor, and
+anything added has to. A skill is plain markdown that either harness can read,
+which is the whole reason one clone serves both. Two narrow exceptions, both
+named in [AGENTS.md](AGENTS.md) under "What belongs here": the maintenance
+scripts read one tool's own files, since `fired.sh` can only count what Claude
+Code writes down, and `review-diff` carries a Claude Code frontmatter field as
+a lock over a body that is right without it.
+
+Tool-specific machinery stays out, plugins included.
+[AGENTS.md](AGENTS.md) under "What belongs here" carries the rule and the
+reason. Install what you like in your own tool:
+[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what pairs well with each, as a
+recommendation rather than a dependency.
+
 ## Setup
 
 Clone once, somewhere permanent:
@@ -119,18 +135,13 @@ invoked, so that skill's count reads lower than its influence.
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.
 
-## Plugins
+## Optional extras
 
-Plugins load into the same sessions these skills do. To see which are
-installed and what they let an agent do:
-
-```bash
-./scripts/plugins.sh
-```
-
-It reads the installed set rather than a list in a file, so it cannot go
-stale. [PLUGINS.md](PLUGINS.md) holds the test a plugin has to pass before it
-joins them, and the decisions already taken.
+Plugins and anything else your tool loads alongside these skills sit outside
+this repo, for the reason under "Scope" above.
+[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) holds the notes: what pairs well with
+Claude Code, what was found on the Cursor side, what to look at before
+enabling any of it, and what was tried and dropped.
 
 ## Instructions for agents
 

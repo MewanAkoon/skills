@@ -63,7 +63,16 @@ Before adding a model-invoked skill, read every description already in the
 set and look for a prompt where the new skill and an existing one would give
 conflicting instructions. When you find one, narrow the new description until
 they no longer collide, move the overlapping part into the existing skill's
-`references/`, or demote something.
+`references/`, or demote something. To print the set as it stands:
+
+```bash checked
+grep -L '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' skills/*/SKILL.md | xargs -r grep -h '^description:'
+```
+
+It lists only what an agent can reach on its own, because a user-invoked
+skill competes with nothing until someone types its name. The pattern is the
+one `check.sh` uses to decide the same question, so the two agree on a file
+whose flag carries extra spacing.
 
 Claude Code and Cursor both read `disable-model-invocation`. The Agent Skills
 spec allows only `name`, `description`, `license`, `compatibility`,

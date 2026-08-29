@@ -164,13 +164,14 @@ done
 diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
-# Every script here parses. fired.sh embeds an awk program in single quotes,
-# where an apostrophe inside a printed string ends the program and leaves a
-# file that breaks only when someone runs it, and nothing else here runs them.
-# CI cannot run fired.sh at all, because it has no $HOME.
+# Every script here parses as bash. fired.sh embeds an awk program in single
+# quotes, so an unbalanced apostrophe in a printed string ends the program and
+# leaves a file that fails only when someone runs it. Nothing else here runs
+# the scripts, so without this it ships.
 #
-# npm run lint catches this too, through a shellcheck it downloads. This is the
-# command AGENTS.md says to run before committing, and it needs only bash.
+# A bash parse and nothing more. Two apostrophes balance each other and pass
+# here, leaving the awk program mangled. `npm run lint` catches that case and
+# this does not.
 for f in link.sh scripts/*.sh; do
   bash -n "$f" || bad "$f: does not parse"
 done

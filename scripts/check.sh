@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks every skill against the invariants in AGENTS.md.
+# Checks this repo against the invariants in AGENTS.md.
 # Needs bash and the usual POSIX tools. Run before committing.
 #
 # --doctor adds the one check CI cannot run, because CI has no $HOME: whether
@@ -163,6 +163,18 @@ for f in .claude/rules/authoring-skills.md .cursor/rules/authoring-skills.mdc; d
 done
 diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
+
+# Every script here parses as bash. fired.sh embeds an awk program in single
+# quotes, so an unbalanced apostrophe in a printed string ends the program and
+# leaves a file that fails only when someone runs it. Nothing else here runs
+# the scripts, so without this it ships.
+#
+# A bash parse and nothing more. Two apostrophes balance each other and pass
+# here, leaving the awk program mangled. `npm run lint` catches that case and
+# this does not.
+for f in link.sh scripts/*.sh; do
+  bash -n "$f" || bad "$f: does not parse"
+done
 
 # Every command block marked runnable actually runs. A block opts in with
 # `bash checked` on its fence, because most blocks in this repo are templates

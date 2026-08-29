@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Counts how often each skill in this repo has fired, so the pruning rule in
-# WRITING-RULES.md has something to run against.
+# Counts how often each skill in this repo has fired. Nothing acts on the
+# count, and no skill is deleted for going unused. A zero is a question about
+# that skill's description or its linking.
 #
 # Claude Code writes one JSONL transcript per session under ~/.claude/projects
 # and records "skill":"<name>" when a skill is invoked, whether the user typed
@@ -59,7 +60,7 @@ printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "$SHOWN"
 # which input a line came from by counting records, and when the first input is
 # empty it reads every line of the second as though it belonged to the first.
 # Here that would silently count no skill at all and report the whole set as
-# never fired, which is the input to a rule that deletes skills. A `stat` that
+# never fired, which is a wrong answer nothing else would catch. A `stat` that
 # does not support either format is enough to empty the date list, so the tag
 # carries the answer instead of the record count.
 {
@@ -113,7 +114,7 @@ printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "$SHOWN"
 
     printf "\n%d of %d have never fired.\n", never, total
     if (never > 0) {
-      print "WRITING-RULES.md says to delete a skill that has not fired in two weeks."
+      print "A zero is a question about the description or the linking."
       print "Check ./scripts/check.sh --doctor first: an unlinked skill cannot fire."
     }
   }

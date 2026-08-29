@@ -206,15 +206,12 @@ Run the skill twice, in two fresh sessions, on the same prompt. If the
 behaviour differs, a step is underspecified, and it is almost always a vague
 completion criterion. Fix that one step and nothing else.
 
-## Pruning
+## Keeping skills
 
-Every two weeks, delete any skill that has not fired or been called. A
-model-invoked skill that never triggers is not neutral, its description costs
-tokens on every turn of every conversation.
+A skill stays until you remove it deliberately. Nothing here deletes one for
+going unused, however long it stays quiet. Keep a skill written for a case
+that has not come up yet.
 
-`./scripts/fired.sh` counts the firings, reading the `"skill":"<name>"` lines
-Claude Code writes into its session transcripts. Read two things off it before
-deleting anything. A skill that is not linked cannot fire, so check
-`./scripts/check.sh --doctor` first. A skill named in `~/.claude/CLAUDE.md`
-gets followed without being invoked, so its count reads lower than its
-influence.
+`./scripts/fired.sh` counts the firings. Read a zero as a question about the
+description or the linking, and answer it with `./scripts/check.sh --doctor`,
+because a skill that is not linked cannot fire.

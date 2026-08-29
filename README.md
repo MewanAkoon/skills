@@ -101,19 +101,20 @@ what it checks. CI runs the same script on every pull request and on every
 push to `main`, on Linux and on macOS, without `--doctor`, since CI has no
 `$HOME` to inspect.
 
-## Pruning
+## Usage counts
 
-`WRITING-RULES.md` says to delete a skill that has not fired in two weeks.
-To see which those are:
+A skill stays whether or not it fires. To see how often each one has fired:
 
 ```bash
 ./scripts/fired.sh
 ```
 
 It reads the session transcripts Claude Code leaves under `~/.claude/projects`
-and counts the times each skill was invoked. Two caveats, both printed with
-the report: an unlinked skill cannot fire, so run `--doctor` first, and a
-skill named in `~/.claude/CLAUDE.md` gets followed without being invoked.
+and counts the times each skill was invoked. Read a zero as a question about
+the skill's description or its linking, and run `--doctor` first, because an
+unlinked skill cannot fire. The report says that much itself. It cannot see a
+skill named in `~/.claude/CLAUDE.md`, which gets followed without being
+invoked, so that skill's count reads lower than its influence.
 
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.

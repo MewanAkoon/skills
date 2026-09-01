@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 # Counts how often each skill in this repo has fired. Nothing acts on the
-# count, and no skill is deleted for going unused. A zero is a question about
-# that skill's description or its linking.
+# count, and no skill is deleted for going unused. A zero is a question with
+# three possible answers, which the report prints: the work happened in
+# Cursor, the skill is not linked, or the description does not fire.
 #
 # Claude Code writes one JSONL transcript per session under ~/.claude/projects
 # and records "skill":"<name>" when a skill is invoked, whether the user typed
 # it or the model reached for it. This reads those.
 #
-# Two things it cannot see. Cursor keeps no comparable transcript, so its runs
-# are missing. A skill also named in ~/.claude/CLAUDE.md gets followed without
-# being invoked, so its count reads lower than its influence.
+# One thing the report does not say, because it is about influence rather than
+# counting: a skill also named in ~/.claude/CLAUDE.md gets followed without
+# being invoked, so its count reads lower than its reach.
 
 set -uo pipefail
 
 # Resolve through a symlink, so invoking this from a bin directory on PATH
 # still finds the clone rather than the symlink's own directory.
-SELF="$(readlink -f "$0")"
+SELF="$(readlink -f "$0" 2>/dev/null || true)"
+# An empty SELF would make `dirname` return `.`, so the cd below would succeed
+# into the wrong directory and every glob would quietly match nothing. Say what
+# is wrong instead. `readlink -f` is GNU and BSD both today, and missing on
+# macOS before Big Sur.
+[ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 cd "$(dirname "$SELF")/.." || exit 1
 
 TRANSCRIPTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
@@ -23,7 +29,9 @@ TRANSCRIPTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
 # ~/.claude/projects reads better than the absolute path, and $HOME is the
 # only part worth shortening.
 SHOWN="$TRANSCRIPTS"
-case "$SHOWN" in "$HOME"/*) SHOWN="~${SHOWN#"$HOME"}" ;; esac
+# CLAUDE_PROJECTS_DIR is exactly the case where $HOME may be unset, and an
+# unset one is fatal under `set -u`.
+case "$SHOWN" in "${HOME:-/nonexistent}"/*) SHOWN="~${SHOWN#"${HOME:-/nonexistent}"}" ;; esac
 
 if [ ! -d "$TRANSCRIPTS" ]; then
   echo "no transcripts at $TRANSCRIPTS, so nothing to count" >&2
@@ -112,10 +120,12 @@ printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "$SHOWN"
       }
     }
 
-    printf "\n%d of %d have never fired.\n", never, total
+    printf "\n%d of %d have no count here.\n", never, total
     if (never > 0) {
-      print "A zero is a question about the description or the linking."
-      print "Check ./scripts/check.sh --doctor first: an unlinked skill cannot fire."
+      print "A zero is a question, not a verdict. Three things answer it."
+      print "  Cursor writes no transcript, so work done there is not counted."
+      print "  An unlinked skill cannot fire: ./scripts/check.sh --doctor."
+      print "  Otherwise read the description, which is what decides firing."
     }
   }
 '

@@ -1,0 +1,7 @@
+# Git for Windows defaults to core.autocrlf=true, and every script here has a
+# bash shebang. CRLF makes the kernel look for `bash\r`, and the frontmatter
+# checks compare against a literal `---` that `---\r` never matches, so a
+# Windows clone fails everywhere at once. Normalise on the way in and check
+# out LF regardless of the setting.
+* text=auto eol=lf
+*.sh text eol=lf

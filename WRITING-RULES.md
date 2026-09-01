@@ -25,6 +25,14 @@ decides whether the skill runs. Write it first, on its own, before the body.
 - Be slightly pushy. Agents under-trigger skills more often than they
   over-trigger them.
 
+Every trigger goes in `description` and nowhere else. Claude Code also reads a
+`when_to_use` field and Cursor does not, so a trigger parked there fires in one
+harness and not the other. Two more constraints come from Cursor being the
+stricter reader: it requires `description`, where Claude Code falls back to the
+first paragraph of the body, and it requires `name` to match the directory,
+where Claude Code takes the directory name regardless. `check.sh` already
+enforces the name.
+
 Fires:
 
 ```yaml
@@ -48,10 +56,12 @@ carries triggers. Costs permanent context.
 becomes a plain one-line summary for a human browsing slash commands. Costs
 nothing.
 
-What caps the model-invoked set is conflict, not count. A description costs
-about seventy tokens, so the whole set is a few hundred. A false fire costs
-far more, because the agent reads an entire `SKILL.md` and then follows the
-wrong procedure.
+What caps the model-invoked set is conflict, not count. A description runs to
+a few hundred characters, so the whole set is under a thousand tokens. A false
+fire costs far more, because the agent reads an entire `SKILL.md` and then
+follows the wrong procedure. Print the set with the command below rather than
+trusting a number here, which goes stale every time a description is
+rewritten.
 
 So the test is competition, not overlap. Two skills compete when they claim
 the same decision and the agent has to pick one. Two skills compose when they
@@ -74,17 +84,42 @@ skill competes with nothing until someone types its name. The pattern is the
 one `check.sh` uses to decide the same question, so the two agree on a file
 whose flag carries extra spacing.
 
-Claude Code and Cursor both read `disable-model-invocation`. The Agent Skills
-spec allows only `name`, `description`, `license`, `compatibility`,
-`metadata`, and `allowed-tools`, so a strict validator rejects the flag
-outright. That is the trade a user-invoked skill makes: it works in both
-harnesses from disk, and it will not upload to claude.ai.
+Claude Code and Cursor both read `disable-model-invocation`, which
+[Cursor's skills documentation](https://cursor.com/docs/skills) states. The
+Agent Skills spec allows only `name`, `description`, `license`,
+`compatibility`, `metadata`, and `allowed-tools`, so a strict validator
+rejects the flag outright. That is the trade a user-invoked skill makes: it
+works in both harnesses from disk, and it will not upload to claude.ai.
 
 An agent that does not read the flag treats the skill as model-invoked. So
 for anything that must not auto-fire, also keep the description free of
 trigger phrases. The flag alone is not a guarantee.
 
+### Ambient triggers
+
+A task-shaped trigger fires because the agent classifies what it is about to
+do. An ambient trigger has no such moment. Writing a reply is the clearest
+case: the agent is always doing it, so it never stops to ask which skill
+covers it, and a description listing artifacts reads as a list of things that
+are not this.
+
+Write an ambient trigger as the first clause, as a condition rather than an
+instruction, and give it something countable. `plain-writing` opens on a reply
+longer than two sentences for that reason. An agent can check a length; it
+cannot check whether prose is the kind a human will read.
+
+Expect an ambient trigger to fire less reliably than a task-shaped one even
+after that, because the moment it depends on is one the agent passes through
+rather than arrives at. That is a reason to write the first clause carefully,
+not a reason to add a second copy of it somewhere else.
+
 ## Tool access
+
+Read this first, because it decides whether the rest applies to you. Cursor
+reads neither field below. A skill leaning on either is restricted in one
+harness and wide open in the other, so the body has to be right without the
+field and the field is only ever a second lock. What follows is how to choose
+between them once the body already holds.
 
 Two frontmatter fields govern tools and they pull in opposite directions.
 
@@ -104,15 +139,14 @@ its first step runs `git diff` and its third runs the repo's own lint
 commands. A restriction that breaks the skill gets deleted the first time it
 bites.
 
-`disallowed-tools` is a Claude Code field, and the trade is worse than the one
-`disable-model-invocation` makes. Cursor reads that flag; its frontmatter has
-no `disallowed-tools` and no `allowed-tools`, so a skill leaning on either is
-restricted in one harness and wide open in the other. Both fields also sit
-outside the Agent Skills spec, so the skill will not upload to claude.ai.
+The trade is worse than the one `disable-model-invocation` makes, because
+Cursor reads that flag and reads neither of these. The two fields also differ
+against the spec: `allowed-tools` is in it, as the list under "Invocation"
+says, while `disallowed-tools` is a Claude Code extension, so a skill using
+that one will not upload to claude.ai.
 
-Write the body so the skill is right without the field, then add the field as
-a second lock. A limit that holds in only one of the two harnesses this repo
-links into is not one the body can leave unsaid.
+A limit that holds in only one of the two harnesses this repo links into is
+not one the body can leave unsaid.
 
 ## Structure
 
@@ -209,9 +243,17 @@ completion criterion. Fix that one step and nothing else.
 ## Keeping skills
 
 A skill stays until you remove it deliberately. Nothing here deletes one for
-going unused, however long it stays quiet. Keep a skill written for a case
-that has not come up yet.
+going unused, however long it stays quiet. The three corrections that earned
+it already happened, and a quiet stretch does not undo them.
 
-`./scripts/fired.sh` counts the firings. Read a zero as a question about the
-description or the linking, and answer it with `./scripts/check.sh --doctor`,
-because a skill that is not linked cannot fire.
+This governs keeping, not writing. The gate above still holds: a skill starts
+from a correction you made three times, never from a case you expect to meet.
+
+`./scripts/fired.sh` counts the firings, and the report says how to read a
+zero. Answer it before touching the skill, because two of the three answers
+are about the install rather than the writing.
+
+When a model-invoked skill stays quiet and the install checks out, demote it.
+Set `disable-model-invocation: true`, move its README row, and keep the file.
+That removes the only cost a quiet skill carries, which is a description
+riding every turn, and it costs nothing to reverse when the case returns.

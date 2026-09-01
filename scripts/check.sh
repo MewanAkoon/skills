@@ -2,14 +2,20 @@
 # Checks this repo against the invariants in AGENTS.md.
 # Needs bash and the usual POSIX tools. Run before committing.
 #
-# --doctor adds the one check CI cannot run, because CI has no $HOME: whether
-# every skill here is currently linked into the directory link.sh writes to.
+# --doctor adds the one check CI cannot run, because a fresh runner has no
+# ~/.claude and no SKILLS_DEST to inspect: whether every skill here is
+# currently linked into the directory link.sh writes to.
 
 set -uo pipefail
 
 # Resolve through a symlink, so invoking this from a bin directory on PATH
 # still finds the clone rather than the symlink's own directory.
-SELF="$(readlink -f "$0")"
+SELF="$(readlink -f "$0" 2>/dev/null || true)"
+# An empty SELF would make `dirname` return `.`, so the cd below would succeed
+# into the wrong directory and every glob would quietly match nothing. Say what
+# is wrong instead. `readlink -f` is GNU and BSD both today, and missing on
+# macOS before Big Sur.
+[ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 cd "$(dirname "$SELF")/.." || exit 1
 
 doctor=no
@@ -39,7 +45,18 @@ body() {
 # errors are left to print, because a file list that comes back empty makes
 # every check reading it pass without opening a thing.
 markdown() {
-  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc'
+  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' | present
+}
+
+# git lists a file it still has in the index even after someone deletes it on
+# disk, so every reader below would open a path that is gone and print its own
+# error. Dropping those keeps a partial adoption, which starts by deleting a
+# skill directory, from making this script look broken.
+present() {
+  while IFS= read -r p; do
+    [ -f "$p" ] && printf '%s\n' "$p"
+  done
+  return 0
 }
 
 # The same list without the untracked files. The block runner below executes
@@ -47,7 +64,7 @@ markdown() {
 # than whatever happens to be sitting in the tree. Staged counts, so a new
 # file is checked after `git add` and before the commit.
 tracked_markdown() {
-  git ls-files --cached -- '*.md' '*.mdc'
+  git ls-files --cached -- '*.md' '*.mdc' | present
 }
 
 # The README table rows under one heading, used to check where a skill is listed.
@@ -100,6 +117,17 @@ for dir in skills/*/; do
     bad "$name: description is ${#description} characters, over the spec's 1024"
   fi
 
+  # Cursor reads neither tools field, so a skill leaning on one is restricted
+  # in Claude Code and wide open in Cursor. AGENTS.md allows it only as a
+  # second lock over a body already right without it, and names `review-diff`
+  # as the one that took the trade. Staying quiet about that one keeps this
+  # warning meaning "someone added a second", which is the thing worth
+  # noticing. A rename makes it speak up, which is the intent.
+  if [ "$name" != review-diff ] &&
+     printf '%s\n' "$fm" | grep -qE '^(allowed|disallowed)-tools:'; then
+    warn "$name: carries a tools field Cursor does not read. AGENTS.md allows that only as a second lock over a body that holds without it"
+  fi
+
   flagged=no
   printf '%s\n' "$fm" | grep -q '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' && flagged=yes
 
@@ -125,7 +153,7 @@ done
 
 # Every README row points at a skill that exists.
 while IFS= read -r linked; do
-  [ -f "skills/$linked/SKILL.md" ] || bad "README links skills/$linked/SKILL.md, which does not exist"
+  [ -f "skills/$linked/SKILL.md" ] || bad "a README table row lists $linked, which has no skills/$linked/SKILL.md"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
 
 # The link check and the dash sweep both take their file list from git, and an
@@ -158,20 +186,47 @@ done < <(
 )
 
 # The two rules files carry one body in two frontmatter formats.
-for f in .claude/rules/authoring-skills.md .cursor/rules/authoring-skills.mdc; do
-  head -1 "$f" | grep -qx -- '---' || bad "$f: no frontmatter, so its body cannot be compared"
+#
+# `body` returns everything after the closing ---, so a file with an opening
+# fence and no closing one yields nothing. Two such files compared equal and
+# the whole check passed while the bodies shared not one line. Requiring the
+# close, and a body with something in it, closes that.
+claude_rule=.claude/rules/authoring-skills.md
+cursor_rule=.cursor/rules/authoring-skills.mdc
+
+for f in "$claude_rule" "$cursor_rule"; do
+  if ! head -1 "$f" | grep -qx -- '---'; then
+    bad "$f: no frontmatter, so its body cannot be compared"
+  elif [ "$(sed -n '2,$p' "$f" | grep -cx -- '---')" -eq 0 ]; then
+    bad "$f: frontmatter is never closed, so its body reads as empty"
+  elif [ -z "$(body "$f")" ]; then
+    bad "$f: body is empty, so comparing it proves nothing"
+  fi
 done
-diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
+
+diff -q <(body "$claude_rule") <(body "$cursor_rule") >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
-# Every script here parses as bash. fired.sh embeds an awk program in single
-# quotes, so an unbalanced apostrophe in a printed string ends the program and
-# leaves a file that fails only when someone runs it. Nothing else here runs
-# the scripts, so without this it ships.
+# Both rules files fire on skills/**, which AGENTS.md states as an invariant
+# and nothing checked. Widening either one silently changes when the rule
+# loads, which is the half of this pair that actually decides behaviour.
+grep -q '^  - "skills/\*\*"$' "$claude_rule" \
+  || bad "$claude_rule: paths no longer scopes it to skills/**"
+grep -qx 'globs: skills/\*\*' "$cursor_rule" \
+  || bad "$cursor_rule: globs no longer scopes it to skills/**"
+grep -qx 'alwaysApply: false' "$cursor_rule" \
+  || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
+
+# link.sh and scripts/*.sh parse as bash. fired.sh embeds an awk program in
+# single quotes, so an unbalanced apostrophe in a printed string ends the
+# program and leaves a file that fails only when someone runs it, and nothing
+# else in this script runs them.
 #
-# A bash parse and nothing more. Two apostrophes balance each other and pass
-# here, leaving the awk program mangled. `npm run lint` catches that case and
-# this does not.
+# `npm run lint` catches that too, and more of it: a balanced pair of
+# apostrophes passes the parse below while leaving the awk program mangled,
+# and shellcheck reports it. This check earns its place by needing only bash,
+# because it runs before a commit, where fetching shellcheck over the network
+# would not.
 for f in link.sh scripts/*.sh; do
   bash -n "$f" || bad "$f: does not parse"
 done
@@ -192,6 +247,7 @@ done
 if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
   export CHECK_SH_RUNNING_BLOCKS=1
   blocks="$(mktemp -d)"
+  trap 'rm -rf "$blocks"' EXIT
 
   while IFS= read -r f; do
     count="$(grep -c '^```bash checked$' "$f")"
@@ -205,8 +261,13 @@ if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
         inside { print }
       ' "$f" > "$blocks/block.sh"
 
-      bash -e "$blocks/block.sh" >/dev/null 2>&1 </dev/null \
-        || bad "$f: block $i is marked checked and exits non-zero"
+      # Keep the output and replay it on failure. These blocks are the only
+      # executable documentation here, and a bare block number says nothing
+      # about which command failed or why.
+      if ! bash -e "$blocks/block.sh" >"$blocks/out" 2>&1 </dev/null; then
+        bad "$f: block $i is marked checked and exits non-zero"
+        sed 's/^/      /' "$blocks/out" >&2
+      fi
 
       i=$((i + 1))
     done
@@ -218,21 +279,46 @@ fi
 
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
 # so banning only the first leaves the tell in place.
+#
+# One -e per character rather than a bracket set. A bracket holding multi-byte
+# characters is only character-wise in a UTF-8 locale; under LC_ALL=C it is a
+# set of six bytes, and a curly quote, a bullet, and an ellipsis all share
+# bytes with it. That reported a dash on a line holding none. A whole fixed
+# string matches byte-wise in every locale.
 while IFS= read -r f; do
-  lines="$(grep -n '[—–−]' "$f" | cut -d: -f1 | tr '\n' ' ')"
+  lines="$(grep -n -e '—' -e '–' -e '−' "$f" | cut -d: -f1 | tr '\n' ' ')"
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(markdown)
 
-# Machine state, so it warns rather than failing, and only when asked. CI has
-# no $HOME to check and would fail every run.
+# Machine state, so it runs only when asked. A fresh runner has no ~/.claude,
+# so CI would fail every run.
 if [ "$doctor" = yes ]; then
-  dest="$HOME/.claude/skills"
+  if [ -z "${HOME:-}" ] && [ -z "${SKILLS_DEST:-}" ]; then
+    warn "no \$HOME and no \$SKILLS_DEST, so the link check cannot run"
+    doctor=skipped
+  fi
+fi
+
+if [ "$doctor" = yes ]; then
+  # The same default and the same override link.sh uses, so the two agree on
+  # where the links belong.
+  dest="${SKILLS_DEST:-$HOME/.claude/skills}"
   repo="$(pwd)"
   missing=0
+  ignored_count=0
 
   for dir in skills/*/; do
     name="$(basename "$dir")"
     link="$dest/$name"
+
+    # A skill listed in .skillsignore is meant to be absent, so its absence is
+    # the correct state rather than something to fix.
+    if [ -f .skillsignore ] &&
+       grep -qE "^[[:space:]]*${name}[[:space:]]*(#.*)?$" .skillsignore; then
+      ignored_count=$((ignored_count + 1))
+      continue
+    fi
+
     if [ ! -L "$link" ]; then
       warn "$name is not linked into $dest"
       missing=$((missing + 1))
@@ -253,10 +339,18 @@ if [ "$doctor" = yes ]; then
     done
   fi
 
+  if [ "$ignored_count" -gt 0 ]; then
+    printf 'doctor: %d ignored by .skillsignore\n' "$ignored_count"
+  fi
+
+  # A missing link means the skills are not installed, so this fails the run
+  # rather than printing a warning under an `ok`. That also lets a hook or a
+  # script gate on it.
   if [ "$missing" -gt 0 ]; then
     printf 'doctor: %d to fix, run ./link.sh\n' "$missing"
+    fail=1
   else
-    printf 'doctor: every skill is linked into %s\n' "$dest"
+    printf 'doctor: every skill is linked into %s, which Cursor loads too\n' "$dest"
   fi
 fi
 

@@ -9,6 +9,6 @@
     "doctor": "./scripts/check.sh --doctor",
     "fired": "./scripts/fired.sh",
     "link": "./link.sh",
-    "lint": "npx --yes shellcheck@4.1.0 link.sh scripts/*.sh"
+    "lint": "SHELLCHECKJS_RELEASE=v0.11.0 npx --yes shellcheck@4.1.0 link.sh scripts/*.sh"
   }
 }

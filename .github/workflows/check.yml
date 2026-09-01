@@ -16,7 +16,7 @@ concurrency:
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
-    # run. --doctor is left out: CI has no populated $HOME to inspect.
+    # run. --doctor is left out: a fresh runner has no ~/.claude to inspect.
     strategy:
       fail-fast: false
       matrix:
@@ -33,9 +33,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The version is pinned in package.json rather than taken from the
-      # runner image, whose shellcheck moves on its own and disagreed with a
-      # local 0.11.0 about SC2015. Printing it keeps the next disagreement
-      # visible in the log instead of only in the failure.
-      - run: npx --yes shellcheck@4.1.0 --version
+      # Two version numbers, and they count different things. package.json
+      # pins the npm wrapper at 4.1.0; that wrapper downloads koalaman's
+      # shellcheck and takes the latest unless told otherwise, so
+      # SHELLCHECKJS_RELEASE pins the binary at 0.11.0. Without it the binary
+      # moved on its own, which is what disagreed with a local 0.11.0 about
+      # SC2015. `npm run lint` carries both, so this prints through it rather
+      # than calling npx directly and reporting a version the lint never used.
+      - run: npm run lint -- --version
       - run: npm run lint

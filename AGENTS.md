@@ -24,8 +24,10 @@ two are the requirements beyond bash and the usual POSIX tools.
 
 `package.json` carries those as `npm run check`, `doctor`, `fired`, and
 `link`, plus `npm run lint`, which runs shellcheck over every one of them.
-It declares no dependencies. `lint` fetches a pinned shellcheck through `npx`,
-and CI runs that same pinned version rather than the runner image's, which
+It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
+the wrapper in `package.json` and the binary it downloads with
+`SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.
+CI runs that same pinned pair rather than the runner image's shellcheck, which
 moves on its own and disagreed with a local one about `A && B || C`.
 
 `link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude

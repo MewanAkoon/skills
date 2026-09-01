@@ -10,7 +10,12 @@ set -uo pipefail
 
 # Resolve through a symlink, so invoking this from a bin directory on PATH
 # still finds the clone rather than the symlink's own directory.
-SELF="$(readlink -f "$0")"
+SELF="$(readlink -f "$0" 2>/dev/null || true)"
+# An empty SELF would make `dirname` return `.`, so the cd below would succeed
+# into the wrong directory and every glob would quietly match nothing. Say what
+# is wrong instead. `readlink -f` is GNU and BSD both today, and missing on
+# macOS before Big Sur.
+[ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 cd "$(dirname "$SELF")/.." || exit 1
 
 doctor=no
@@ -40,7 +45,18 @@ body() {
 # errors are left to print, because a file list that comes back empty makes
 # every check reading it pass without opening a thing.
 markdown() {
-  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc'
+  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' | present
+}
+
+# git lists a file it still has in the index even after someone deletes it on
+# disk, so every reader below would open a path that is gone and print its own
+# error. Dropping those keeps a partial adoption, which starts by deleting a
+# skill directory, from making this script look broken.
+present() {
+  while IFS= read -r p; do
+    [ -f "$p" ] && printf '%s\n' "$p"
+  done
+  return 0
 }
 
 # The same list without the untracked files. The block runner below executes
@@ -48,7 +64,7 @@ markdown() {
 # than whatever happens to be sitting in the tree. Staged counts, so a new
 # file is checked after `git add` and before the commit.
 tracked_markdown() {
-  git ls-files --cached -- '*.md' '*.mdc'
+  git ls-files --cached -- '*.md' '*.mdc' | present
 }
 
 # The README table rows under one heading, used to check where a skill is listed.
@@ -126,7 +142,7 @@ done
 
 # Every README row points at a skill that exists.
 while IFS= read -r linked; do
-  [ -f "skills/$linked/SKILL.md" ] || bad "README links skills/$linked/SKILL.md, which does not exist"
+  [ -f "skills/$linked/SKILL.md" ] || bad "a README table row lists $linked, which has no skills/$linked/SKILL.md"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
 
 # The link check and the dash sweep both take their file list from git, and an
@@ -195,6 +211,7 @@ done
 if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
   export CHECK_SH_RUNNING_BLOCKS=1
   blocks="$(mktemp -d)"
+  trap 'rm -rf "$blocks"' EXIT
 
   while IFS= read -r f; do
     count="$(grep -c '^```bash checked$' "$f")"
@@ -208,8 +225,13 @@ if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
         inside { print }
       ' "$f" > "$blocks/block.sh"
 
-      bash -e "$blocks/block.sh" >/dev/null 2>&1 </dev/null \
-        || bad "$f: block $i is marked checked and exits non-zero"
+      # Keep the output and replay it on failure. These blocks are the only
+      # executable documentation here, and a bare block number says nothing
+      # about which command failed or why.
+      if ! bash -e "$blocks/block.sh" >"$blocks/out" 2>&1 </dev/null; then
+        bad "$f: block $i is marked checked and exits non-zero"
+        sed 's/^/      /' "$blocks/out" >&2
+      fi
 
       i=$((i + 1))
     done
@@ -221,8 +243,14 @@ fi
 
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
 # so banning only the first leaves the tell in place.
+#
+# One -e per character rather than a bracket set. A bracket holding multi-byte
+# characters is only character-wise in a UTF-8 locale; under LC_ALL=C it is a
+# set of six bytes, and a curly quote, a bullet, and an ellipsis all share
+# bytes with it. That reported a dash on a line holding none. A whole fixed
+# string matches byte-wise in every locale.
 while IFS= read -r f; do
-  lines="$(grep -n '[—–−]' "$f" | cut -d: -f1 | tr '\n' ' ')"
+  lines="$(grep -n -e '—' -e '–' -e '−' "$f" | cut -d: -f1 | tr '\n' ' ')"
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(markdown)
 

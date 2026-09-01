@@ -8,15 +8,20 @@
 # and records "skill":"<name>" when a skill is invoked, whether the user typed
 # it or the model reached for it. This reads those.
 #
-# Two things it cannot see. Cursor keeps no comparable transcript, so its runs
-# are missing. A skill also named in ~/.claude/CLAUDE.md gets followed without
-# being invoked, so its count reads lower than its influence.
+# One thing the report does not say, because it is about influence rather than
+# counting: a skill also named in ~/.claude/CLAUDE.md gets followed without
+# being invoked, so its count reads lower than its reach.
 
 set -uo pipefail
 
 # Resolve through a symlink, so invoking this from a bin directory on PATH
 # still finds the clone rather than the symlink's own directory.
-SELF="$(readlink -f "$0")"
+SELF="$(readlink -f "$0" 2>/dev/null || true)"
+# An empty SELF would make `dirname` return `.`, so the cd below would succeed
+# into the wrong directory and every glob would quietly match nothing. Say what
+# is wrong instead. `readlink -f` is GNU and BSD both today, and missing on
+# macOS before Big Sur.
+[ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 cd "$(dirname "$SELF")/.." || exit 1
 
 TRANSCRIPTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
@@ -24,7 +29,9 @@ TRANSCRIPTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
 # ~/.claude/projects reads better than the absolute path, and $HOME is the
 # only part worth shortening.
 SHOWN="$TRANSCRIPTS"
-case "$SHOWN" in "$HOME"/*) SHOWN="~${SHOWN#"$HOME"}" ;; esac
+# CLAUDE_PROJECTS_DIR is exactly the case where $HOME may be unset, and an
+# unset one is fatal under `set -u`.
+case "$SHOWN" in "${HOME:-/nonexistent}"/*) SHOWN="~${SHOWN#"${HOME:-/nonexistent}"}" ;; esac
 
 if [ ! -d "$TRANSCRIPTS" ]; then
   echo "no transcripts at $TRANSCRIPTS, so nothing to count" >&2

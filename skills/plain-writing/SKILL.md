@@ -1,6 +1,6 @@
 ---
 name: plain-writing
-description: Use before sending any reply longer than two sentences, and before writing or editing any prose a human will read. Your own chat answers, explanations, and summaries come first, because answering does not feel like a writing task and that is the case most often missed. Also commit messages, PR descriptions, docs in a repo, code comments, changelogs, issues, and message drafts. Removes AI tells and makes writing read like a person wrote it.
+description: Use before sending any reply longer than two sentences, and before writing or editing any prose a human will read. Also commit messages, PR descriptions, docs in a repo, code comments, changelogs, issues, and message drafts. Removes AI tells and makes writing read like a person wrote it.
 ---
 
 # Plain writing

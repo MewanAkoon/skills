@@ -8,6 +8,10 @@ node_modules/
 .claude/*
 !.claude/rules/
 
-# A local choice of which skills to link, per machine. Commit it in a fork if
-# the whole fork wants the same subset.
+# A local choice of which skills to link, per machine. A fork that wants the
+# same subset everywhere can commit it with `git add -f .skillsignore`.
 .skillsignore
+
+# Skill exports. The clone is the source; a zip beside it is a second
+# copy that drifts.
+*.zip

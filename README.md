@@ -12,11 +12,12 @@ same format from the same directory, which is why one clone serves both.
 
 Every skill here runs the same procedure in both Claude Code and Cursor, and
 anything added has to. A skill is plain markdown that either harness can read,
-which is the whole reason one clone serves both. Two narrow exceptions, both
+which is the whole reason one clone serves both. Three narrow exceptions, all
 named in [AGENTS.md](AGENTS.md) under "What belongs here": the maintenance
 scripts read one tool's own files, since `fired.sh` can only count what Claude
-Code writes down, and `review-diff` carries a Claude Code frontmatter field as
-a lock over a body that is right without it.
+Code writes down, `review-diff` carries a Claude Code frontmatter field as a
+lock over a body that is right without it, and the Cursor rules file carries a
+`description` that gives it a second way in.
 
 Tool-specific machinery stays out, plugins included.
 [AGENTS.md](AGENTS.md) under "What belongs here" carries the rule and the
@@ -38,8 +39,9 @@ The location is yours to pick. Every script resolves its own path, so nothing
 depends on where the clone sits. Move it later and re-run `link.sh`, because
 the symlinks store an absolute path.
 
-`link.sh` symlinks every skill folder into `~/.claude/skills`. Claude Code
+`link.sh` symlinks each skill folder into `~/.claude/skills`. Claude Code
 owns that directory and Cursor loads it too, so one destination serves both.
+`SKILLS_DEST` points it somewhere else if you need that.
 Because they are symlinks, editing a file here takes effect immediately, and
 `git pull` updates both tools at once.
 
@@ -53,7 +55,7 @@ A good run ends with the destination named and no warnings above it:
 
 ```
 doctor: every skill is linked into /Users/you/.claude/skills, which Cursor loads too
-17 skills, 7 model-invoked
+17 skills, 8 model-invoked
 ok
 ```
 
@@ -67,7 +69,7 @@ the clone. `--doctor` tells you when you need to.
 There is no separate step. Cursor loads `~/.claude/skills` alongside its own
 roots, as its [skills documentation](https://cursor.com/docs/skills) states,
 so `link.sh` serves both tools from one destination. Cursor reads
-`disable-model-invocation` the same way Claude Code does, so the ten
+`disable-model-invocation` the same way Claude Code does, so the nine
 user-invoked skills below stay behind `/name` there too.
 
 One setting decides it. Cursor loads those directories only while **Settings,
@@ -85,8 +87,9 @@ reads zero no matter how much you use a skill. And Cursor's Cloud Agents and
 remote sessions do not carry machine-global skills, so anything needed there
 belongs in the repo being worked on.
 
-Cursor keeps its own skills in `~/.cursor/skills-cursor`, several of them
-review skills. `link.sh` neither writes to that directory nor prunes it.
+Cursor keeps its own skills in `~/.cursor/skills-cursor`, which `link.sh`
+leaves alone. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what is in there
+worth knowing about.
 
 ### Keeping working repos clean
 
@@ -146,8 +149,11 @@ clone to do that. So unlink before deleting the clone:
 ```
 
 Then delete the clone. If you deleted it first, the links are already
-orphaned, and `find ~/.claude/skills -maxdepth 1 -type l ! -exec test -e {} \;
--print` lists the dangling ones for you to remove.
+orphaned. This lists the dangling ones for you to remove:
+
+```bash
+find ~/.claude/skills -maxdepth 1 -type l ! -exec test -e {} \; -print
+```
 
 ## Skills
 
@@ -160,15 +166,15 @@ words in it. What costs you is two skills claiming the same decision, because
 the agent picks one, reads a whole `SKILL.md`, and follows the wrong
 procedure. Add a skill when nothing here would contradict it.
 
-Four of these assume a stack, and say so in their own descriptions:
-`ts-types` is TypeScript only, and `tdd-node-api`, `api-boundaries`, and
-`merge-conflicts` lean on Node and TypeScript for their examples. The rest are
-language-neutral. If you work in something else, `.skillsignore` above leaves
-the ones you do not want unlinked.
+Three of these assume a stack, and say so in their own descriptions:
+`ts-types` is TypeScript only, and `tdd-node-api` and `api-boundaries` are
+written for Node services. The rest are language-neutral, though a few reach
+for a TypeScript example. If you work in something else, `.skillsignore` above
+leaves the ones you do not want unlinked.
 
 | Skill | Fires on | What it does |
 |---|---|---|
-| [plain-writing](skills/plain-writing/SKILL.md) | Any prose being written or edited | Strips AI tells, enforces plain language, gates code comments |
+| [plain-writing](skills/plain-writing/SKILL.md) | Any reply or prose being written, chat answers included | Strips AI tells, enforces plain language, gates code comments |
 | [commit](skills/commit/SKILL.md) | Finished changes sitting in the working tree | Stages one change, matches the repo's message convention, survives hooks |
 | [pr](skills/pr/SKILL.md) | A branch with commits ahead of its base | Resolves the base, writes title and body from the diff, creates or updates |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file | Discriminated unions, brands, narrowing, exhaustiveness |

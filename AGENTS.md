@@ -13,9 +13,9 @@ Three scripts, all bash, no build step. The commands they carry:
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
-| `./scripts/check.sh --doctor` | Adds the linking check, which needs a `~/.claude`. Fails when a link is missing. |
+| `./scripts/check.sh --doctor` | Adds the linking check, which needs a destination to inspect. Fails when a link is missing. |
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
-| `./link.sh` | Links every skill into `~/.claude/skills`. |
+| `./link.sh` | Links the skills into the destination, minus anything in `.skillsignore`. |
 | `./link.sh --unlink` | Removes the links this clone made, leaving the clone. |
 
 None of them needs a package installed. All three resolve their own path

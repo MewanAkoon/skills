@@ -3,8 +3,8 @@
 # Needs bash and the usual POSIX tools. Run before committing.
 #
 # --doctor adds the one check CI cannot run, because a fresh runner has no
-# ~/.claude to inspect: whether every skill here is currently linked into the
-# directory link.sh writes to.
+# ~/.claude and no SKILLS_DEST to inspect: whether every skill here is
+# currently linked into the directory link.sh writes to.
 
 set -uo pipefail
 

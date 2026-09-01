@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Symlinks every skill in this repo into the global skill directory each agent
-# reads. Symlinks, not copies, so editing a file here is live immediately and a
-# `git pull` updates every agent at once.
+# Symlinks this repo's skills into the global skill directory Claude Code and
+# Cursor both read. Symlinks, not copies, so editing a file here is live
+# immediately and a `git pull` updates both tools at once.
 #
-# Re-run after adding, renaming, or removing a skill. Safe to run repeatedly.
+#   link.sh              link every skill, minus anything in .skillsignore
+#   link.sh --unlink     remove the links this clone made, keeping the clone
+#   SKILLS_DEST=<dir>    link somewhere other than ~/.claude/skills
+#
+# Re-run after adding, renaming, or removing a skill, after editing
+# .skillsignore, and after moving the clone. Safe to run repeatedly.
 
 set -euo pipefail
 
@@ -79,8 +84,8 @@ ignored() {
 # is the vendor-neutral root both understand, so one destination already covers
 # what these two used to.
 SUPERSEDED=(
-  "$HOME/.agents/skills"
-  "$HOME/.cursor/skills"
+  "${HOME:-/nonexistent}/.agents/skills"
+  "${HOME:-/nonexistent}/.cursor/skills"
 )
 
 # A link this repo made is named after a skill directory in it. Anything else
@@ -94,6 +99,13 @@ ours() {
 
 for OLD in "${SUPERSEDED[@]}"; do
   [ -d "$OLD" ] || continue
+
+  # SKILLS_DEST can name one of these. Pruning the directory we are about to
+  # fill would remove all 17 links and relink them on every run, and report
+  # counters describing work that undid itself.
+  for D in "${DESTS[@]}"; do
+    [ "$OLD" = "$D" ] && continue 2
+  done
 
   for link in "$OLD"/*; do
     [ -L "$link" ] || continue
@@ -117,6 +129,18 @@ for OLD in "${SUPERSEDED[@]}"; do
   fi
 done
 
+# A name in .skillsignore that matches no skill does nothing, and a typo looks
+# exactly like a skill that is correctly ignored. Say so once, before linking.
+if [ -f "$REPO/.skillsignore" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    line="$(printf '%s' "$line" | tr -d '[:space:]')"
+    [ -n "$line" ] || continue
+    [ -d "$REPO/skills/$line" ] \
+      || echo "warning: .skillsignore lists $line, which is not a skill here" >&2
+  done < "$REPO/.skillsignore"
+fi
+
 for DEST in "${DESTS[@]}"; do
   # A destination symlinked back into this repo would link the skills into
   # themselves.
@@ -129,7 +153,9 @@ for DEST in "${DESTS[@]}"; do
     esac
   fi
 
-  mkdir -p "$DEST"
+  # A removal should not leave a directory behind that was never there.
+  [ "$UNLINK" -eq 1 ] || mkdir -p "$DEST"
+  [ -d "$DEST" ] || continue
 
   # Drop links this repo made whose skill is gone, so a renamed skill leaves no
   # dead entry behind for every tool to keep listing.

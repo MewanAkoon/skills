@@ -1,6 +1,6 @@
 ---
 name: ts-types
-description: Use when reading or editing any .ts or .tsx file, designing a type or interface, reviewing a function signature, or deciding how to model a piece of state. Covers discriminated unions, branded types, narrowing, exhaustiveness, and where casts are allowed.
+description: Use when reading or editing any .ts or .tsx file, designing a type or interface, reviewing a function signature, or deciding how to model a piece of state. Use it when tsc reports a type error, and when an any, an as cast, or a non-null assertion appears in a diff. Covers discriminated unions, branded types, narrowing, exhaustiveness, and where casts are allowed.
 ---
 
 # TypeScript type discipline

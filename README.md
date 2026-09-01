@@ -160,6 +160,12 @@ words in it. What costs you is two skills claiming the same decision, because
 the agent picks one, reads a whole `SKILL.md`, and follows the wrong
 procedure. Add a skill when nothing here would contradict it.
 
+Four of these assume a stack, and say so in their own descriptions:
+`ts-types` is TypeScript only, and `tdd-node-api`, `api-boundaries`, and
+`merge-conflicts` lean on Node and TypeScript for their examples. The rest are
+language-neutral. If you work in something else, `.skillsignore` above leaves
+the ones you do not want unlinked.
+
 | Skill | Fires on | What it does |
 |---|---|---|
 | [plain-writing](skills/plain-writing/SKILL.md) | Any prose being written or edited | Strips AI tells, enforces plain language, gates code comments |
@@ -169,6 +175,7 @@ procedure. Add a skill when nothing here would contradict it.
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, config, consumers, third-party calls | Validation at the edge, no guards inside |
 | [tdd-node-api](skills/tdd-node-api/SKILL.md) | Test-first backend work | Seams, red-green loop, three anti-patterns |
 | [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths after a merge, rebase, cherry-pick, revert, or stash pop | Traces both sides, resolves hunk by hunk, finishes the operation |
+| [why](skills/why/SKILL.md) | About to delete a guard, a retry, a timeout, or an odd constant | Traces the rationale from git history, evidence apart from inference |
 
 ### User-invoked
 
@@ -183,7 +190,6 @@ Only fire when typed. Zero context cost.
 | [handoff](skills/handoff/SKILL.md) | `/handoff` | Compact this session for the next one |
 | [review-diff](skills/review-diff/SKILL.md) | `/review-diff` | Diff against repo standards, plus a smell baseline |
 | [how](skills/how/SKILL.md) | `/how` | Subsystem walkthrough, and where new code belongs |
-| [why](skills/why/SKILL.md) | `/why` | Design rationale from the record, evidence apart from inference |
 | [verify-app](skills/verify-app/SKILL.md) | `/verify-app` | Generates a project-local skill that drives this app |
 | [wayfinder](skills/wayfinder/SKILL.md) | `/wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
 

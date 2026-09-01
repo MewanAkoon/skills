@@ -209,8 +209,11 @@ completion criterion. Fix that one step and nothing else.
 ## Keeping skills
 
 A skill stays until you remove it deliberately. Nothing here deletes one for
-going unused, however long it stays quiet. Keep a skill written for a case
-that has not come up yet.
+going unused, however long it stays quiet. The three corrections that earned
+it already happened, and a quiet stretch does not undo them.
+
+This governs keeping, not writing. The gate above still holds: a skill starts
+from a correction you made three times, never from a case you expect to meet.
 
 `./scripts/fired.sh` counts the firings. Read a zero as a question about the
 description or the linking, and answer it with `./scripts/check.sh --doctor`,

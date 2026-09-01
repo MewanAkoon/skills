@@ -1,7 +1,12 @@
 # skills
 
-My agent skills. One clone on disk, symlinked into the global skill directory
-Claude Code and Cursor read. Nothing gets committed into working repos.
+Agent skills as plain markdown, for Claude Code and Cursor. One clone on disk,
+symlinked into the global skill directory both tools read. Nothing gets
+committed into working repos.
+
+A skill is a folder holding a `SKILL.md`: a description that decides when it
+applies, and a procedure the agent follows once it does. Both tools read the
+same format from the same directory, which is why one clone serves both.
 
 ## Scope
 
@@ -21,47 +26,102 @@ recommendation rather than a dependency.
 
 ## Setup
 
-Clone once, somewhere permanent:
+Clone anywhere permanent. Fork first if you plan to edit.
 
 ```bash
-git clone git@github.com:MewanAkoon/skills.git ~/Work/Personal/skills
-cd ~/Work/Personal/skills
+git clone https://github.com/MewanAkoon/skills.git
+cd skills
 ./link.sh
 ```
+
+The location is yours to pick. Every script resolves its own path, so nothing
+depends on where the clone sits. Move it later and re-run `link.sh`, because
+the symlinks store an absolute path.
 
 `link.sh` symlinks every skill folder into `~/.claude/skills`. Claude Code
 owns that directory and Cursor loads it too, so one destination serves both.
 Because they are symlinks, editing a file here takes effect immediately, and
-`git pull` updates both tools at once. The script also drops links whose skill
-has been renamed or deleted.
+`git pull` updates both tools at once.
 
-Re-run `link.sh` after adding, renaming, or removing a skill. To find out
-whether you need to:
+Confirm it worked:
 
 ```bash
 ./scripts/check.sh --doctor
 ```
 
+A good run ends with the destination named and no warnings above it:
+
+```
+doctor: every skill is linked into /Users/you/.claude/skills, which Cursor loads too
+17 skills, 7 model-invoked
+ok
+```
+
+A missing link fails the run, so this is safe to put in a hook.
+
+Re-run `link.sh` after adding, renaming, or removing a skill, and after moving
+the clone. `--doctor` tells you when you need to.
+
 ### Keeping working repos clean
 
-The repo sits at `~/Work/Personal/skills`, in its own area away from client
-work, and the symlinks live under `$HOME`. Nothing lands in a project. As a
-safety net:
+Keep the clone outside any working repo. The symlinks live under `$HOME`, so
+nothing lands in a project either way.
+
+As an optional safety net you can ignore the agent directories globally. Check
+what you already have first, because setting `core.excludesfile` replaces it:
 
 ```bash
-printf '.claude/\n.cursor/skills/\n.scratch/\n.skills.json\n' >> ~/.gitignore_global
+git config --global core.excludesfile
+```
+
+If that prints a path, append to that file instead of the one below. If it
+prints nothing:
+
+```bash
+printf '.claude/\n.scratch/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
-### Sharing one skill with a client team
+Ignoring `.claude/` applies to every repo you touch, including teams that
+commit `.claude/settings.json` on purpose. Skip this step if that is you.
 
-Only when the team should have it too:
+### Taking a subset
 
-```bash
-npx skills add MewanAkoon/skills -s tdd-node-api
+Adopting the repo does not mean adopting all of it. List the skills you do not
+want in a `.skillsignore` at the clone root, one name per line:
+
+```
+tdd-node-api
+ts-types
 ```
 
-That copies files into the current repo. Default to the global setup instead.
+`link.sh` skips those and removes any link it previously made for them. The
+files stay in the clone, so you can change your mind by deleting the line and
+re-running. `--doctor` counts an ignored skill as ignored rather than missing.
+
+### Sharing one skill with a team
+
+Only when the team should have it too, and only from your own fork:
+
+```bash
+npx skills add <you>/skills -s tdd-node-api
+```
+
+That copies files into the current repo and needs Node, unlike everything
+else here. Default to the global setup instead.
+
+### Removing it
+
+`link.sh` can only clean up links it can still identify, and it needs the
+clone to do that. So unlink before deleting the clone:
+
+```bash
+./link.sh --unlink
+```
+
+Then delete the clone. If you deleted it first, the links are already
+orphaned, and `find ~/.claude/skills -maxdepth 1 -type l ! -exec test -e {} \;
+-print` lists the dangling ones for you to remove.
 
 ## Skills
 
@@ -114,8 +174,8 @@ Run the checker before committing:
 
 It covers the mechanical half of that standard. [AGENTS.md](AGENTS.md) lists
 what it checks. CI runs the same script on every pull request and on every
-push to `main`, on Linux and on macOS, without `--doctor`, since CI has no
-`$HOME` to inspect.
+push to `main`, on Linux and on macOS, without `--doctor`, since a fresh
+runner has no `~/.claude` to inspect.
 
 ## Usage counts
 
@@ -127,10 +187,11 @@ A skill stays whether or not it fires. To see how often each one has fired:
 
 It reads the session transcripts Claude Code leaves under `~/.claude/projects`
 and counts the times each skill was invoked. Read a zero as a question about
-the skill's description or its linking, and run `--doctor` first, because an
-unlinked skill cannot fire. The report says that much itself. It cannot see a
-skill named in `~/.claude/CLAUDE.md`, which gets followed without being
-invoked, so that skill's count reads lower than its influence.
+the skill's description or its linking, and answer it with
+`./scripts/check.sh --doctor`, because an unlinked skill cannot fire. The
+report says that much itself. It cannot see a skill named in
+`~/.claude/CLAUDE.md`, which gets followed without being invoked, so that
+skill's count reads lower than its influence.
 
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.

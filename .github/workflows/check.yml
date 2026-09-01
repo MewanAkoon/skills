@@ -16,7 +16,7 @@ concurrency:
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
-    # run. --doctor is left out: CI has no populated $HOME to inspect.
+    # run. --doctor is left out: a fresh runner has no ~/.claude to inspect.
     strategy:
       fail-fast: false
       matrix:

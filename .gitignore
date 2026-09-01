@@ -7,3 +7,7 @@ node_modules/
 !.claude/
 .claude/*
 !.claude/rules/
+
+# A local choice of which skills to link, per machine. Commit it in a fork if
+# the whole fork wants the same subset.
+.skillsignore

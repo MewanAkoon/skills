@@ -13,9 +13,10 @@ Three scripts, all bash, no build step. The commands they carry:
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
-| `./scripts/check.sh --doctor` | Adds the linking check, which needs a `$HOME`. |
+| `./scripts/check.sh --doctor` | Adds the linking check, which needs a `~/.claude`. Fails when a link is missing. |
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
 | `./link.sh` | Links every skill into `~/.claude/skills`. |
+| `./link.sh --unlink` | Removes the links this clone made, leaving the clone. |
 
 None of them needs a package installed. All three resolve their own path
 with `readlink -f`, and `check.sh` takes its file list from `git`, so those
@@ -28,7 +29,17 @@ and CI runs that same pinned version rather than the runner image's, which
 moves on its own and disagreed with a local one about `A && B || C`.
 
 `link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude
-Code owns and Cursor also loads. Skills are never copied into a working repo.
+Code owns and Cursor also loads, as
+[Cursor's skills documentation](https://cursor.com/docs/skills) states. Skills
+are never copied into a working repo. `SKILLS_DEST` overrides the destination,
+and `check.sh --doctor` reads the same variable, so the two agree on where the
+links belong.
+
+A skill named in an optional `.skillsignore` at the clone root is not linked,
+and a link this clone made for one is removed. The file lets someone take a
+subset without deleting anything, so it is what a fork adjusts rather than the
+skill list. `link.sh` removes only links it created, which are the ones named
+after a skill directory here, and reports anything it leaves alone.
 
 ## What belongs here
 
@@ -87,8 +98,8 @@ follows, and enforcing it is what this repo is for.
   file that exists, ignoring the ones inside fenced code blocks, which are
   templates.
 - The two rules files carry the same body.
-- Every script here parses under `bash -n`, because nothing else in this
-  checker runs them.
+- `link.sh` and every `scripts/*.sh` parse under `bash -n`, because nothing
+  else in the checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or
   committed markdown file, runs from the repo root with stdin closed and exits
   zero. The checker executes these, so an untracked file is left alone.
@@ -98,10 +109,11 @@ What limits the model-invoked set is conflict, not count. Before adding one,
 work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
 "Invocation". No script checks that.
 
-`./scripts/check.sh --doctor` adds one check CI cannot run, because CI has no
-`$HOME`: whether every skill in this repo is currently linked into
-`~/.claude/skills`. Run it when a skill has been added, renamed, or removed,
-and run `./link.sh` when it reports a gap.
+`./scripts/check.sh --doctor` adds one check CI cannot run, because a fresh
+runner has no `~/.claude` to inspect: whether every skill in this repo is
+currently linked into `~/.claude/skills`. Run it when a skill has been added,
+renamed, or removed, and run `./link.sh` when it reports a gap. A missing link
+fails the run, so a hook can gate on it.
 
 ## When a change makes a claim false
 

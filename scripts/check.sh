@@ -2,8 +2,9 @@
 # Checks this repo against the invariants in AGENTS.md.
 # Needs bash and the usual POSIX tools. Run before committing.
 #
-# --doctor adds the one check CI cannot run, because CI has no $HOME: whether
-# every skill here is currently linked into the directory link.sh writes to.
+# --doctor adds the one check CI cannot run, because a fresh runner has no
+# ~/.claude to inspect: whether every skill here is currently linked into the
+# directory link.sh writes to.
 
 set -uo pipefail
 
@@ -164,14 +165,16 @@ done
 diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
-# Every script here parses as bash. fired.sh embeds an awk program in single
-# quotes, so an unbalanced apostrophe in a printed string ends the program and
-# leaves a file that fails only when someone runs it. Nothing else here runs
-# the scripts, so without this it ships.
+# link.sh and scripts/*.sh parse as bash. fired.sh embeds an awk program in
+# single quotes, so an unbalanced apostrophe in a printed string ends the
+# program and leaves a file that fails only when someone runs it, and nothing
+# else in this script runs them.
 #
-# A bash parse and nothing more. Two apostrophes balance each other and pass
-# here, leaving the awk program mangled. `npm run lint` catches that case and
-# this does not.
+# `npm run lint` catches that too, and more of it: a balanced pair of
+# apostrophes passes the parse below while leaving the awk program mangled,
+# and shellcheck reports it. This check earns its place by needing only bash,
+# because it runs before a commit, where fetching shellcheck over the network
+# would not.
 for f in link.sh scripts/*.sh; do
   bash -n "$f" || bad "$f: does not parse"
 done
@@ -223,16 +226,35 @@ while IFS= read -r f; do
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(markdown)
 
-# Machine state, so it warns rather than failing, and only when asked. CI has
-# no $HOME to check and would fail every run.
+# Machine state, so it runs only when asked. A fresh runner has no ~/.claude,
+# so CI would fail every run.
 if [ "$doctor" = yes ]; then
-  dest="$HOME/.claude/skills"
+  if [ -z "${HOME:-}" ] && [ -z "${SKILLS_DEST:-}" ]; then
+    warn "no \$HOME and no \$SKILLS_DEST, so the link check cannot run"
+    doctor=skipped
+  fi
+fi
+
+if [ "$doctor" = yes ]; then
+  # The same default and the same override link.sh uses, so the two agree on
+  # where the links belong.
+  dest="${SKILLS_DEST:-$HOME/.claude/skills}"
   repo="$(pwd)"
   missing=0
+  ignored_count=0
 
   for dir in skills/*/; do
     name="$(basename "$dir")"
     link="$dest/$name"
+
+    # A skill listed in .skillsignore is meant to be absent, so its absence is
+    # the correct state rather than something to fix.
+    if [ -f .skillsignore ] &&
+       grep -qE "^[[:space:]]*${name}[[:space:]]*(#.*)?$" .skillsignore; then
+      ignored_count=$((ignored_count + 1))
+      continue
+    fi
+
     if [ ! -L "$link" ]; then
       warn "$name is not linked into $dest"
       missing=$((missing + 1))
@@ -253,10 +275,18 @@ if [ "$doctor" = yes ]; then
     done
   fi
 
+  if [ "$ignored_count" -gt 0 ]; then
+    printf 'doctor: %d ignored by .skillsignore\n' "$ignored_count"
+  fi
+
+  # A missing link means the skills are not installed, so this fails the run
+  # rather than printing a warning under an `ok`. That also lets a hook or a
+  # script gate on it.
   if [ "$missing" -gt 0 ]; then
     printf 'doctor: %d to fix, run ./link.sh\n' "$missing"
+    fail=1
   else
-    printf 'doctor: every skill is linked into %s\n' "$dest"
+    printf 'doctor: every skill is linked into %s, which Cursor loads too\n' "$dest"
   fi
 fi
 

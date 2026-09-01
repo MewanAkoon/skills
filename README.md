@@ -62,6 +62,32 @@ A missing link fails the run, so this is safe to put in a hook.
 Re-run `link.sh` after adding, renaming, or removing a skill, and after moving
 the clone. `--doctor` tells you when you need to.
 
+### If you use Cursor
+
+There is no separate step. Cursor loads `~/.claude/skills` alongside its own
+roots, as its [skills documentation](https://cursor.com/docs/skills) states,
+so `link.sh` serves both tools from one destination. Cursor reads
+`disable-model-invocation` the same way Claude Code does, so the ten
+user-invoked skills below stay behind `/name` there too.
+
+One setting decides it. Cursor loads those directories only while **Settings,
+Rules, Skills, Subagents, "Include third-party Plugins, Skills, and other
+configs"** is on. It ships on. Turn it off and every skill here disappears
+with no error saying why.
+
+To confirm Cursor sees them, open Customize, then Skills, and look for the
+names. `--doctor` checks the symlinks on disk, which is a different question
+from whether Cursor enumerated them.
+
+Two things a Cursor user does not get. `./scripts/fired.sh` counts Claude Code
+sessions only, because Cursor writes no comparable transcript, so every count
+reads zero no matter how much you use a skill. And Cursor's Cloud Agents and
+remote sessions do not carry machine-global skills, so anything needed there
+belongs in the repo being worked on.
+
+Cursor keeps its own skills in `~/.cursor/skills-cursor`, several of them
+review skills. `link.sh` neither writes to that directory nor prunes it.
+
 ### Keeping working repos clean
 
 Keep the clone outside any working repo. The symlinks live under `$HOME`, so
@@ -186,12 +212,15 @@ A skill stays whether or not it fires. To see how often each one has fired:
 ```
 
 It reads the session transcripts Claude Code leaves under `~/.claude/projects`
-and counts the times each skill was invoked. Read a zero as a question about
-the skill's description or its linking, and answer it with
-`./scripts/check.sh --doctor`, because an unlinked skill cannot fire. The
-report says that much itself. It cannot see a skill named in
-`~/.claude/CLAUDE.md`, which gets followed without being invoked, so that
-skill's count reads lower than its influence.
+and counts the times each skill was invoked. A zero is a question rather than
+a verdict, and the report names the three things that answer it: the work
+happened in Cursor, which writes no transcript, or the skill is not linked, or
+its description does not fire.
+
+Two limits worth knowing before you read anything into a count. A Cursor-only
+user sees zeros throughout, because there is nothing for this to read. And a
+skill named in `~/.claude/CLAUDE.md` gets followed without being invoked, so
+its count reads lower than its influence.
 
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.

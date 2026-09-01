@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Counts how often each skill in this repo has fired. Nothing acts on the
-# count, and no skill is deleted for going unused. A zero is a question about
-# that skill's description or its linking.
+# count, and no skill is deleted for going unused. A zero is a question with
+# three possible answers, which the report prints: the work happened in
+# Cursor, the skill is not linked, or the description does not fire.
 #
 # Claude Code writes one JSONL transcript per session under ~/.claude/projects
 # and records "skill":"<name>" when a skill is invoked, whether the user typed
@@ -112,10 +113,12 @@ printf 'Across %s Claude Code sessions in %s\n\n' "$sessions" "$SHOWN"
       }
     }
 
-    printf "\n%d of %d have never fired.\n", never, total
+    printf "\n%d of %d have no count here.\n", never, total
     if (never > 0) {
-      print "A zero is a question about the description or the linking."
-      print "Check ./scripts/check.sh --doctor first: an unlinked skill cannot fire."
+      print "A zero is a question, not a verdict. Three things answer it."
+      print "  Cursor writes no transcript, so work done there is not counted."
+      print "  An unlinked skill cannot fire: ./scripts/check.sh --doctor."
+      print "  Otherwise read the description, which is what decides firing."
     }
   }
 '

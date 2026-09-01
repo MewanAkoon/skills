@@ -86,8 +86,8 @@ declared standards-only.
 ## Step 3: Find the standards
 
 Look for what this repo has written down: `AGENTS.md`, `CLAUDE.md`,
-`CONTRIBUTING.md`, `CODING_STANDARDS.md`, `.cursor/rules/`, ADRs under
-`docs/`, and the README of the package being changed.
+`CONTRIBUTING.md`, `CODING_STANDARDS.md`, `.cursor/rules/`, `.claude/rules/`,
+ADRs under `docs/`, and the README of the package being changed.
 
 Then find the repo's own check commands and run them. Look in `package.json`
 scripts, the `Makefile`, `pyproject.toml`, or the CI workflow, and take the

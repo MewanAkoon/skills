@@ -87,6 +87,12 @@ trigger phrases. The flag alone is not a guarantee.
 
 ## Tool access
 
+Read this first, because it decides whether the rest applies to you. Cursor
+reads neither field below. A skill leaning on either is restricted in one
+harness and wide open in the other, so the body has to be right without the
+field and the field is only ever a second lock. What follows is how to choose
+between them once the body already holds.
+
 Two frontmatter fields govern tools and they pull in opposite directions.
 
 `allowed-tools` grants. It pre-approves the listed tools for the turn that
@@ -105,15 +111,15 @@ its first step runs `git diff` and its third runs the repo's own lint
 commands. A restriction that breaks the skill gets deleted the first time it
 bites.
 
-`disallowed-tools` is a Claude Code field, and the trade is worse than the one
-`disable-model-invocation` makes. Cursor reads that flag; its frontmatter has
-no `disallowed-tools` and no `allowed-tools`, so a skill leaning on either is
-restricted in one harness and wide open in the other. Both fields also sit
-outside the Agent Skills spec, so the skill will not upload to claude.ai.
+The trade is worse than the one `disable-model-invocation` makes, because
+Cursor reads that flag and reads neither of these. The two fields also differ
+against the spec: `allowed-tools` is in it, as the list under "Invocation"
+says, while
+`disallowed-tools` is a Claude Code extension, so a skill using that one will
+not upload to claude.ai.
 
-Write the body so the skill is right without the field, then add the field as
-a second lock. A limit that holds in only one of the two harnesses this repo
-links into is not one the body can leave unsaid.
+A limit that holds in only one of the two harnesses this repo links into is
+not one the body can leave unsaid.
 
 ## Structure
 

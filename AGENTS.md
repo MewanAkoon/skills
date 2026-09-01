@@ -59,15 +59,19 @@ be dead weight in the other. Recommendations of that kind live in
 depends on. Anything that would make a skill run its procedure in one harness
 and not the other belongs there instead, or nowhere.
 
-Two exceptions, both narrow. A maintenance script runs on one machine rather
+Three exceptions, all narrow. A maintenance script runs on one machine rather
 than in a session, so it may read a harness's own files: `link.sh` writes to
 `~/.claude/skills` and `fired.sh` reads `~/.claude/projects`, and both say so
-where they do it. And a skill may carry a harness-specific frontmatter field
-when it is a second lock over a body that is already right without it, which
-is why `review-diff` sets `disallowed-tools` that Cursor does not read.
+where they do it. A skill may carry a harness-specific frontmatter field when
+it is a second lock over a body that is already right without it, which is why
+`review-diff` sets `disallowed-tools` that Cursor does not read.
 [WRITING-RULES.md](WRITING-RULES.md) under "Tool access" holds that trade and
-the condition on it. Neither exception covers a procedure that only works in
-one harness.
+the condition on it. And the Cursor rules file carries a `description`, which
+lets Cursor pull it in by relevance where the Claude rule has no equivalent;
+that one adds a way in rather than changing what either file says, so both
+harnesses still get the same body on `skills/**`.
+
+None of the three covers a procedure that only works in one harness.
 
 ## What an agent here never does
 
@@ -99,7 +103,15 @@ follows, and enforcing it is what this repo is for.
 - Every relative markdown link in a tracked or new markdown file resolves to a
   file that exists, ignoring the ones inside fenced code blocks, which are
   templates.
-- The two rules files carry the same body.
+- The two rules files close their frontmatter, carry a body that is not empty,
+  and carry the same body. An unclosed fence reads as an empty body, and two
+  empty bodies compare equal.
+- Both rules files still scope themselves to `skills/**`, and the Cursor one
+  still sets `alwaysApply: false`. That scoping is what decides when either
+  rule loads.
+- A skill other than `review-diff` carrying `allowed-tools` or
+  `disallowed-tools` warns rather than fails, because whether the body holds
+  without the field is not something a script can read.
 - `link.sh` and every `scripts/*.sh` parse under `bash -n`, because nothing
   else in the checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or
@@ -110,6 +122,11 @@ follows, and enforcing it is what this repo is for.
 What limits the model-invoked set is conflict, not count. Before adding one,
 work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
 "Invocation". No script checks that.
+
+Nothing here deletes a skill for going unused. A model-invoked one that stays
+quiet, on an install that checks out, gets demoted to user-invoked instead:
+the description stops riding every turn and the file stays.
+[WRITING-RULES.md](WRITING-RULES.md) under "Keeping skills" holds it.
 
 `./scripts/check.sh --doctor` adds one check CI cannot run, because a fresh
 runner has no `~/.claude` to inspect: whether every skill in this repo is

@@ -117,6 +117,17 @@ for dir in skills/*/; do
     bad "$name: description is ${#description} characters, over the spec's 1024"
   fi
 
+  # Cursor reads neither tools field, so a skill leaning on one is restricted
+  # in Claude Code and wide open in Cursor. AGENTS.md allows it only as a
+  # second lock over a body already right without it, and names `review-diff`
+  # as the one that took the trade. Staying quiet about that one keeps this
+  # warning meaning "someone added a second", which is the thing worth
+  # noticing. A rename makes it speak up, which is the intent.
+  if [ "$name" != review-diff ] &&
+     printf '%s\n' "$fm" | grep -qE '^(allowed|disallowed)-tools:'; then
+    warn "$name: carries a tools field Cursor does not read. AGENTS.md allows that only as a second lock over a body that holds without it"
+  fi
+
   flagged=no
   printf '%s\n' "$fm" | grep -q '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' && flagged=yes
 
@@ -175,11 +186,36 @@ done < <(
 )
 
 # The two rules files carry one body in two frontmatter formats.
-for f in .claude/rules/authoring-skills.md .cursor/rules/authoring-skills.mdc; do
-  head -1 "$f" | grep -qx -- '---' || bad "$f: no frontmatter, so its body cannot be compared"
+#
+# `body` returns everything after the closing ---, so a file with an opening
+# fence and no closing one yields nothing. Two such files compared equal and
+# the whole check passed while the bodies shared not one line. Requiring the
+# close, and a body with something in it, closes that.
+claude_rule=.claude/rules/authoring-skills.md
+cursor_rule=.cursor/rules/authoring-skills.mdc
+
+for f in "$claude_rule" "$cursor_rule"; do
+  if ! head -1 "$f" | grep -qx -- '---'; then
+    bad "$f: no frontmatter, so its body cannot be compared"
+  elif [ "$(sed -n '2,$p' "$f" | grep -cx -- '---')" -eq 0 ]; then
+    bad "$f: frontmatter is never closed, so its body reads as empty"
+  elif [ -z "$(body "$f")" ]; then
+    bad "$f: body is empty, so comparing it proves nothing"
+  fi
 done
-diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
+
+diff -q <(body "$claude_rule") <(body "$cursor_rule") >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
+
+# Both rules files fire on skills/**, which AGENTS.md states as an invariant
+# and nothing checked. Widening either one silently changes when the rule
+# loads, which is the half of this pair that actually decides behaviour.
+grep -q '^  - "skills/\*\*"$' "$claude_rule" \
+  || bad "$claude_rule: paths no longer scopes it to skills/**"
+grep -qx 'globs: skills/\*\*' "$cursor_rule" \
+  || bad "$cursor_rule: globs no longer scopes it to skills/**"
+grep -qx 'alwaysApply: false' "$cursor_rule" \
+  || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
 # link.sh and scripts/*.sh parse as bash. fired.sh embeds an awk program in
 # single quotes, so an unbalanced apostrophe in a printed string ends the

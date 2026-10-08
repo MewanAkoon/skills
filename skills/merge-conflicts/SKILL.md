@@ -1,6 +1,6 @@
 ---
 name: merge-conflicts
-description: Use when git reports unmerged paths, whether they came from a merge, rebase, cherry-pick, revert, stash pop, or applied patch, or when the user says a pull left both versions inside a file. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
+description: Use when git reports unmerged paths, when a command prints CONFLICT or "Automatic merge failed", or when a file holds conflict markers on a path git lists as unmerged. Covers merge, rebase, cherry-pick, revert, stash pop, and applied patches, and the case where a pull left both versions inside one file. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
 ---
 
 # Merge conflicts
@@ -24,12 +24,18 @@ conflict. Leave a parser fixture or a document about conflicts alone.
 
 Skip it when the user says they are taking the conflict themselves, and when
 every unmerged path is generated output. For a lockfile, take one side whole
-and re-run install, so only the two branches' own dependency changes move:
+and re-run the install, so only the two branches' own dependency changes move.
+
+Read the lockfile and the install command off the repo rather than assuming
+either. Whichever lockfile is the unmerged path names the tool: `pnpm-lock.yaml`
+is pnpm, `package-lock.json` npm, `yarn.lock` yarn, `go.sum` `go mod tidy`,
+`Cargo.lock` cargo, `poetry.lock` poetry, `Gemfile.lock` bundler. The shape is
+the same in each:
 
 ```bash
-git checkout --theirs pnpm-lock.yaml   # confirm which side that is, see step 1
-pnpm install
-git add pnpm-lock.yaml
+git checkout --theirs <lockfile>   # confirm which side that is, see step 1
+<the project's install command>
+git add <lockfile>
 ```
 
 The `git add` is the part that finishes it. `git checkout --theirs` writes the

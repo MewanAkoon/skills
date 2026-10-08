@@ -9,7 +9,12 @@ set -uo pipefail
 
 # Resolve through a symlink, so invoking this from a bin directory on PATH
 # still finds the clone rather than the symlink's own directory.
-SELF="$(readlink -f "$0")"
+SELF="$(readlink -f "$0" 2>/dev/null || true)"
+# An empty SELF would make `dirname` return `.`, so the cd below would succeed
+# into the wrong directory and every glob would quietly match nothing. Say what
+# is wrong instead. `readlink -f` is GNU and BSD both today, and missing on
+# macOS before Big Sur.
+[ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 cd "$(dirname "$SELF")/.." || exit 1
 
 doctor=no

@@ -10,7 +10,12 @@ set -euo pipefail
 # Resolve through a symlink, so running this from a bin directory on PATH still
 # finds the clone. Without it REPO names the symlink's directory, every glob
 # below matches nothing, and the script reports success having linked nothing.
-SELF="$(readlink -f "$0")"
+SELF="$(readlink -f "$0" 2>/dev/null || true)"
+# An empty SELF would make `dirname` return `.`, so the cd below would succeed
+# into the wrong directory and every glob would quietly match nothing. Say what
+# is wrong instead. `readlink -f` is GNU and BSD both today, and missing on
+# macOS before Big Sur.
+[ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 REPO="$(cd -P "$(dirname "$SELF")" && pwd)"
 
 # Where a symlink points, as a physical path comparable with $REPO. Reading the

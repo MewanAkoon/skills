@@ -15,7 +15,8 @@ Three scripts, all bash, no build step. The commands they carry:
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
 | `./scripts/check.sh --doctor` | Adds the linking check, which needs a `$HOME`. |
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
-| `./link.sh` | Links every skill into `~/.claude/skills`. |
+| `./link.sh` | Links the skills into the destination, minus anything in `.skillsignore`. |
+| `./link.sh --unlink` | Removes the links this clone made, leaving the clone. |
 
 None of them needs a package installed. All three resolve their own path
 with `readlink -f`, and `check.sh` takes its file list from `git`, so those
@@ -35,6 +36,12 @@ Code owns and Cursor also loads, as
 are never copied into a working repo. `SKILLS_DEST` overrides the destination,
 and `check.sh --doctor` reads the same variable, so the two agree on where the
 links belong.
+
+A skill named in an optional `.skillsignore` at the clone root is not linked,
+and a link this clone made for one is removed. The file lets someone take a
+subset without deleting anything, so it is what a fork adjusts rather than the
+skill list. `link.sh` removes only links it created, which are the ones named
+after a skill directory here, and reports anything it leaves alone.
 
 ## What belongs here
 

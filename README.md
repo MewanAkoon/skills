@@ -83,6 +83,20 @@ printf '.claude/\n.cursor/skills/\n.scratch/\n.skills.json\n' >> ~/.gitignore_gl
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
+### Taking a subset
+
+Adopting the repo does not mean adopting all of it. List the skills you do not
+want in a `.skillsignore` at the clone root, one name per line:
+
+```
+tdd-node-api
+ts-types
+```
+
+`link.sh` skips those and removes any link it previously made for them. The
+files stay in the clone, so you can change your mind by deleting the line and
+re-running. `--doctor` counts an ignored skill as ignored rather than missing.
+
 ### Sharing one skill with a client team
 
 Only when the team should have it too:

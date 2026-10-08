@@ -7,3 +7,7 @@ node_modules/
 !.claude/
 .claude/*
 !.claude/rules/
+
+# A local choice of which skills to link, per machine. A fork that wants the
+# same subset everywhere can commit it with `git add -f .skillsignore`.
+.skillsignore

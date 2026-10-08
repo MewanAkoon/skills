@@ -304,10 +304,20 @@ if [ "$doctor" = yes ]; then
   dest="${SKILLS_DEST:-$HOME/.claude/skills}"
   repo="$(pwd)"
   missing=0
+  ignored_count=0
 
   for dir in skills/*/; do
     name="$(basename "$dir")"
     link="$dest/$name"
+
+    # A skill listed in .skillsignore is meant to be absent, so its absence is
+    # the correct state rather than something to fix.
+    if [ -f .skillsignore ] &&
+       grep -qE "^[[:space:]]*${name}[[:space:]]*(#.*)?$" .skillsignore; then
+      ignored_count=$((ignored_count + 1))
+      continue
+    fi
+
     if [ ! -L "$link" ]; then
       warn "$name is not linked into $dest"
       missing=$((missing + 1))
@@ -328,6 +338,13 @@ if [ "$doctor" = yes ]; then
     done
   fi
 
+  if [ "$ignored_count" -gt 0 ]; then
+    printf 'doctor: %d ignored by .skillsignore\n' "$ignored_count"
+  fi
+
+  # A missing link means the skills are not installed, so this fails the run
+  # rather than printing a warning under an `ok`. That also lets a hook or a
+  # script gate on it.
   if [ "$missing" -gt 0 ]; then
     printf 'doctor: %d to fix, run ./link.sh\n' "$missing"
   else

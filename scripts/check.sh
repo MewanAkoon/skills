@@ -44,7 +44,18 @@ body() {
 # errors are left to print, because a file list that comes back empty makes
 # every check reading it pass without opening a thing.
 markdown() {
-  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc'
+  git ls-files --cached --others --exclude-standard -- '*.md' '*.mdc' | present
+}
+
+# git lists a file it still has in the index even after someone deletes it on
+# disk, so every reader below would open a path that is gone and print its own
+# error. Dropping those keeps a partial adoption, which starts by deleting a
+# skill directory, from making this script look broken.
+present() {
+  while IFS= read -r p; do
+    [ -f "$p" ] && printf '%s\n' "$p"
+  done
+  return 0
 }
 
 # The same list without the untracked files. The block runner below executes
@@ -52,7 +63,7 @@ markdown() {
 # than whatever happens to be sitting in the tree. Staged counts, so a new
 # file is checked after `git add` and before the commit.
 tracked_markdown() {
-  git ls-files --cached -- '*.md' '*.mdc'
+  git ls-files --cached -- '*.md' '*.mdc' | present
 }
 
 # The README table rows under one heading, used to check where a skill is listed.

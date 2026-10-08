@@ -35,6 +35,9 @@ link_target() {
   printf '%s/%s\n' "$dir" "$(basename "$raw")"
 }
 
+linked=0
+removed=0
+skipped=0
 # One destination. Claude Code reads ~/.claude/skills, and Cursor loads it too
 # for compatibility alongside its own directories, so a second destination puts
 # every skill in two directories Cursor scans and lists each one twice.
@@ -74,6 +77,7 @@ for OLD in "${SUPERSEDED[@]}"; do
         if ours "$link"; then
           rm "$link"
           echo "removed superseded $(basename "$link") from $OLD"
+          removed=$((removed + 1))
         else
           echo "left $(basename "$link") in $OLD, this repo did not create it" >&2
         fi
@@ -123,13 +127,30 @@ for DEST in "${DESTS[@]}"; do
 
     if [ -e "$target" ] && [ ! -L "$target" ]; then
       echo "skipping $name in $DEST, a real directory is already there" >&2
+      skipped=$((skipped + 1))
       continue
+    fi
+
+    # Report a takeover, so a second clone claiming these names says so rather
+    # than looking like a first install.
+    if [ -L "$target" ]; then
+      case "$(link_target "$target" || true)" in
+        "$REPO"/skills/*) ;;
+        *) echo "repointed $name in $DEST, it pointed outside this clone" >&2 ;;
+      esac
     fi
 
     ln -sfn "${src%/}" "$target"
     echo "linked $name -> $DEST"
+    linked=$((linked + 1))
   done
 done
 
 echo
-echo "Done. Restart your agent if it caches the skill list at startup."
+echo "Linked $linked, unlinked $removed, skipped $skipped."
+echo "Restart your agent if it caches the skill list at startup."
+
+# A skipped skill is not installed, which is the thing this script exists to
+# do, so the run reports it rather than ending on a success anyone would read
+# as complete.
+[ "$skipped" -eq 0 ]

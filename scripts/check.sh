@@ -223,8 +223,14 @@ fi
 
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
 # so banning only the first leaves the tell in place.
+#
+# One -e per character rather than a bracket set. A bracket holding multi-byte
+# characters is only character-wise in a UTF-8 locale; under LC_ALL=C it is a
+# set of six bytes, and a curly quote, a bullet, and an ellipsis all share
+# bytes with it. That reported a dash on a line holding none. A whole fixed
+# string matches byte-wise in every locale.
 while IFS= read -r f; do
-  lines="$(grep -n '[—–−]' "$f" | cut -d: -f1 | tr '\n' ' ')"
+  lines="$(grep -n -e '—' -e '–' -e '−' "$f" | cut -d: -f1 | tr '\n' ' ')"
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(markdown)
 

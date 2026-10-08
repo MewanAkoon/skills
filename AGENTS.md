@@ -88,7 +88,9 @@ follows, and enforcing it is what this repo is for.
 - Every relative markdown link in a tracked or new markdown file resolves to a
   file that exists, ignoring the ones inside fenced code blocks, which are
   templates.
-- The two rules files carry the same body.
+- The two rules files close their frontmatter, carry a body that is not empty,
+  and carry the same body. An unclosed fence reads as an empty body, and two
+  empty bodies compare equal.
 - Every script here parses under `bash -n`, because nothing else in this
   checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or

@@ -174,10 +174,25 @@ done < <(
 )
 
 # The two rules files carry one body in two frontmatter formats.
-for f in .claude/rules/authoring-skills.md .cursor/rules/authoring-skills.mdc; do
-  head -1 "$f" | grep -qx -- '---' || bad "$f: no frontmatter, so its body cannot be compared"
+#
+# `body` returns everything after the closing ---, so a file with an opening
+# fence and no closing one yields nothing. Two such files compared equal and
+# the whole check passed while the bodies shared not one line. Requiring the
+# close, and a body with something in it, closes that.
+claude_rule=.claude/rules/authoring-skills.md
+cursor_rule=.cursor/rules/authoring-skills.mdc
+
+for f in "$claude_rule" "$cursor_rule"; do
+  if ! head -1 "$f" | grep -qx -- '---'; then
+    bad "$f: no frontmatter, so its body cannot be compared"
+  elif [ "$(sed -n '2,$p' "$f" | grep -cx -- '---')" -eq 0 ]; then
+    bad "$f: frontmatter is never closed, so its body reads as empty"
+  elif [ -z "$(body "$f")" ]; then
+    bad "$f: body is empty, so comparing it proves nothing"
+  fi
 done
-diff -q <(body .claude/rules/authoring-skills.md) <(body .cursor/rules/authoring-skills.mdc) >/dev/null \
+
+diff -q <(body "$claude_rule") <(body "$cursor_rule") >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
 # Every script here parses as bash. fired.sh embeds an awk program in single

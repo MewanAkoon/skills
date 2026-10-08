@@ -29,7 +29,9 @@ TRANSCRIPTS="${CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}"
 # ~/.claude/projects reads better than the absolute path, and $HOME is the
 # only part worth shortening.
 SHOWN="$TRANSCRIPTS"
-case "$SHOWN" in "$HOME"/*) SHOWN="~${SHOWN#"$HOME"}" ;; esac
+# CLAUDE_PROJECTS_DIR is exactly the case where $HOME may be unset, and an
+# unset one is fatal under `set -u`.
+case "$SHOWN" in "${HOME:-/nonexistent}"/*) SHOWN="~${SHOWN#"${HOME:-/nonexistent}"}" ;; esac
 
 if [ ! -d "$TRANSCRIPTS" ]; then
   echo "no transcripts at $TRANSCRIPTS, so nothing to count" >&2

@@ -112,6 +112,11 @@ What limits the model-invoked set is conflict, not count. Before adding one,
 work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
 "Invocation". No script checks that.
 
+Nothing here deletes a skill for going unused. A model-invoked one that stays
+quiet, on an install that checks out, gets demoted to user-invoked instead:
+the description stops riding every turn and the file stays.
+[WRITING-RULES.md](WRITING-RULES.md) under "Keeping skills" holds it.
+
 `./scripts/check.sh --doctor` adds one check CI cannot run, because CI has no
 `$HOME`: whether every skill in this repo is currently linked into
 `~/.claude/skills`. Run it when a skill has been added, renamed, or removed,

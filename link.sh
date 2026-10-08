@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Symlinks every skill in this repo into the global skill directory each agent
-# reads. Symlinks, not copies, so editing a file here is live immediately and a
-# `git pull` updates every agent at once.
+# Symlinks this repo's skills into the global skill directory Claude Code and
+# Cursor both read. Symlinks, not copies, so editing a file here is live
+# immediately and a `git pull` updates both tools at once.
 #
 # Re-run after adding, renaming, or removing a skill. Safe to run repeatedly.
 
@@ -41,8 +41,11 @@ skipped=0
 # One destination. Claude Code reads ~/.claude/skills, and Cursor loads it too
 # for compatibility alongside its own directories, so a second destination puts
 # every skill in two directories Cursor scans and lists each one twice.
+#
+# SKILLS_DEST overrides it, for someone who wants a different root. Cursor also
+# reads ~/.agents/skills, which is the vendor-neutral one.
 DESTS=(
-  "$HOME/.claude/skills"   # Claude Code, and Cursor for compatibility
+  "${SKILLS_DEST:-$HOME/.claude/skills}"
 )
 
 # Destinations this repo used to write to and no longer does. Links this repo
@@ -69,6 +72,13 @@ ours() {
 
 for OLD in "${SUPERSEDED[@]}"; do
   [ -d "$OLD" ] || continue
+
+  # SKILLS_DEST can name one of these. Pruning the directory we are about to
+  # fill would remove all 17 links and relink them on every run, and report
+  # counters describing work that undid itself.
+  for D in "${DESTS[@]}"; do
+    [ "$OLD" = "$D" ] && continue 2
+  done
 
   for link in "$OLD"/*; do
     [ -L "$link" ] || continue

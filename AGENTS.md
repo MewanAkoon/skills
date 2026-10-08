@@ -30,7 +30,11 @@ CI runs that same pinned pair rather than the runner image's shellcheck, which
 moves on its own and disagreed with a local one about `A && B || C`.
 
 `link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude
-Code owns and Cursor also loads. Skills are never copied into a working repo.
+Code owns and Cursor also loads, as
+[Cursor's skills documentation](https://cursor.com/docs/skills) states. Skills
+are never copied into a working repo. `SKILLS_DEST` overrides the destination,
+and `check.sh --doctor` reads the same variable, so the two agree on where the
+links belong.
 
 ## What belongs here
 

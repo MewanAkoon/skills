@@ -32,6 +32,7 @@ cd ~/Work/Personal/skills
 
 `link.sh` symlinks every skill folder into `~/.claude/skills`. Claude Code
 owns that directory and Cursor loads it too, so one destination serves both.
+`SKILLS_DEST` points it somewhere else if you need that.
 Because they are symlinks, editing a file here takes effect immediately, and
 `git pull` updates both tools at once. The script also drops links whose skill
 has been renamed or deleted.

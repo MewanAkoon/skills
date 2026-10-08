@@ -292,7 +292,16 @@ done < <(markdown)
 # Machine state, so it warns rather than failing, and only when asked. CI has
 # no $HOME to check and would fail every run.
 if [ "$doctor" = yes ]; then
-  dest="$HOME/.claude/skills"
+  if [ -z "${HOME:-}" ] && [ -z "${SKILLS_DEST:-}" ]; then
+    warn "no \$HOME and no \$SKILLS_DEST, so the link check cannot run"
+    doctor=skipped
+  fi
+fi
+
+if [ "$doctor" = yes ]; then
+  # The same default and the same override link.sh uses, so the two agree on
+  # where the links belong.
+  dest="${SKILLS_DEST:-$HOME/.claude/skills}"
   repo="$(pwd)"
   missing=0
 

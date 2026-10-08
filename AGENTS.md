@@ -94,6 +94,9 @@ follows, and enforcing it is what this repo is for.
 - Both rules files still scope themselves to `skills/**`, and the Cursor one
   still sets `alwaysApply: false`. That scoping is what decides when either
   rule loads.
+- A skill other than `review-diff` carrying `allowed-tools` or
+  `disallowed-tools` warns rather than fails, because whether the body holds
+  without the field is not something a script can read.
 - Every script here parses under `bash -n`, because nothing else in this
   checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or

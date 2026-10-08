@@ -116,6 +116,17 @@ for dir in skills/*/; do
     bad "$name: description is ${#description} characters, over the spec's 1024"
   fi
 
+  # Cursor reads neither tools field, so a skill leaning on one is restricted
+  # in Claude Code and wide open in Cursor. AGENTS.md allows it only as a
+  # second lock over a body already right without it, and names `review-diff`
+  # as the one that took the trade. Staying quiet about that one keeps this
+  # warning meaning "someone added a second", which is the thing worth
+  # noticing. A rename makes it speak up, which is the intent.
+  if [ "$name" != review-diff ] &&
+     printf '%s\n' "$fm" | grep -qE '^(allowed|disallowed)-tools:'; then
+    warn "$name: carries a tools field Cursor does not read. AGENTS.md allows that only as a second lock over a body that holds without it"
+  fi
+
   flagged=no
   printf '%s\n' "$fm" | grep -q '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' && flagged=yes
 

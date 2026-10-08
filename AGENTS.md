@@ -87,6 +87,8 @@ follows, and enforcing it is what this repo is for.
   file that exists, ignoring the ones inside fenced code blocks, which are
   templates.
 - The two rules files carry the same body.
+- Every script here parses under `bash -n`, because nothing else in this
+  checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or
   committed markdown file, runs from the repo root with stdin closed and exits
   zero. The checker executes these, so an untracked file is left alone.

@@ -141,7 +141,7 @@ done
 
 # Every README row points at a skill that exists.
 while IFS= read -r linked; do
-  [ -f "skills/$linked/SKILL.md" ] || bad "README links skills/$linked/SKILL.md, which does not exist"
+  [ -f "skills/$linked/SKILL.md" ] || bad "a README table row lists $linked, which has no skills/$linked/SKILL.md"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
 
 # The link check and the dash sweep both take their file list from git, and an

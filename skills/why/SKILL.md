@@ -1,7 +1,6 @@
 ---
 name: why
-description: Trace the design rationale behind existing code through git history.
-disable-model-invocation: true
+description: Use before deleting or rewriting a guard, a retry, a timeout, an early return, a special case, or a constant with an oddly specific value. Use it when code looks wrong, redundant, or paranoid and you are about to simplify it away. Traces the rationale through git history and keeps what a source actually says apart from what you are inferring.
 ---
 
 # Why
@@ -17,18 +16,26 @@ what you are inferring from a pattern. That separation is the product.
 
 ## When to use it
 
-Before deleting a guard, a retry, a timeout, a special case, or a constant
-with an oddly specific value. Before rewriting something that looks wrong.
-When a reviewer asks why the code is like this and nobody left a comment.
+Before deleting a guard, a retry, a timeout, an early return, a special case,
+or a constant with an oddly specific value. Before rewriting something that
+looks wrong or redundant. When a reviewer asks why the code is like this and
+nobody left a comment.
 
-Skip it for code written this week that you already understand. Skip it when
-the question is what the code does, which is `/how`.
+It runs on its own for that first case, because deleting a guard is something
+an agent reaches on its own with nobody watching to ask for it. `api-boundaries`
+tells the agent to delete guards; this is the check that runs first.
+
+Skip it for code written this week that you already understand, and for code
+you are adding rather than removing. Skip it when the question is what the
+code does, which is `/how`. Skip the full report when the commit that added
+the line already explains it: say what that commit says and stop.
 
 ## How to use it
 
-Type `/why` with a file, a line range, or a symbol name. You get back a short
-report with a citation on every claim, and a list of everywhere that was
-searched and came back empty.
+Nothing to invoke when it fires on its own. To ask directly, type `/why` with
+a file, a line range, or a symbol name. Either way you get a short report with
+a citation on every claim, and a list of everywhere that was searched and came
+back empty.
 
 ---
 

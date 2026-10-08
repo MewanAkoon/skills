@@ -1,6 +1,6 @@
 ---
 name: plain-writing
-description: Use when writing or editing any prose that a human will read. Commit messages, PR descriptions, README files, API docs, code comments, changelogs, issue reports, and Slack or email drafts. Apply it to your own chat replies too. Removes AI tells and makes writing read like a person wrote it.
+description: Use before sending any reply longer than two sentences, and before writing or editing any prose a human will read. Also commit messages, PR descriptions, docs in a repo, code comments, changelogs, issues, and message drafts. Removes AI tells and makes writing read like a person wrote it.
 ---
 
 # Plain writing
@@ -13,15 +13,18 @@ sentence shape, and structure.
 
 ## When it runs
 
-Automatically, whenever prose is being written or edited. That includes
-commit messages, PR descriptions, and code comments, which people often
-forget count as prose.
+Whenever prose is being written or edited. Your own replies in the
+conversation count, and they are the case that gets missed, because answering
+does not feel like a writing task. Any answer longer than two sentences is
+prose someone reads.
+
+Commit messages, PR descriptions, and code comments count too, and people
+forget those are prose as well.
 
 ## How to use it
 
-Nothing to invoke. If the agent produces text that still reads as generated,
-say "apply plain-writing to that" and it will run the self-audit at the
-bottom.
+Nothing to invoke. The self-audit at the bottom runs on the text before it is
+sent, not after someone complains about it.
 
 ---
 

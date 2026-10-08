@@ -1,6 +1,6 @@
 ---
 name: merge-conflicts
-description: Use when git reports unmerged paths, whether they came from a merge, rebase, cherry-pick, revert, stash pop, or applied patch, or when the user says a pull left both versions inside a file. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
+description: Use when git reports unmerged paths, when a command prints CONFLICT or "Automatic merge failed", or when a file holds conflict markers on a path git lists as unmerged. Covers merge, rebase, cherry-pick, revert, stash pop, and applied patches, and the case where a pull left both versions inside one file. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
 ---
 
 # Merge conflicts

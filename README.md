@@ -77,7 +77,7 @@ procedure. Add a skill when nothing here would contradict it.
 
 | Skill | Fires on | What it does |
 |---|---|---|
-| [plain-writing](skills/plain-writing/SKILL.md) | Any prose being written or edited | Strips AI tells, enforces plain language, gates code comments |
+| [plain-writing](skills/plain-writing/SKILL.md) | Any reply or prose being written, chat answers included | Strips AI tells, enforces plain language, gates code comments |
 | [commit](skills/commit/SKILL.md) | Finished changes sitting in the working tree | Stages one change, matches the repo's message convention, survives hooks |
 | [pr](skills/pr/SKILL.md) | A branch with commits ahead of its base | Resolves the base, writes title and body from the diff, creates or updates |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file | Discriminated unions, brands, narrowing, exhaustiveness |

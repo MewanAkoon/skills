@@ -1,6 +1,6 @@
 ---
 name: tdd-node-api
-description: Use when building or fixing behaviour in a Node API test-first. Triggers on "TDD", "red-green-refactor", "write a failing test first", "add a regression test", or any request to build a service function, route handler, or repository method with tests. Defines where the test goes and what makes it worth keeping.
+description: Use when adding or changing behaviour in a Node or TypeScript service function, route handler, or repository method in a repo that has a test directory. Write the failing test before the implementation. Also fires on TDD, red-green-refactor, and any request for a regression test. Skip it for config edits, type-only changes, and throwaway scripts. Defines where the test goes and what makes it worth keeping.
 ---
 
 # TDD for Node APIs

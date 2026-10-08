@@ -1,6 +1,6 @@
 ---
 name: api-boundaries
-description: Use when writing or reviewing a route handler, controller, middleware, config loader, message consumer, or any call to a third-party API. Also use when deciding where validation belongs or when reviewing defensive checks scattered through a service. Puts validation at the edge and keeps internal code free of guards.
+description: Use when touching a route handler, controller, middleware, webhook, queue consumer, or config loader in a Node or TypeScript service, when reading process.env, req.body, or a parsed JSON payload, or when calling an API you do not own. Use it whenever you are deciding where a validation or a null check belongs. Puts validation at the edge and keeps internal code free of guards.
 ---
 
 # API boundaries

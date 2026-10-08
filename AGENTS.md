@@ -97,8 +97,8 @@ follows, and enforcing it is what this repo is for.
 - A skill other than `review-diff` carrying `allowed-tools` or
   `disallowed-tools` warns rather than fails, because whether the body holds
   without the field is not something a script can read.
-- Every script here parses under `bash -n`, because nothing else in this
-  checker runs them.
+- `link.sh` and every `scripts/*.sh` parse under `bash -n`, because nothing
+  else in the checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or
   committed markdown file, runs from the repo root with stdin closed and exits
   zero. The checker executes these, so an untracked file is left alone.

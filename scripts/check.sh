@@ -216,14 +216,16 @@ grep -qx 'globs: skills/\*\*' "$cursor_rule" \
 grep -qx 'alwaysApply: false' "$cursor_rule" \
   || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
-# Every script here parses as bash. fired.sh embeds an awk program in single
-# quotes, so an unbalanced apostrophe in a printed string ends the program and
-# leaves a file that fails only when someone runs it. Nothing else here runs
-# the scripts, so without this it ships.
+# link.sh and scripts/*.sh parse as bash. fired.sh embeds an awk program in
+# single quotes, so an unbalanced apostrophe in a printed string ends the
+# program and leaves a file that fails only when someone runs it, and nothing
+# else in this script runs them.
 #
-# A bash parse and nothing more. Two apostrophes balance each other and pass
-# here, leaving the awk program mangled. `npm run lint` catches that case and
-# this does not.
+# `npm run lint` catches that too, and more of it: a balanced pair of
+# apostrophes passes the parse below while leaving the awk program mangled,
+# and shellcheck reports it. This check earns its place by needing only bash,
+# because it runs before a commit, where fetching shellcheck over the network
+# would not.
 for f in link.sh scripts/*.sh; do
   bash -n "$f" || bad "$f: does not parse"
 done

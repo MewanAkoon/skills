@@ -42,24 +42,41 @@ DESTS=(
   "$HOME/.claude/skills"   # Claude Code, and Cursor for compatibility
 )
 
-# Destinations this repo used to write to. Links into this repo are pruned from
-# them, so a machine set up before a tool was dropped stops loading skills into
-# it. Removing a destination from DESTS alone leaves the old links working and
-# updating on every `git pull`, with nothing reporting them.
-RETIRED=(
-  "$HOME/.agents/skills"   # Codex, dropped
-  "$HOME/.cursor/skills"   # Cursor, now covered by ~/.claude/skills
+# Destinations this repo used to write to and no longer does. Links this repo
+# made are pruned from them, so a machine set up before the move stops loading
+# the same skill twice. Dropping a destination from DESTS alone would leave the
+# old links working and updating on every `git pull`, with nothing saying so.
+#
+# Neither tool is dropped. Cursor reads ~/.claude/skills, and ~/.agents/skills
+# is the vendor-neutral root both understand, so one destination already covers
+# what these two used to.
+SUPERSEDED=(
+  "${HOME:-/nonexistent}/.agents/skills"
+  "${HOME:-/nonexistent}/.cursor/skills"
 )
 
-for OLD in "${RETIRED[@]}"; do
+# A link this repo made is named after a skill directory in it. Anything else
+# pointing here was made by hand, so it is left alone. A dangling link is ours
+# too: that is a skill renamed since it was linked.
+ours() {
+  [ -d "$REPO/skills/$(basename "$1")" ] && return 0
+  [ -e "$1" ] || return 0
+  return 1
+}
+
+for OLD in "${SUPERSEDED[@]}"; do
   [ -d "$OLD" ] || continue
 
   for link in "$OLD"/*; do
     [ -L "$link" ] || continue
     case "$(link_target "$link" || true)" in
       "$REPO"/skills/*)
-        rm "$link"
-        echo "removed retired $(basename "$link") from $OLD"
+        if ours "$link"; then
+          rm "$link"
+          echo "removed superseded $(basename "$link") from $OLD"
+        else
+          echo "left $(basename "$link") in $OLD, this repo did not create it" >&2
+        fi
         ;;
     esac
   done

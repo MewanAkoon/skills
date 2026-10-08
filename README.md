@@ -1,103 +1,150 @@
 # skills
 
-Agent skills as plain markdown, for Claude Code and Cursor. One clone on disk,
-symlinked into the global skill directory both tools read. Nothing gets
-committed into working repos.
+Agent skills as plain markdown, shipped as one Claude Code plugin, `eng`, from
+this repo. Install it once and every skill loads in every session, under its
+full name: `eng:commit`, `eng:pr`, `eng:why`, and so on. Nothing gets committed
+into working repos.
 
 A skill is a folder holding a `SKILL.md`: a description that decides when it
-applies, and a procedure the agent follows once it does. Both tools read the
-same format from the same directory, which is why one clone serves both.
+applies, and a procedure the agent follows once it does. The plugin is that
+folder of skills plus two small manifests in `.claude-plugin/`, which is the
+packaging the Claude Code docs describe and the one
+[mattpocock/skills](https://github.com/mattpocock/skills) uses.
 
 ## Scope
 
-Every skill here runs the same procedure in both Claude Code and Cursor, and
-anything added has to. A skill is plain markdown that either harness can read,
-which is the whole reason one clone serves both. Three narrow exceptions, all
-named in [AGENTS.md](AGENTS.md) under "What belongs here": the maintenance
-scripts read one tool's own files, since `fired.sh` can only count what Claude
-Code writes down, `review-diff` carries a Claude Code frontmatter field as a
-lock over a body that is right without it, and the Cursor rules file carries a
-`description` that gives it a second way in.
+Claude Code first. The skills themselves stay plain markdown that any harness
+can read, but the way they ship, the plugin and its manifests, is Claude Code
+packaging. Cursor support comes later; "If you use Cursor" below says where it
+stands.
 
-Tool-specific machinery stays out, plugins included.
-[AGENTS.md](AGENTS.md) under "What belongs here" carries the rule and the
-reason. Install what you like in your own tool:
-[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what pairs well with each, as a
-recommendation rather than a dependency.
+Two narrow exceptions to "plain markdown", both named in [AGENTS.md](AGENTS.md)
+under "What belongs here": `review-diff` carries a Claude Code frontmatter
+field as a lock over a body that is right without it, and the Cursor rules
+file carries a `description` that gives it a second way in.
+
+Other plugins stay out of this one. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md)
+says what pairs well with it, as a recommendation rather than a dependency.
 
 ## Setup
 
-Clone anywhere permanent. Fork first if you plan to edit.
+You need Claude Code 2.1.293 or later. In any Claude Code session:
 
-```bash
-git clone https://github.com/MewanAkoon/skills.git
-cd skills
-./link.sh
+```
+/plugin marketplace add MewanAkoon/skills
+/plugin install eng@mewanakoon
 ```
 
-The location is yours to pick. Every script resolves its own path, so nothing
-depends on where the clone sits. Move it later and re-run `link.sh`, because
-the symlinks store an absolute path.
+Or from a shell:
 
-`link.sh` symlinks each skill folder into `~/.claude/skills`. Claude Code
-owns that directory and Cursor loads it too, so one destination serves both.
-`SKILLS_DEST` points it somewhere else if you need that.
-Because they are symlinks, editing a file here takes effect immediately, and
-`git pull` updates both tools at once.
+```bash
+claude plugin marketplace add MewanAkoon/skills
+claude plugin install eng@mewanakoon
+```
 
-Confirm it worked:
+Both install at user scope, so the skills load in every project on the
+machine. There is no clone to keep and no script to run.
+
+Then turn off the bare copies of two skills. A project may carry its own
+`commit` and `pr` skills, and those load beside the plugin's today and can take
+a request meant for it. Claude Code also reserves both names for built-in
+skills it keeps switched off for now and can switch on. Add this to
+`~/.claude/settings.json`:
+
+```json
+{
+  "skillOverrides": {
+    "commit": "off",
+    "pr": "off"
+  }
+}
+```
+
+`skillOverrides` hides a skill by name from you and the model alike, for this
+machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
+stay, and a team repo's own `commit` and `pr` stay for everyone else.
+
+To confirm it worked from a clone of this repo:
 
 ```bash
 ./scripts/check.sh --doctor
 ```
 
-A good run ends with the destination named and no warnings above it:
+A good run ends like this:
 
 ```
-doctor: every skill is linked into /Users/you/.claude/skills, which Cursor loads too
+doctor: eng@mewanakoon 0.1.0 is installed and enabled, with no bare copies beside it
 17 skills, 8 model-invoked
 ok
 ```
 
-A missing link fails the run, so this is safe to put in a hook.
+It fails when Claude Code is older than 2.1.293, when the plugin is not
+installed at user scope, is disabled, or is at another version than this clone,
+when an old link or a personal copy of one of these skills is still loading, or
+when the `skillOverrides` entry is missing.
 
-Re-run `link.sh` after adding, renaming, or removing a skill, and after moving
-the clone. `--doctor` tells you when you need to.
+### Updating
+
+Claude Code leaves auto-update off for marketplaces outside Anthropic's. Turn
+it on once in `/plugin`, under Marketplaces, or update by hand:
+
+```bash
+claude plugin update eng@mewanakoon
+```
+
+A release is a new `version` in `.claude-plugin/plugin.json`. An install stays
+on the version it has until that string changes.
+
+### Moving from the old symlinks
+
+Before the plugin, `link.sh` symlinked each skill into `~/.claude/skills`.
+Those links are personal skills with bare names, and they would load beside
+the plugin's copies. From the clone:
+
+1. Run `./link.sh --unlink`. It removes the links this clone made and leaves
+   anything else alone. If you linked with `SKILLS_DEST` set, run it with the
+   same value. A `.skillsignore` in the clone no longer does anything, so
+   delete it.
+2. Install the plugin and add the `skillOverrides` entry, as above.
+3. If your `~/.claude/CLAUDE.md`, or a hook of yours, names a path under
+   `~/.claude/skills`, point it at the skill's full name instead, such as
+   `eng:plain-writing`. Those paths no longer exist.
+4. Run `./scripts/check.sh --doctor`.
+
+### Working on this repo
+
+Add your clone as the marketplace instead of the GitHub one:
+
+```
+/plugin marketplace add ~/path/to/skills
+/plugin install eng@mewanakoon
+```
+
+A directory marketplace loads the plugin from the folder itself, so an edit
+shows up after `/reload-plugins`. To try the working tree for one session
+without installing anything:
+
+```bash
+claude --plugin-dir .
+```
 
 ### If you use Cursor
 
-There is no separate step. Cursor loads `~/.claude/skills` alongside its own
-roots, as its [skills documentation](https://cursor.com/docs/skills) states,
-so `link.sh` serves both tools from one destination. Cursor reads
-`disable-model-invocation` the same way Claude Code does, so the nine
-user-invoked skills below stay behind `/name` there too.
-
-One setting decides it. Cursor loads those directories only while **Settings,
-Rules, Skills, Subagents, "Include third-party Plugins, Skills, and other
-configs"** is on. It ships on. Turn it off and every skill here disappears
-with no error saying why.
-
-To confirm Cursor sees them, open Customize, then Skills, and look for the
-names. `--doctor` checks the symlinks on disk, which is a different question
-from whether Cursor enumerated them.
-
-Two things a Cursor user does not get. `./scripts/fired.sh` counts Claude Code
-sessions only, because Cursor writes no comparable transcript, so every count
-reads zero no matter how much you use a skill. And Cursor's Cloud Agents and
-remote sessions do not carry machine-global skills, so anything needed there
-belongs in the repo being worked on.
-
-Cursor keeps its own skills in `~/.cursor/skills-cursor`, which `link.sh`
-leaves alone. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what is in there
-worth knowing about.
+Cursor reads skills from `~/.claude/skills`, which the plugin no longer fills.
+Cursor's changelog says it also imports plugins installed in Claude Code while
+**Settings, Agents, Third-Party Imports** is on, which would bring these
+skills with it. That is not yet confirmed for this plugin. A skill folder
+copied into `~/.cursor/skills` works too, with one catch: the skills name each
+other and their commands with the plugin's prefix, `eng:commit` and
+`/eng:commit`, which Cursor does not have. Drop the `eng:` prefix in a copy you
+make for Cursor.
 
 ### Keeping working repos clean
 
-Keep the clone outside any working repo. The symlinks live under `$HOME`, so
-nothing lands in a project either way.
-
-As an optional safety net you can ignore the agent directories globally. Check
-what you already have first, because setting `core.excludesfile` replaces it:
+The plugin installs under `~/.claude/plugins`, so nothing lands in a project.
+Some skills write working files, such as `wayfinder` under `.scratch/`. As an
+optional safety net you can ignore those globally. Check what you already have
+first, because setting `core.excludesfile` replaces it:
 
 ```bash
 git config --global core.excludesfile
@@ -116,17 +163,12 @@ commit `.claude/settings.json` on purpose. Skip this step if that is you.
 
 ### Taking a subset
 
-Adopting the repo does not mean adopting all of it. List the skills you do not
-want in a `.skillsignore` at the clone root, one name per line:
-
-```
-tdd-node-api
-ts-types
-```
-
-`link.sh` skips those and removes any link it previously made for them. The
-files stay in the clone, so you can change your mind by deleting the line and
-re-running. `--doctor` counts an ignored skill as ignored rather than missing.
+A plugin installs as a unit, and it loads every folder under `skills/`. To
+take part of it, fork the repo, delete the skill folders you do not want along
+with their README rows, and install from your fork. `./scripts/check.sh` names
+anything left pointing at a skill you removed. Listing skills in `plugin.json`
+does not narrow the set, because that field adds to the `skills/` scan rather
+than replacing it.
 
 ### Sharing one skill with a team
 
@@ -136,26 +178,22 @@ Only when the team should have it too, and only from your own fork:
 npx skills add <you>/skills -s tdd-node-api
 ```
 
-That copies files into the current repo and needs Node, unlike everything
-else here. Default to the global setup instead.
+That copies files into the current repo and needs Node. Default to the plugin
+instead.
 
 ### Removing it
 
-`link.sh` can only clean up links it can still identify, and it needs the
-clone to do that. So unlink before deleting the clone:
-
 ```bash
-./link.sh --unlink
+claude plugin uninstall eng@mewanakoon
+claude plugin marketplace remove mewanakoon
 ```
 
-Then delete the clone. If you deleted it first, the links are already
-orphaned. This lists the dangling ones for you to remove:
-
-```bash
-find ~/.claude/skills -maxdepth 1 -type l ! -exec test -e {} \; -print
-```
+Remove the `skillOverrides` entry too if you want Claude Code's own `commit`
+and `pr` back.
 
 ## Skills
+
+Every skill loads as `eng:<name>`. The tables link the folders.
 
 ### Model-invoked
 
@@ -169,8 +207,8 @@ procedure. Add a skill when nothing here would contradict it.
 Three of these assume a stack, and say so in their own descriptions:
 `ts-types` is TypeScript only, and `tdd-node-api` and `api-boundaries` are
 written for Node services. The rest are language-neutral, though a few reach
-for a TypeScript example. If you work in something else, `.skillsignore` above
-leaves the ones you do not want unlinked.
+for a TypeScript example. If you work in something else, "Taking a subset"
+above leaves out the ones you do not want.
 
 | Skill | Fires on | What it does |
 |---|---|---|
@@ -189,61 +227,57 @@ Only fire when typed. Zero context cost.
 
 | Skill | Invoke | What it does |
 |---|---|---|
-| [diagnose-bug](skills/diagnose-bug/SKILL.md) | `/diagnose-bug` | Six-phase debugging loop, gated |
-| [blast-radius](skills/blast-radius/SKILL.md) | `/blast-radius` | What a change breaks elsewhere, with evidence levels |
-| [grill-me](skills/grill-me/SKILL.md) | `/grill-me` | Interview until the design has no open branches |
-| [architect](skills/architect/SKILL.md) | `/architect` | Types and module shape before implementation |
-| [handoff](skills/handoff/SKILL.md) | `/handoff` | Compact this session for the next one |
-| [review-diff](skills/review-diff/SKILL.md) | `/review-diff` | Diff against repo standards, plus a smell baseline |
-| [how](skills/how/SKILL.md) | `/how` | Subsystem walkthrough, and where new code belongs |
-| [verify-app](skills/verify-app/SKILL.md) | `/verify-app` | Generates a project-local skill that drives this app |
-| [wayfinder](skills/wayfinder/SKILL.md) | `/wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
+| [diagnose-bug](skills/diagnose-bug/SKILL.md) | `/eng:diagnose-bug` | Six-phase debugging loop, gated |
+| [blast-radius](skills/blast-radius/SKILL.md) | `/eng:blast-radius` | What a change breaks elsewhere, with evidence levels |
+| [grill-me](skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
+| [architect](skills/architect/SKILL.md) | `/eng:architect` | Types and module shape before implementation |
+| [handoff](skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
+| [review-diff](skills/review-diff/SKILL.md) | `/eng:review-diff` | Diff against repo standards, plus a smell baseline |
+| [how](skills/how/SKILL.md) | `/eng:how` | Subsystem walkthrough, and where new code belongs |
+| [verify-app](skills/verify-app/SKILL.md) | `/eng:verify-app` | Generates a project-local skill that drives this app |
+| [wayfinder](skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
+
+A bare form such as `/grill-me` also works while no other command has that
+name.
 
 ## Writing new skills
 
 Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
-Run the checker before committing:
+Run the checker before committing, and the plugin validator when a manifest
+changes:
 
 ```bash
 ./scripts/check.sh
+./scripts/validate-plugin.sh
 ```
 
-It covers the mechanical half of that standard. [AGENTS.md](AGENTS.md) lists
-what it checks. CI runs the same script on every pull request and on every
-push to `main`, on Linux and on macOS, without `--doctor`, since a fresh
-runner has no `~/.claude` to inspect.
+The checker covers the mechanical half of that standard, and
+[AGENTS.md](AGENTS.md) lists what it checks. CI runs it on every pull request
+and on every push to `main`, on Linux and on macOS, without `--doctor`, since
+a fresh runner has no Claude Code install to inspect. CI also runs the
+validator on a pinned Claude Code.
+
+A change to anything the plugin loads needs a new `version` in
+`.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
+installed from GitHub would receive the change.
 
 ## Usage counts
 
-A skill stays whether or not it fires. To see how often each one has fired:
-
-```bash
-./scripts/fired.sh
-```
-
-It reads the session transcripts Claude Code leaves under `~/.claude/projects`
-and counts the times each skill was invoked. A zero is a question rather than
-a verdict, and the report names the three things that answer it: the work
-happened in Cursor, which writes no transcript, or the skill is not linked, or
-its description does not fire.
-
-Two limits worth knowing before you read anything into a count. A Cursor-only
-user sees zeros throughout, because there is nothing for this to read. And a
-skill named in `~/.claude/CLAUDE.md` gets followed without being invoked, so
-its count reads lower than its influence.
+A skill stays whether or not it fires. To see how often each one has fired,
+run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
+when it last ran, and what its description costs on every turn.
 
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.
 
 ## Optional extras
 
-Plugins and anything else your tool loads alongside these skills sit outside
-this repo, for the reason under "Scope" above.
-[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) holds the notes: what pairs well with
-Claude Code, what was found on the Cursor side, what to look at before
-enabling any of it, and what was tried and dropped.
+Other plugins, and anything else your tool loads alongside these skills, sit
+outside this repo. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) holds the notes:
+what pairs well with Claude Code, what was found on the Cursor side, what to
+look at before enabling any of it, and what was tried and dropped.
 
 ## Instructions for agents
 

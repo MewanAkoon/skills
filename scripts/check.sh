@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Checks this repo against the invariants in AGENTS.md.
-# Needs bash and the usual POSIX tools. Run before committing.
+# Needs bash, jq, and the usual POSIX tools. Run before committing.
 #
-# --doctor adds the one check CI cannot run, because a fresh runner has no
-# ~/.claude and no SKILLS_DEST to inspect: whether every skill here is
-# currently linked into the directory link.sh writes to.
+# --doctor adds the checks CI cannot run, because a fresh runner has no
+# Claude Code install to inspect: whether Claude Code is new enough, whether
+# the plugin is installed at user scope at this version, whether bare copies
+# of its skills are still loading beside it, and whether the skillOverrides
+# entry the README asks for is in place.
 
 set -uo pipefail
 
@@ -29,6 +31,19 @@ done
 fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 warn() { printf 'WARN  %s\n' "$1" >&2; }
+
+# Is MAJOR.MINOR.PATCH $1 newer than $2? Field by field, so 0.10.0 counts as
+# newer than 0.9.0.
+newer() {
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    split(a, x, "."); split(b, y, ".")
+    for (i = 1; i <= 3; i++) {
+      if (x[i] + 0 > y[i] + 0) exit 0
+      if (x[i] + 0 < y[i] + 0) exit 1
+    }
+    exit 1
+  }'
+}
 
 # Everything between the opening and closing --- of a markdown file.
 frontmatter() {
@@ -82,6 +97,20 @@ readme_user="$(section 'User-invoked')"
 
 model_count=0
 
+# Names Claude Code already uses for a built-in command or a bundled skill, as
+# of 2.1.293. A skill here with one of these names would be shadowed, or would
+# shadow the built-in, depending on how it is typed. commit and pr are the two
+# this repo keeps on purpose: every reference writes them eng:commit and
+# eng:pr, and the README's skillOverrides entry turns the built-ins off.
+reserved=" add-dir agents batch bug claude-api clear code-review compact config
+ context cost dataviz debug doctor explain-usage exit export feedback
+ fewer-permission-prompts help hooks ide init insights install-github-app
+ keybindings-help login logout loop mcp memory memory-types model permissions
+ plan plugin plugin-authoring release-notes reload-plugins resume review rewind
+ run run-skill-generator schedule security-review simplify skill-doctor skills
+ status statusline tasks terminal-setup theme todos update-config upgrade usage
+ verify workflow-authoring "
+
 for dir in skills/*/; do
   name="$(basename "$dir")"
   skill="${dir}SKILL.md"
@@ -109,6 +138,9 @@ for dir in skills/*/; do
   if [ "${#name}" -gt 64 ]; then
     bad "$name: name is ${#name} characters, over the spec's 64"
   fi
+  case "$reserved" in
+    *[[:space:]]"$name"[[:space:]]*) bad "$name: Claude Code already uses this name for a built-in" ;;
+  esac
 
   description="$(printf '%s\n' "$fm" | sed -n 's/^description:[[:space:]]*//p' | head -1)"
   if [ -z "$description" ]; then
@@ -155,6 +187,91 @@ done
 while IFS= read -r linked; do
   [ -f "skills/$linked/SKILL.md" ] || bad "a README table row lists $linked, which has no skills/$linked/SKILL.md"
 done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
+
+# The plugin's two manifests. They are what an install reads, so a broken one
+# breaks every install at once, and nothing else here opens them.
+plugin_json=.claude-plugin/plugin.json
+market_json=.claude-plugin/marketplace.json
+plugin_name=""
+market_name=""
+version=""
+
+if ! command -v jq >/dev/null 2>&1; then
+  bad "jq is not installed, so the plugin manifests cannot be read"
+elif [ ! -f "$plugin_json" ] || [ ! -f "$market_json" ]; then
+  bad "$plugin_json and $market_json must both exist"
+elif ! jq empty "$plugin_json" 2>/dev/null; then
+  bad "$plugin_json is not valid JSON"
+elif ! jq empty "$market_json" 2>/dev/null; then
+  bad "$market_json is not valid JSON"
+else
+  plugin_name="$(jq -r '.name // empty' "$plugin_json")"
+  market_name="$(jq -r '.name // empty' "$market_json")"
+  version="$(jq -r '.version // empty' "$plugin_json")"
+
+  [ -n "$plugin_name" ] || bad "$plugin_json: no name"
+  [ -n "$market_name" ] || bad "$market_json: no name"
+
+  # Claude Code does not check the format. Semver is this repo's convention,
+  # and the version rule below compares the string, so it has to be one.
+  printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || bad "$plugin_json: version '$version' is not MAJOR.MINOR.PATCH"
+
+  # One plugin, served from the repo root, under the manifest's own name. A
+  # second entry or another source would install something other than this
+  # tree.
+  [ "$(jq '.plugins | length' "$market_json")" = 1 ] \
+    || bad "$market_json: lists other than exactly one plugin"
+  [ "$(jq -r '.plugins[0].name // empty' "$market_json")" = "$plugin_name" ] \
+    || bad "$market_json: its plugin is not named $plugin_name, as $plugin_json says"
+  [ "$(jq -r '.plugins[0].source // empty' "$market_json")" = ./ ] \
+    || bad "$market_json: its plugin's source is not ./"
+fi
+
+# A change to what the plugin loads needs a new version. Claude Code keeps an
+# install on the version it has until the string changes, so an edit without a
+# bump never reaches anyone who installed the plugin from GitHub. plugin.json
+# counts too, since it can declare hooks and servers inline. The base is
+# origin/main unless CHECK_BASE names another ref.
+loaded="skills hooks standards agents commands output-styles themes monitors workflows bin .mcp.json .lsp.json $plugin_json"
+base="${CHECK_BASE:-origin/main}"
+if [ -n "$version" ]; then
+  if ! git rev-parse --verify -q "$base^{commit}" >/dev/null 2>&1; then
+    warn "no $base to compare against, so the version rule was not checked"
+  else
+    mb="$(git merge-base HEAD "$base" 2>/dev/null || true)"
+    # Before the base had a manifest there is no earlier version to compare.
+    if [ -n "$mb" ] && git cat-file -e "$mb:$plugin_json" 2>/dev/null; then
+      old="$(git show "$mb:$plugin_json" | jq -r '.version // empty')"
+      # shellcheck disable=SC2086
+      if ! git diff --quiet "$mb" -- $loaded ||
+         [ -n "$(git ls-files --others --exclude-standard -- $loaded)" ]; then
+        newer "$version" "$old" \
+          || bad "$plugin_json: what the plugin loads changed since $base, so version $version must be newer than $old"
+      fi
+    fi
+  fi
+fi
+
+# Inside the plugin a skill is reached as plugin:skill, and Claude Code does
+# not resolve every bare name: a bare commit came back unknown with eng:commit
+# installed. So every reference to a skill here, and every command a skill
+# tells someone to type, uses the full name.
+if [ -n "$plugin_name" ]; then
+  while IFS= read -r ref; do
+    [ -f "skills/$ref/SKILL.md" ] \
+      || bad "a skill references $plugin_name:$ref, which is not a skill here"
+  done < <(grep -rhoE "(^|[^a-z0-9-])$plugin_name:[a-z0-9-]+" skills --include='*.md' \
+             | sed "s/^.*$plugin_name://" | sort -u)
+
+  names="$(find skills -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | paste -sd'|' -)"
+  # Inside backticks, quotes or plain prose alike. A path such as skills/why
+  # has no space, quote or backtick before the slash, so it does not match.
+  while IFS= read -r hit; do
+    bad "$hit: types a skill by its bare name; write /$plugin_name:<name>"
+  done < <(grep -rnE '(^|[[:space:]`("'"'"'])/('"$names"')([[:space:]`.,;:)"'"'"']|$)' skills --include='*.md' \
+             | cut -d: -f1,2 | sort -u)
+fi
 
 # The link check and the dash sweep both take their file list from git, and an
 # empty list is indistinguishable from a clean run. So this sits ahead of both
@@ -217,13 +334,13 @@ grep -qx 'globs: skills/\*\*' "$cursor_rule" \
 grep -qx 'alwaysApply: false' "$cursor_rule" \
   || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
-# link.sh and scripts/*.sh parse as bash. fired.sh embeds an awk program in
+# link.sh and scripts/*.sh parse as bash. This script embeds awk programs in
 # single quotes, so an unbalanced apostrophe in a printed string ends the
 # program and leaves a file that fails only when someone runs it, and nothing
-# else in this script runs them.
+# else here runs the others.
 #
 # `npm run lint` catches that too, and more of it: a balanced pair of
-# apostrophes passes the parse below while leaving the awk program mangled,
+# apostrophes passes the parse below while leaving an awk program mangled,
 # and shellcheck reports it. This check earns its place by needing only bash,
 # because it runs before a commit, where fetching shellcheck over the network
 # would not.
@@ -290,67 +407,106 @@ while IFS= read -r f; do
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(markdown)
 
-# Machine state, so it runs only when asked. A fresh runner has no ~/.claude,
-# so CI would fail every run.
-if [ "$doctor" = yes ]; then
-  if [ -z "${HOME:-}" ] && [ -z "${SKILLS_DEST:-}" ]; then
-    warn "no \$HOME and no \$SKILLS_DEST, so the link check cannot run"
-    doctor=skipped
-  fi
+# Machine state, so it runs only when asked. A fresh runner has no Claude Code
+# install, so CI would fail every run.
+if [ "$doctor" = yes ] && [ -z "${HOME:-}" ] && [ -z "${CLAUDE_CONFIG_DIR:-}" ]; then
+  bad "no \$HOME and no \$CLAUDE_CONFIG_DIR, so the install cannot be checked"
+  doctor=skipped
 fi
 
 if [ "$doctor" = yes ]; then
-  # The same default and the same override link.sh uses, so the two agree on
-  # where the links belong.
-  dest="${SKILLS_DEST:-$HOME/.claude/skills}"
+  config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
   repo="$(pwd)"
-  missing=0
-  ignored_count=0
+  problems=0
+  fix() { warn "$1"; problems=$((problems + 1)); }
 
-  for dir in skills/*/; do
-    name="$(basename "$dir")"
-    link="$dest/$name"
-
-    # A skill listed in .skillsignore is meant to be absent, so its absence is
-    # the correct state rather than something to fix.
-    if [ -f .skillsignore ] &&
-       grep -qE "^[[:space:]]*${name}[[:space:]]*(#.*)?$" .skillsignore; then
-      ignored_count=$((ignored_count + 1))
-      continue
+  # Installed, enabled, and at the version this clone carries. Auto-update is
+  # off for a marketplace outside Anthropic's, so a stale version is the
+  # common case after a pull.
+  id="$plugin_name@$market_name"
+  if [ -z "$plugin_name" ] || [ -z "$market_name" ]; then
+    fix "the manifests above could not be read, so the install cannot be checked"
+  elif ! command -v claude >/dev/null 2>&1; then
+    fix "claude is not on PATH, so the plugin install cannot be checked"
+  elif ! command -v jq >/dev/null 2>&1; then
+    fix "jq is not installed, so the plugin list cannot be read"
+  else
+    # The README's minimum. 2.1.292 closed a hole that let the model run a
+    # user-invoked skill after compaction.
+    cc="$(claude --version 2>/dev/null | sed -nE 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)"
+    if [ -z "$cc" ]; then
+      fix "claude --version printed no version, so the 2.1.293 minimum cannot be checked"
+    elif newer 2.1.293 "$cc"; then
+      fix "Claude Code is $cc, and these skills need 2.1.293 or later. Run: claude update"
     fi
 
-    if [ ! -L "$link" ]; then
-      warn "$name is not linked into $dest"
-      missing=$((missing + 1))
-    elif [ "$(readlink "$link")" != "$repo/skills/$name" ]; then
-      warn "$name in $dest points at $(readlink "$link")"
-      missing=$((missing + 1))
+    # Listed from / rather than from this clone, so the enabled state is the
+    # user-scope one and not what this repo's own project settings say. The
+    # README installs at user scope, which is what loads in every project.
+    if ! list="$(cd / && claude plugin list --json 2>/dev/null)" ||
+       ! printf '%s' "$list" | jq -e 'type == "array"' >/dev/null 2>&1; then
+      fix "claude plugin list --json failed or printed something other than a list, so the install cannot be checked"
+    elif ! entry="$(printf '%s' "$list" | jq -c --arg id "$id" '.[] | select(.id == $id and .scope == "user")' | head -1)" ||
+         [ -z "$entry" ]; then
+      fix "$id is not installed at user scope. The README's Setup section has the two commands"
+    else
+      [ "$(printf '%s' "$entry" | jq -r '.enabled')" = true ] \
+        || fix "$id is installed but disabled. Turn it on in /plugin"
+      installed="$(printf '%s' "$entry" | jq -r '.version // empty')"
+      [ "$installed" = "$version" ] \
+        || fix "$id is at $installed and this clone is at $version. Update whichever is behind: claude plugin update $id, or git pull"
     fi
-  done
+  fi
 
-  # Links this repo made whose skill is gone. Every tool keeps listing them.
-  if [ -d "$dest" ]; then
-    for link in "$dest"/*; do
-      [ -L "$link" ] || continue
-      case "$(readlink "$link")" in
-        "$repo"/skills/*)
-          [ -e "$link" ] || { warn "$(basename "$link") in $dest points at a skill that is gone"; missing=$((missing + 1)); } ;;
-      esac
+  # A personal skill with the same name as one of the plugin's loads beside
+  # it, and two skills then claim one moment. That holds wherever it points:
+  # a link into another clone of this repo loads just the same. A link into
+  # this clone under any other name loads a second copy too, but link.sh did
+  # not make it, so it is left for whoever did.
+  skills_dir="$config/skills"
+  # The names an older install linked, which link.sh carries. Several stop
+  # being folders here once skills move, and a link left for one still loads.
+  legacy=" $(sed -n '/^LEGACY=(/,/^)/p' link.sh | sed '1d;$d' | tr -s '[:space:]' ' ') "
+  if [ -d "$skills_dir" ]; then
+    for entry_path in "$skills_dir"/*; do
+      [ -e "$entry_path" ] || [ -L "$entry_path" ] || continue
+      name="$(basename "$entry_path")"
+      if [ -d "skills/$name" ] || case "$legacy" in *" $name "*) true ;; *) false ;; esac; then
+        if [ -L "$entry_path" ]; then
+          fix "$skills_dir/$name is an old link to $(readlink "$entry_path") and loads beside $plugin_name:$name. Run ./link.sh --unlink from that clone, or remove it"
+        else
+          fix "$skills_dir/$name is a personal copy of $plugin_name:$name and loads beside it"
+        fi
+      elif [ -L "$entry_path" ]; then
+        case "$(readlink "$entry_path")" in
+          "$repo"/skills/*) fix "$skills_dir/$name links into this clone and loads a second copy of a skill. link.sh did not make it; remove it by hand" ;;
+        esac
+      fi
     done
   fi
 
-  if [ "$ignored_count" -gt 0 ]; then
-    printf 'doctor: %d ignored by .skillsignore\n' "$ignored_count"
+  # The README's skillOverrides entry. Without it a bare commit or pr, from
+  # Claude Code itself or from a project, can take a request meant for the
+  # plugin's.
+  settings="$config/settings.json"
+  if [ -f "$settings" ] && ! jq empty "$settings" >/dev/null 2>&1; then
+    fix "$settings is not valid JSON, so Claude Code cannot read it either"
+  else
+    for name in commit pr; do
+      value=""
+      [ -f "$settings" ] && value="$(jq -r --arg n "$name" '.skillOverrides[$n] // empty' "$settings" 2>/dev/null)"
+      [ "$value" = off ] \
+        || fix "$settings does not set skillOverrides.$name to \"off\", so a bare $name can load beside $plugin_name:$name"
+    done
   fi
 
-  # A missing link means the skills are not installed, so this fails the run
-  # rather than printing a warning under an `ok`. That also lets a hook or a
-  # script gate on it.
-  if [ "$missing" -gt 0 ]; then
-    printf 'doctor: %d to fix, run ./link.sh\n' "$missing"
+  # Anything to fix fails the run rather than printing a warning under an
+  # `ok`, which also lets a hook or a script gate on it.
+  if [ "$problems" -gt 0 ]; then
+    printf 'doctor: %d to fix\n' "$problems"
     fail=1
   else
-    printf 'doctor: every skill is linked into %s, which Cursor loads too\n' "$dest"
+    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it\n' "$id" "$version"
   fi
 fi
 

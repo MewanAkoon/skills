@@ -145,8 +145,8 @@ against the spec: `allowed-tools` is in it, as the list under "Invocation"
 says, while `disallowed-tools` is a Claude Code extension, so a skill using
 that one will not upload to claude.ai.
 
-A limit that holds in only one of the two harnesses this repo links into is
-not one the body can leave unsaid.
+A limit that holds in only one of the two harnesses these skills are written
+for is not one the body can leave unsaid.
 
 ## Structure
 
@@ -158,6 +158,13 @@ Every skill opens with three short headings, in this order:
 
 Then the body. Someone reading the file cold should not have to infer
 anything.
+
+Name another skill by its full name inside the plugin, `eng:<name>`, and a
+command to type as `/eng:<name>`. Claude Code does not resolve every bare name
+to the plugin's skill: a bare `commit` came back unknown with `eng:commit`
+installed. `check.sh` fails a typed bare command and an `eng:` name that
+matches no skill; a bare name in prose, such as "the why skill", is yours to
+catch. The `Adapted from` line names the upstream skill and keeps its own name.
 
 ## The body
 
@@ -249,9 +256,11 @@ it already happened, and a quiet stretch does not undo them.
 This governs keeping, not writing. The gate above still holds: a skill starts
 from a correction you made three times, never from a case you expect to meet.
 
-`./scripts/fired.sh` counts the firings, and the report says how to read a
-zero. Answer it before touching the skill, because two of the three answers
-are about the install rather than the writing.
+`/skill-doctor` in Claude Code counts the firings: each skill's uses and when
+it last ran. Before reading a zero as a verdict, rule out the install, because
+a skill that is not loading cannot fire. `./scripts/check.sh --doctor` checks
+that the plugin is installed and current, and that no bare copy is competing
+with it. A skill used only in Cursor shows no uses at all.
 
 When a model-invoked skill stays quiet and the install checks out, demote it.
 Set `disable-model-invocation: true`, move its README row, and keep the file.

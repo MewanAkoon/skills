@@ -40,7 +40,7 @@ ts-types" and the agent will walk the table and the tests.
 | Honest type guards | A guard must check the claim it makes. A lying guard is worse than a cast because the bug hides behind a name that says it is safe. Name them `isX` or `hasX`. |
 | Exhaustiveness | Put `const _exhaustive: never = value;` in the default arm so adding a variant breaks the build. |
 | `satisfies` over `as` | It validates the value against the type without widening the literals. |
-| Parse at the boundary | Data crossing into the process gets parsed into a named domain type at the edge. See the `api-boundaries` skill for where that edge is. |
+| Parse at the boundary | Data crossing into the process gets parsed into a named domain type at the edge. See the `eng:api-boundaries` skill for where that edge is. |
 | Derive, do not redeclare | Reach for `Pick`, `Omit`, `Parameters`, `ReturnType`, `Awaited`, and `typeof` before writing a new interface that duplicates an existing shape. When a `.proto`, an OpenAPI or GraphQL schema, a database migration, or a design-token file already defines the shape, derive from the generated type. A hand-written parallel drifts the moment the schema moves. |
 | Object arguments | Pass an object rather than three positional parameters, so call sites document themselves. Skip this on hot paths such as parsers and per-request loops. |
 

@@ -92,7 +92,7 @@ A guard that returns early on `undefined` in the middle of a service does not
 make the code safer. It makes a missing parse invisible.
 
 Both answers above end in deleting something someone wrote on purpose. When
-the guard predates you and nothing explains it, the `why` skill reads the
+the guard predates you and nothing explains it, the `eng:why` skill reads the
 commit that added it before you remove it. Run that first and this test
 second, because a guard put there for a real incident answers "only a bug
 could make it fire" wrongly.

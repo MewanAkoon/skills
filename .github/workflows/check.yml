@@ -16,7 +16,8 @@ concurrency:
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
-    # run. --doctor is left out: a fresh runner has no ~/.claude to inspect.
+    # run. --doctor is left out: a fresh runner has no Claude Code install to
+    # inspect.
     strategy:
       fail-fast: false
       matrix:
@@ -26,8 +27,22 @@ jobs:
       # Pinned to a commit, because a moving tag on the only gate this repo
       # has is a gate someone else can change.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The version rule compares against origin/main, which a shallow
+          # clone does not have.
+          fetch-depth: 0
       - run: bash --version | head -1
+      - run: jq --version
       - run: ./scripts/check.sh
+
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Pinned, because the validator's rules change with each release, and a
+      # gate that moves on its own is one someone else controls. It needs no
+      # login: it reads the manifests and makes no model call.
+      - run: CLAUDE_BIN="npx --yes @anthropic-ai/claude-code@2.1.293" ./scripts/validate-plugin.sh
 
   shellcheck:
     runs-on: ubuntu-latest

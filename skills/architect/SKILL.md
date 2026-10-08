@@ -24,7 +24,7 @@ Skip it for a change inside one function.
 
 ## How to use it
 
-Type `/architect` and describe the change. You will be asked to approve the
+Type `/eng:architect` and describe the change. You will be asked to approve the
 sketch before any real code is written. Read it properly, that approval is
 the point of the whole skill.
 
@@ -49,7 +49,7 @@ implemented")` or a two-line comment of pseudocode.
 
 Cover:
 
-- The domain types, with the `ts-types` rules applied. Model the variants,
+- The domain types, with the `eng:ts-types` rules applied. Model the variants,
   brand the ids, make the impossible state unwritable.
 - Every function signature at the new boundary, with real parameter and
   return types.

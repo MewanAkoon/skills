@@ -24,8 +24,8 @@ Step 2 says how to spot one.
 
 ## How to use it
 
-Nothing to invoke. Type `/pr` to force a run, or `/pr draft` to open it as a
-draft.
+Nothing to invoke. Type `/eng:pr` to force a run, or `/eng:pr draft` to open
+it as a draft.
 
 ---
 
@@ -98,7 +98,7 @@ A hit on the second command means a merge, rebase, cherry-pick, or revert is
 mid-flight. Stop and say which one. `HEAD` is part way through the operation,
 so the diff you would describe is not the diff that will land, and a rebase
 still to finish rewrites every commit the PR would show. The
-`merge-conflicts` skill finishes the operation.
+`eng:merge-conflicts` skill finishes the operation.
 
 Any path the third command lists stops the run the same way, even with no
 operation in flight, which is the state `git apply --3way` leaves behind. That
@@ -300,7 +300,7 @@ git push -u $REMOTE $CURRENT_BRANCH
 Then create it. The single-quoted heredoc keeps backticks and special
 characters literal, and process substitution avoids a temp file. Every `EOF`
 terminator sits at column 0, with no leading spaces or tabs. Add `--draft` on
-`/pr draft`:
+`/eng:pr draft`:
 
 ```bash
 gh pr create \

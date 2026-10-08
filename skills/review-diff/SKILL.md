@@ -26,15 +26,15 @@ about to approve, or on work in progress when you want to know whether it is
 drifting.
 
 Skip it when the question is "does this break something else". That is
-`/blast-radius`. Skip it when the question is "why is this failing". That is
-`/diagnose-bug`.
+`/eng:blast-radius`. Skip it when the question is "why is this failing". That
+is `/eng:diagnose-bug`.
 
 ## How to use it
 
-Type `/review-diff` with a fixed point: `/review-diff since main`,
-`/review-diff since HEAD~5`, or a commit SHA. You get findings grouped under
-their heading, and each heading closes with its own count and its own worst
-one.
+Type `/eng:review-diff` with a fixed point: `/eng:review-diff since main`,
+`/eng:review-diff since HEAD~5`, or a commit SHA. You get findings grouped
+under their heading, and each heading closes with its own count and its own
+worst one.
 
 If the change was supposed to do something specific, say what in one line
 when you invoke it. That turns on step 5.
@@ -121,7 +121,7 @@ documents anything:
 | Duplicated code | The same logic shape in two hunks or two files | Extract the shape, call it from both |
 | Feature envy | A function that reaches into another object's data more than its own | Move the function next to the data it uses |
 | Data clumps | The same few parameters travelling together everywhere | Give them one type and pass that |
-| Primitive obsession | A `string` or a `number` standing in for a domain concept | Give the concept its own type. See the `ts-types` skill for brands |
+| Primitive obsession | A `string` or a `number` standing in for a domain concept | Give the concept its own type. See the `eng:ts-types` skill for brands |
 | Repeated switches | The same `switch` on the same field in several places | One map both sites share, or polymorphism |
 | Shotgun surgery | One logical change forced edits across many files | Gather what changes together into one module |
 | Divergent change | One file edited for several unrelated reasons | Split it so each module changes for one reason |
@@ -138,9 +138,9 @@ Four things are worth a specific look, each one where the diff has them:
 
 - Entry points that trust their input: route handlers, controllers,
   middleware, message consumers, CLI argument parsing. See the
-  `api-boundaries` skill for where the edge is.
+  `eng:api-boundaries` skill for where the edge is.
 - `as` casts and `any` added by the diff, in a TypeScript repo. See the
-  `ts-types` skill.
+  `eng:ts-types` skill.
 - Database queries written inline in an entry point rather than behind a
   repository or a service.
 - New `await` inside a loop where the calls are independent.

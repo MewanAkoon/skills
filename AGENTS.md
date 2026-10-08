@@ -4,74 +4,71 @@ For any agent working in this repo.
 
 ## What this repo is
 
-A source of agent skills, not an application. There is nothing to build and no
-test suite. Every `SKILL.md` loads into some other repo's session, so a change
-here changes how an agent behaves everywhere.
+A source of agent skills, not an application, shipped as one Claude Code
+plugin, `eng`. There is nothing to build and no test suite. Every `SKILL.md`
+loads into some other repo's session, so a change here changes how an agent
+behaves everywhere.
+
+The repo is both the plugin and the marketplace that lists it, the way
+mattpocock/skills ships. `.claude-plugin/plugin.json` names the plugin and
+carries its version; `.claude-plugin/marketplace.json` names the marketplace,
+`mewanakoon`, and lists the one plugin with `"source": "./"`. Claude Code finds
+the skills by its default scan of `skills/`. Inside the plugin each skill is
+`eng:<name>`, and that full name is how skills refer to each other.
 
 Three scripts, all bash, no build step. The commands they carry:
 
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
-| `./scripts/check.sh --doctor` | Adds the linking check, which needs a destination to inspect. Fails when a link is missing. |
-| `./scripts/fired.sh` | Counts how often each skill has fired. |
-| `./link.sh` | Links the skills into the destination, minus anything in `.skillsignore`. |
-| `./link.sh --unlink` | Removes the links this clone made, leaving the clone. |
+| `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
+| `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
+| `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
+| `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 
-None of them needs a package installed. All three resolve their own path
-with `readlink -f`, and `check.sh` takes its file list from `git`, so those
-two are the requirements beyond bash and the usual POSIX tools.
+None of them needs a package installed beyond `jq`, which macOS 15 and the CI
+runners ship, and `claude` for the validator and `--doctor`. All three resolve
+their own path with `readlink -f`, and `check.sh` takes its file list from
+`git`.
 
-`package.json` carries those as `npm run check`, `doctor`, `fired`, and
-`link`, plus `npm run lint`, which runs shellcheck over every one of them.
+`package.json` carries those as `npm run check`, `doctor`, `validate`, and
+`unlink`, plus `npm run lint`, which runs shellcheck over every script.
 It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
 the wrapper in `package.json` and the binary it downloads with
 `SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.
 CI runs that same pinned pair rather than the runner image's shellcheck, which
 moves on its own and disagreed with a local one about `A && B || C`.
 
-`link.sh` symlinks each skill directory into `~/.claude/skills`, which Claude
-Code owns and Cursor also loads, as
-[Cursor's skills documentation](https://cursor.com/docs/skills) states. Skills
-are never copied into a working repo. `SKILLS_DEST` overrides the destination,
-and `check.sh --doctor` reads the same variable, so the two agree on where the
-links belong.
-
-A skill named in an optional `.skillsignore` at the clone root is not linked,
-and a link this clone made for one is removed. The file lets someone take a
-subset without deleting anything, so it is what a fork adjusts rather than the
-skill list. `link.sh` removes only links it created, which are the ones named
-after a skill directory here, and reports anything it leaves alone.
-
 ## What belongs here
 
-Everything this repo ships loads into both Claude Code and Cursor, so anything
-added has to work in both. The skill is the unit that travels: plain markdown
-under `skills/`, read by whichever harness picked it up, carrying no machinery
-of its own.
+The plugin is Claude Code packaging, and Claude Code is the harness this repo
+serves first. The skill is still the unit that travels: plain markdown under
+`skills/`, readable by any harness, carrying no machinery of its own. The
+manifests sit beside the skills rather than inside them, so a skill read
+outside the plugin still reads the same.
 
-Tool-specific machinery stays out, even when it is useful on the machine you
-are sitting at. A Claude Code plugin and a Cursor plugin are different
-artifacts, installed from different marketplaces into different directories,
-and the two trees do not overlap. Adopting either would serve one harness and
-be dead weight in the other. Recommendations of that kind live in
-[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md), which no session loads and nothing
-depends on. Anything that would make a skill run its procedure in one harness
-and not the other belongs there instead, or nowhere.
+Other plugins stay out, even when useful on the machine you are sitting at.
+Recommendations of that kind live in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md),
+which no session loads and nothing depends on. A procedure that only works in
+one harness belongs nowhere unless it says what happens in the other.
 
-Three exceptions, all narrow. A maintenance script runs on one machine rather
-than in a session, so it may read a harness's own files: `link.sh` writes to
-`~/.claude/skills` and `fired.sh` reads `~/.claude/projects`, and both say so
-where they do it. A skill may carry a harness-specific frontmatter field when
-it is a second lock over a body that is already right without it, which is why
-`review-diff` sets `disallowed-tools` that Cursor does not read.
+A skill may rely on a Claude Code built-in, such as `/code-review`, when it
+says what happens where the built-in is missing. Without that fallback, the
+skill's step does nothing in another harness, and nothing says so.
+
+Two exceptions, both narrow. A skill may carry a harness-specific frontmatter
+field when it is a second lock over a body that is already right without it,
+which is why `review-diff` sets `disallowed-tools` that Cursor does not read.
 [WRITING-RULES.md](WRITING-RULES.md) under "Tool access" holds that trade and
 the condition on it. And the Cursor rules file carries a `description`, which
 lets Cursor pull it in by relevance where the Claude rule has no equivalent;
 that one adds a way in rather than changing what either file says, so both
 harnesses still get the same body on `skills/**`.
 
-None of the three covers a procedure that only works in one harness.
+Maintenance scripts run on one machine rather than in a session, so they may
+read a harness's own files: `link.sh --unlink` removes links under
+`~/.claude/skills` and the other directories an older install wrote to, and
+`--doctor` reads Claude Code's plugin list and settings. Both say so where they do it.
 
 ## What an agent here never does
 
@@ -114,6 +111,24 @@ follows, and enforcing it is what this repo is for.
   without the field is not something a script can read.
 - `link.sh` and every `scripts/*.sh` parse under `bash -n`, because nothing
   else in the checker runs them.
+- Both manifests parse. The marketplace lists exactly one plugin, under the
+  name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
+  a `MAJOR.MINOR.PATCH` version.
+- When anything the plugin loads changed since the branch left `origin/main`
+  (`skills/` and `plugin.json` today; `hooks/`, `standards/`, `agents/`,
+  `commands/`, `output-styles/`, `themes/`, `monitors/`, `workflows/`, `bin/`,
+  `.mcp.json` and `.lsp.json` once they exist),
+  the version is newer than the one at that point, compared field by field.
+  `CHECK_BASE` names another base. A clone without that ref gets a warning
+  instead.
+- No skill takes a name Claude Code uses for a built-in command or bundled
+  skill. `commit` and `pr` are the two kept on purpose, because every
+  reference writes them `eng:commit` and `eng:pr` and the README's
+  `skillOverrides` entry turns the built-ins off.
+- Every `eng:<name>` in a skill names a skill here, and no skill tells anyone
+  to type a skill by its bare name, such as `` `/why` ``, in backticks or in
+  plain text. Claude Code does not resolve every bare name to the plugin's
+  skill. A bare name in prose, such as "the why skill", is not checked.
 - Every command block whose fence reads `bash checked`, in a staged or
   committed markdown file, runs from the repo root with stdin closed and exits
   zero. The checker executes these, so an untracked file is left alone.
@@ -128,11 +143,14 @@ quiet, on an install that checks out, gets demoted to user-invoked instead:
 the description stops riding every turn and the file stays.
 [WRITING-RULES.md](WRITING-RULES.md) under "Keeping skills" holds it.
 
-`./scripts/check.sh --doctor` adds one check CI cannot run, because a fresh
-runner has no `~/.claude` to inspect: whether every skill in this repo is
-currently linked into `~/.claude/skills`. Run it when a skill has been added,
-renamed, or removed, and run `./link.sh` when it reports a gap. A missing link
-fails the run, so a hook can gate on it.
+`./scripts/check.sh --doctor` adds the checks CI cannot run, because a fresh
+runner has no Claude Code install to inspect: that Claude Code is 2.1.293 or
+later; that `eng@mewanakoon` is installed at user scope, enabled and at this
+clone's version; that no old link or personal copy of one of these skills sits
+in `~/.claude/skills`; and that `~/.claude/settings.json` is valid JSON and
+sets `skillOverrides` for `commit` and `pr` to `"off"`. `CLAUDE_CONFIG_DIR`
+moves where it looks, as it does for Claude Code. Anything to fix fails the
+run, so a hook can gate on it.
 
 ## When a change makes a claim false
 
@@ -149,7 +167,7 @@ marker, because the assumption is what goes stale.
 Mark it only when it runs anywhere, because CI runs it too, with the checkout
 and the usual POSIX tools and little else. A fresh runner has no `~/.claude`,
 so nothing reading session transcripts or a tool's own installed files will
-work there. `./scripts/fired.sh` reads `~/.claude/projects`, so a block
+work there. `./scripts/check.sh --doctor` reads the install, so a block
 calling it stays unmarked. A block that needs an environment belongs in its
 own fence with no marker, beside the one that runs anywhere.
 
@@ -167,7 +185,7 @@ repo's own files too.
 | `CLAUDE.md` | Claude Code, which imports `AGENTS.md` |
 | `.cursor/rules/*.mdc` | Cursor |
 | `.claude/rules/*.md` | Claude Code |
-| `skills/*/SKILL.md` | both, through `link.sh` |
+| `skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is unverified. |
 
 Anything true for both harnesses belongs in this file. The two rules
 directories carry one body in each harness's own format. Both fire on

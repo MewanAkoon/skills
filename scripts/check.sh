@@ -2,8 +2,9 @@
 # Checks this repo against the invariants in AGENTS.md.
 # Needs bash and the usual POSIX tools. Run before committing.
 #
-# --doctor adds the one check CI cannot run, because CI has no $HOME: whether
-# every skill here is currently linked into the directory link.sh writes to.
+# --doctor adds the one check CI cannot run, because a fresh runner has no
+# ~/.claude and no SKILLS_DEST to inspect: whether every skill here is
+# currently linked into the directory link.sh writes to.
 
 set -uo pipefail
 
@@ -289,8 +290,8 @@ while IFS= read -r f; do
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(markdown)
 
-# Machine state, so it warns rather than failing, and only when asked. CI has
-# no $HOME to check and would fail every run.
+# Machine state, so it runs only when asked. A fresh runner has no ~/.claude,
+# so CI would fail every run.
 if [ "$doctor" = yes ]; then
   if [ -z "${HOME:-}" ] && [ -z "${SKILLS_DEST:-}" ]; then
     warn "no \$HOME and no \$SKILLS_DEST, so the link check cannot run"
@@ -347,8 +348,9 @@ if [ "$doctor" = yes ]; then
   # script gate on it.
   if [ "$missing" -gt 0 ]; then
     printf 'doctor: %d to fix, run ./link.sh\n' "$missing"
+    fail=1
   else
-    printf 'doctor: every skill is linked into %s\n' "$dest"
+    printf 'doctor: every skill is linked into %s, which Cursor loads too\n' "$dest"
   fi
 fi
 

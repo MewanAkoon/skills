@@ -44,6 +44,15 @@ whether you need to:
 ./scripts/check.sh --doctor
 ```
 
+A good run ends with the destination named and no warnings above it:
+
+```
+doctor: every skill is linked into /Users/you/.claude/skills, which Cursor loads too
+17 skills, 8 model-invoked
+ok
+```
+
+A missing link fails the run, so this is safe to put in a hook.
 
 ### If you use Cursor
 
@@ -164,8 +173,8 @@ Run the checker before committing:
 
 It covers the mechanical half of that standard. [AGENTS.md](AGENTS.md) lists
 what it checks. CI runs the same script on every pull request and on every
-push to `main`, on Linux and on macOS, without `--doctor`, since CI has no
-`$HOME` to inspect.
+push to `main`, on Linux and on macOS, without `--doctor`, since a fresh
+runner has no `~/.claude` to inspect.
 
 ## Usage counts
 

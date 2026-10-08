@@ -13,7 +13,7 @@ Three scripts, all bash, no build step. The commands they carry:
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
-| `./scripts/check.sh --doctor` | Adds the linking check, which needs a `$HOME`. |
+| `./scripts/check.sh --doctor` | Adds the linking check, which needs a destination to inspect. Fails when a link is missing. |
 | `./scripts/fired.sh` | Counts how often each skill has fired. |
 | `./link.sh` | Links the skills into the destination, minus anything in `.skillsignore`. |
 | `./link.sh --unlink` | Removes the links this clone made, leaving the clone. |
@@ -128,10 +128,11 @@ quiet, on an install that checks out, gets demoted to user-invoked instead:
 the description stops riding every turn and the file stays.
 [WRITING-RULES.md](WRITING-RULES.md) under "Keeping skills" holds it.
 
-`./scripts/check.sh --doctor` adds one check CI cannot run, because CI has no
-`$HOME`: whether every skill in this repo is currently linked into
-`~/.claude/skills`. Run it when a skill has been added, renamed, or removed,
-and run `./link.sh` when it reports a gap.
+`./scripts/check.sh --doctor` adds one check CI cannot run, because a fresh
+runner has no `~/.claude` to inspect: whether every skill in this repo is
+currently linked into `~/.claude/skills`. Run it when a skill has been added,
+renamed, or removed, and run `./link.sh` when it reports a gap. A missing link
+fails the run, so a hook can gate on it.
 
 ## When a change makes a claim false
 

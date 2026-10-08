@@ -56,10 +56,12 @@ carries triggers. Costs permanent context.
 becomes a plain one-line summary for a human browsing slash commands. Costs
 nothing.
 
-What caps the model-invoked set is conflict, not count. A description costs
-about seventy tokens, so the whole set is a few hundred. A false fire costs
-far more, because the agent reads an entire `SKILL.md` and then follows the
-wrong procedure.
+What caps the model-invoked set is conflict, not count. A description runs to
+a few hundred characters, so the whole set is under a thousand tokens. A false
+fire costs far more, because the agent reads an entire `SKILL.md` and then
+follows the wrong procedure. Print the set with the command below rather than
+trusting a number here, which goes stale every time a description is
+rewritten.
 
 So the test is competition, not overlap. Two skills compete when they claim
 the same decision and the agent has to pick one. Two skills compose when they

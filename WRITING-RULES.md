@@ -25,6 +25,14 @@ decides whether the skill runs. Write it first, on its own, before the body.
 - Be slightly pushy. Agents under-trigger skills more often than they
   over-trigger them.
 
+Every trigger goes in `description` and nowhere else. Claude Code also reads a
+`when_to_use` field and Cursor does not, so a trigger parked there fires in one
+harness and not the other. Two more constraints come from Cursor being the
+stricter reader: it requires `description`, where Claude Code falls back to the
+first paragraph of the body, and it requires `name` to match the directory,
+where Claude Code takes the directory name regardless. `check.sh` already
+enforces the name.
+
 Fires:
 
 ```yaml
@@ -83,6 +91,24 @@ harnesses from disk, and it will not upload to claude.ai.
 An agent that does not read the flag treats the skill as model-invoked. So
 for anything that must not auto-fire, also keep the description free of
 trigger phrases. The flag alone is not a guarantee.
+
+### Ambient triggers
+
+A task-shaped trigger fires because the agent classifies what it is about to
+do. An ambient trigger has no such moment. Writing a reply is the clearest
+case: the agent is always doing it, so it never stops to ask which skill
+covers it, and a description listing artifacts reads as a list of things that
+are not this.
+
+Write an ambient trigger as the first clause, as a condition rather than an
+instruction, and give it something countable. `plain-writing` opens on a reply
+longer than two sentences for that reason. An agent can check a length; it
+cannot check whether prose is the kind a human will read.
+
+Expect an ambient trigger to fire less reliably than a task-shaped one even
+after that, because the moment it depends on is one the agent passes through
+rather than arrives at. That is a reason to write the first clause carefully,
+not a reason to add a second copy of it somewhere else.
 
 ## Tool access
 

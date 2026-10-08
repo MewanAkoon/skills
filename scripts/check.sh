@@ -208,6 +208,7 @@ done
 if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
   export CHECK_SH_RUNNING_BLOCKS=1
   blocks="$(mktemp -d)"
+  trap 'rm -rf "$blocks"' EXIT
 
   while IFS= read -r f; do
     count="$(grep -c '^```bash checked$' "$f")"
@@ -221,8 +222,13 @@ if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
         inside { print }
       ' "$f" > "$blocks/block.sh"
 
-      bash -e "$blocks/block.sh" >/dev/null 2>&1 </dev/null \
-        || bad "$f: block $i is marked checked and exits non-zero"
+      # Keep the output and replay it on failure. These blocks are the only
+      # executable documentation here, and a bare block number says nothing
+      # about which command failed or why.
+      if ! bash -e "$blocks/block.sh" >"$blocks/out" 2>&1 </dev/null; then
+        bad "$f: block $i is marked checked and exits non-zero"
+        sed 's/^/      /' "$blocks/out" >&2
+      fi
 
       i=$((i + 1))
     done

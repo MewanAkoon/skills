@@ -43,6 +43,34 @@ whether you need to:
 ./scripts/check.sh --doctor
 ```
 
+
+### If you use Cursor
+
+There is no separate step. Cursor loads `~/.claude/skills` alongside its own
+roots, as its [skills documentation](https://cursor.com/docs/skills) states,
+so `link.sh` serves both tools from one destination. Cursor reads
+`disable-model-invocation` the same way Claude Code does, so the nine
+user-invoked skills below stay behind `/name` there too.
+
+One setting decides it. Cursor loads those directories only while **Settings,
+Rules, Skills, Subagents, "Include third-party Plugins, Skills, and other
+configs"** is on. It ships on. Turn it off and every skill here disappears
+with no error saying why.
+
+To confirm Cursor sees them, open Customize, then Skills, and look for the
+names. `--doctor` checks the symlinks on disk, which is a different question
+from whether Cursor enumerated them.
+
+Two things a Cursor user does not get. `./scripts/fired.sh` counts Claude Code
+sessions only, because Cursor writes no comparable transcript, so every count
+reads zero no matter how much you use a skill. And Cursor's Cloud Agents and
+remote sessions do not carry machine-global skills, so anything needed there
+belongs in the repo being worked on.
+
+Cursor keeps its own skills in `~/.cursor/skills-cursor`, which `link.sh`
+leaves alone. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) says what is in there
+worth knowing about.
+
 ### Keeping working repos clean
 
 The repo sits at `~/Work/Personal/skills`, in its own area away from client

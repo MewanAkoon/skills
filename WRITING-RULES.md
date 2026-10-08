@@ -82,11 +82,12 @@ skill competes with nothing until someone types its name. The pattern is the
 one `check.sh` uses to decide the same question, so the two agree on a file
 whose flag carries extra spacing.
 
-Claude Code and Cursor both read `disable-model-invocation`. The Agent Skills
-spec allows only `name`, `description`, `license`, `compatibility`,
-`metadata`, and `allowed-tools`, so a strict validator rejects the flag
-outright. That is the trade a user-invoked skill makes: it works in both
-harnesses from disk, and it will not upload to claude.ai.
+Claude Code and Cursor both read `disable-model-invocation`, which
+[Cursor's skills documentation](https://cursor.com/docs/skills) states. The
+Agent Skills spec allows only `name`, `description`, `license`,
+`compatibility`, `metadata`, and `allowed-tools`, so a strict validator
+rejects the flag outright. That is the trade a user-invoked skill makes: it
+works in both harnesses from disk, and it will not upload to claude.ai.
 
 An agent that does not read the flag treats the skill as model-invoked. So
 for anything that must not auto-fire, also keep the description free of

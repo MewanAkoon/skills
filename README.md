@@ -75,6 +75,12 @@ words in it. What costs you is two skills claiming the same decision, because
 the agent picks one, reads a whole `SKILL.md`, and follows the wrong
 procedure. Add a skill when nothing here would contradict it.
 
+Three of these assume a stack, and say so in their own descriptions:
+`ts-types` is TypeScript only, and `tdd-node-api` and `api-boundaries` are
+written for Node services. The rest are language-neutral, though a few reach
+for a TypeScript example. If you work in something else, `.skillsignore` above
+leaves the ones you do not want unlinked.
+
 | Skill | Fires on | What it does |
 |---|---|---|
 | [plain-writing](skills/plain-writing/SKILL.md) | Any reply or prose being written, chat answers included | Strips AI tells, enforces plain language, gates code comments |

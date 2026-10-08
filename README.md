@@ -7,11 +7,12 @@ Claude Code and Cursor read. Nothing gets committed into working repos.
 
 Every skill here runs the same procedure in both Claude Code and Cursor, and
 anything added has to. A skill is plain markdown that either harness can read,
-which is the whole reason one clone serves both. Two narrow exceptions, both
+which is the whole reason one clone serves both. Three narrow exceptions, all
 named in [AGENTS.md](AGENTS.md) under "What belongs here": the maintenance
 scripts read one tool's own files, since `fired.sh` can only count what Claude
-Code writes down, and `review-diff` carries a Claude Code frontmatter field as
-a lock over a body that is right without it.
+Code writes down, `review-diff` carries a Claude Code frontmatter field as a
+lock over a body that is right without it, and the Cursor rules file carries a
+`description` that gives it a second way in.
 
 Tool-specific machinery stays out, plugins included.
 [AGENTS.md](AGENTS.md) under "What belongs here" carries the rule and the

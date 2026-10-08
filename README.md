@@ -161,11 +161,15 @@ A skill stays whether or not it fires. To see how often each one has fired:
 ```
 
 It reads the session transcripts Claude Code leaves under `~/.claude/projects`
-and counts the times each skill was invoked. Read a zero as a question about
-the skill's description or its linking, and run `--doctor` first, because an
-unlinked skill cannot fire. The report says that much itself. It cannot see a
-skill named in `~/.claude/CLAUDE.md`, which gets followed without being
-invoked, so that skill's count reads lower than its influence.
+and counts the times each skill was invoked. A zero is a question rather than
+a verdict, and the report names the three things that answer it: the work
+happened in Cursor, which writes no transcript, or the skill is not linked, or
+its description does not fire.
+
+Two limits worth knowing before you read anything into a count. A Cursor-only
+user sees zeros throughout, because there is nothing for this to read. And a
+skill named in `~/.claude/CLAUDE.md` gets followed without being invoked, so
+its count reads lower than its influence.
 
 Every script is also an `npm run` target, which is the only reason
 `package.json` exists. It declares no dependencies.

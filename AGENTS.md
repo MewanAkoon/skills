@@ -91,6 +91,9 @@ follows, and enforcing it is what this repo is for.
 - The two rules files close their frontmatter, carry a body that is not empty,
   and carry the same body. An unclosed fence reads as an empty body, and two
   empty bodies compare equal.
+- Both rules files still scope themselves to `skills/**`, and the Cursor one
+  still sets `alwaysApply: false`. That scoping is what decides when either
+  rule loads.
 - Every script here parses under `bash -n`, because nothing else in this
   checker runs them.
 - Every command block whose fence reads `bash checked`, in a staged or

@@ -195,6 +195,16 @@ done
 diff -q <(body "$claude_rule") <(body "$cursor_rule") >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
+# Both rules files fire on skills/**, which AGENTS.md states as an invariant
+# and nothing checked. Widening either one silently changes when the rule
+# loads, which is the half of this pair that actually decides behaviour.
+grep -q '^  - "skills/\*\*"$' "$claude_rule" \
+  || bad "$claude_rule: paths no longer scopes it to skills/**"
+grep -qx 'globs: skills/\*\*' "$cursor_rule" \
+  || bad "$cursor_rule: globs no longer scopes it to skills/**"
+grep -qx 'alwaysApply: false' "$cursor_rule" \
+  || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
+
 # Every script here parses as bash. fired.sh embeds an awk program in single
 # quotes, so an unbalanced apostrophe in a printed string ends the program and
 # leaves a file that fails only when someone runs it. Nothing else here runs

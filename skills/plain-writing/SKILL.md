@@ -21,6 +21,10 @@ prose someone reads.
 Commit messages, PR descriptions, and code comments count too, and people
 forget those are prose as well.
 
+Skip text a program reads, such as JSON, a config value, or a log line a
+parser matches, and text quoted word for word, such as an error message or a
+line cited from a source.
+
 ## How to use it
 
 Nothing to invoke. The self-audit at the bottom runs on the text before it is
@@ -62,7 +66,7 @@ mentioning", "In order to" (use "to"), "Due to the fact that" (use
 "because"), "In the event that" (use "if").
 
 Delete chatbot filler: "I hope this helps", "Let me know if", "Great
-question", "You're absolutely right", "Certainly".
+question", "Good catch", "You're absolutely right", "Certainly".
 
 ## Sentences
 

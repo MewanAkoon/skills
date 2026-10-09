@@ -43,10 +43,18 @@ moves on its own and disagreed with a local one about `A && B || C`.
 ## What belongs here
 
 The plugin is Claude Code packaging, and Claude Code is the harness this repo
-serves first. The skill is still the unit that travels: plain markdown under
-`skills/`, readable by any harness, carrying no machinery of its own. The
-manifests sit beside the skills rather than inside them, so a skill read
-outside the plugin still reads the same.
+serves first. Three kinds of file travel, all plain markdown readable by any
+harness, and none carrying machinery of its own:
+
+- Skills under `skills/`, the unit most of the repo is made of.
+- `standards/workflow.md`, the standing workflow every session follows. It
+  names the skill for each step that has a procedure, so every skill it names
+  has to exist and be model-invoked.
+- Agents under `agents/`, the subagents a skill starts. An agent is written
+  once and serves any harness, so its body holds every rule it follows.
+
+The manifests sit beside these rather than inside them, so a file read outside
+the plugin still reads the same.
 
 Other plugins stay out, even when useful on the machine you are sitting at.
 Recommendations of that kind live in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md),
@@ -57,9 +65,10 @@ A skill may rely on a Claude Code built-in, such as `/code-review`, when it
 says what happens where the built-in is missing. Without that fallback, the
 skill's step does nothing in another harness, and nothing says so.
 
-Two exceptions, both narrow. A skill may carry a harness-specific frontmatter
-field when it is a second lock over a body that is already right without it,
-which is why `review-diff` sets `disallowed-tools` that Cursor does not read.
+Two exceptions, both narrow. A skill or an agent may carry a harness-specific
+frontmatter field when it is a second lock over a body that is already right
+without it, which is why `agents/reviewer.md` names `tools` that Cursor does
+not read.
 [WRITING-RULES.md](WRITING-RULES.md) under "Tool access" holds that trade and
 the condition on it. And the Cursor rules file carries a `description`, which
 lets Cursor pull it in by relevance where the Claude rule has no equivalent;
@@ -107,9 +116,26 @@ follows, and enforcing it is what this repo is for.
 - Both rules files still scope themselves to `skills/**`, and the Cursor one
   still sets `alwaysApply: false`. That scoping is what decides when either
   rule loads.
-- A skill other than `review-diff` carrying `allowed-tools` or
-  `disallowed-tools` warns rather than fails, because whether the body holds
-  without the field is not something a script can read.
+- A skill carrying `allowed-tools` or `disallowed-tools` warns rather than
+  fails, because whether the body holds without the field is not something a
+  script can read. No skill carries one today.
+- Every file under `agents/` has a `name` matching its file name and a
+  `description`.
+- Every description, in a skill or an agent, is one line of YAML. Unquoted, it
+  is not a `>` or `|` block, holds no `: `, space or tab before `#`, colon
+  before a tab, or trailing colon, and starts with no character YAML reserves.
+  Quoted, it ends on its closing quote with nothing after it, and holds no
+  quote or backslash inside that would end or garble it. Claude Code drops the
+  whole frontmatter of a file whose YAML fails to parse.
+- `standards/workflow.md` names at least one skill as "the X skill", and
+  every skill named that way exists and is model-invoked.
+- Size budgets, because each of these loads into someone's context. A
+  model-invoked description is at most 300 bytes, and the set at most 3,900.
+  `standards/workflow.md` is at most 2,500 bytes. `investigate`'s `SKILL.md` is
+  at most 6,500 bytes, and `implement`, `review-diff`, and `pr-feedback` at
+  most 5,000 each. Every other `SKILL.md` is at most 15,000 bytes, inside the
+  20,000 characters compaction keeps of a skill. An agent file is at most 6,500
+  bytes.
 - `link.sh` and every `scripts/*.sh` parse under `bash -n`, because nothing
   else in the checker runs them.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
@@ -136,7 +162,7 @@ follows, and enforcing it is what this repo is for.
 - Every command block whose fence reads `bash checked`, in a staged or
   committed markdown file, runs from the repo root with stdin closed and exits
   zero. The checker executes these, so an untracked file is left alone.
-- No markdown file contains an em dash, an en dash, or a minus sign.
+- No file the repo owns contains an em dash, an en dash, or a minus sign.
 
 What limits the model-invoked set is conflict, not count. Before adding one,
 work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
@@ -190,6 +216,8 @@ repo's own files too.
 | `.cursor/rules/*.mdc` | Cursor |
 | `.claude/rules/*.md` | Claude Code |
 | `skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is unverified. |
+| `agents/*.md` | Claude Code, through the `eng` plugin, as `eng:<name>` |
+| `standards/workflow.md` | Claude Code, through the `eng` plugin's SessionStart hook |
 
 Anything true for both harnesses belongs in this file. The two rules
 directories carry one body in each harness's own format. Both fire on

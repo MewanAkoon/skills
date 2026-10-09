@@ -18,11 +18,16 @@ When you are switching from one AI tool to another mid-task. When a session
 has gone long and the context is getting thin. At the end of a work day on
 something unfinished. Before handing a branch to someone else.
 
+Skip it when the work is finished, because the commits and the PR already
+carry what a reader needs.
+
 ## How to use it
 
 Type `/eng:handoff`. Optionally say what the next session is for, which narrows
-what gets included. Paste the resulting document as the first message of the
-next session, or save it next to the branch.
+what gets included. The agent saves the document at
+`<repo>/.claude/handoffs/<slug>.md`, or at a path you name, and gives you the
+path. Paste the document as the first message of the next session, on this
+machine or any other.
 
 ---
 
@@ -63,7 +68,11 @@ any key, token, password, connection string, or personal data.
 ## What stays out
 
 Point at code with `file:line` rather than pasting it. The next agent can
-read the repo, and pasted code goes stale the moment someone commits.
+read the repo, and pasted code goes stale the moment someone commits. Point
+at a committed file, a PR, a ticket, or a thread by its path or URL rather
+than summarising it, for the same reason. A plan or a reproduction that lives
+only on this machine is missing on the next one, so inline the part of it the
+next step needs.
 
 Write the state the conversation arrived at. The order things were discussed
 in stays out.
@@ -82,7 +91,8 @@ it.
 **Done when:** every file, function, and decision the next step names appears
 elsewhere in the document as a real path or a real name, each section above
 holds content or one line saying it is empty, and every key, token, password,
-connection string, and piece of personal data reads `<REDACTED>`.
+connection string, and piece of personal data reads `<REDACTED>`, and the file
+is saved where "How to use it" says, with its path given.
 
 ---
 

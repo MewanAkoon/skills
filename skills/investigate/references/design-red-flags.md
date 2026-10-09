@@ -1,5 +1,7 @@
 # Design red flags
 
+Read this from [interfaces.md](interfaces.md) when screening a sketched shape.
+
 Four shapes that read as reasonable in a sketch and cost you after the code
 lands. Screen the sketch against each one. A flag is a reason to revise the
 shape, not a reason to add a comment explaining it.

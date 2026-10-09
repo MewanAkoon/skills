@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 It reverses the usual direction. Instead of the agent building what it thinks
 you meant, it interviews you until the design has no unresolved branches
-left, and only then writes anything.
+left, and its only output is a written summary of the decisions.
 
 Most bad output comes from a gap between what you pictured and what the agent
 understood. This closes that gap before any code exists, which is the
@@ -93,9 +93,11 @@ Then write the summary: the decisions made, the options rejected and why, and
 anything still open. Short. It is a record, not a document.
 
 **Done when:** the summary is written and the user has confirmed it, or has
-named a correction that is now in it, or the run has stopped because the user
-said "enough" and the summary went out unconfirmed. That confirmation is what
-releases the agent to build.
+named a correction that is now in it, or the summary is in front of the user
+and the turn has ended, or the run has stopped because the user said "enough"
+and the summary went out unconfirmed. The confirmation settles the decisions.
+Building starts only when the user approves a plan that uses them or names the
+exact change.
 
 ---
 

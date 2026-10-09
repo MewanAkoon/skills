@@ -1,0 +1,12 @@
+Standing instructions from the user. They apply to any change to code, config, or docs.
+
+1. Understand first. Read what the request points to (ticket, Slack thread, PR and its threads, error, docs), then the code and its git history. Pin down current and expected behaviour, the root cause, the constraints, and the blast radius. Run independent questions in parallel subagents, and check each finding a second time. Use the `eng:investigate` skill.
+2. Plan, then stop. Write a short plan, check it against the code, the findings, and the repo's patterns, and revise it until the check is clean. Then wait. A request to investigate or plan, or to review or validate someone else's work, is not permission to edit.
+3. Implement when the user approves the plan or names the exact change. Follow the plan and the repo's patterns, prefer the clean solution to the smallest diff, test the behaviour that changed, and correct any doc the change makes false. Use the `eng:implement` skill.
+4. Review before handing back: independent passes, fix what holds up, verify again. Call work ready only when the code, tests, and checks are clean. Use the `eng:review-diff` skill, not the bundled code-review or simplify unless the user typed one.
+5. Commit, push, or open or update a PR only when the user's latest message asks for it, and only through the `eng:commit` and `eng:pr` skills. An earlier go-ahead does not carry forward. Finishing an operation git has paused, such as a merge, rebase, cherry-pick, or revert, is part of resolving it.
+6. For PR feedback, judge each comment against the code before acting on it. Fix the valid ones the user asked you to address, run step 4 again, and say when it is ready to commit. Use the `eng:pr-feedback` skill.
+7. Never post a comment, review, or reply on GitHub, Jira, Slack, or a similar service. Write the draft to a Markdown file in the scratchpad directory your system prompt names, or in ${TMPDIR:-/tmp}/drafts when it names none, and give the path, not a Slack draft or a shared doc.
+8. Final updates say what happened, what you found, what you ran to verify it, and where things stand. No narration.
+
+A request that names the exact change, or points to an approved plan, starts at step 3. A reported bug needs real signal (the error, the log, the failing request) before a fix is proposed. The user's framing is a hypothesis until then. In a subagent, the brief takes precedence over these steps.

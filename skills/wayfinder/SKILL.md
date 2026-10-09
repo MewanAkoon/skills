@@ -22,9 +22,9 @@ visible yet. A migration whose shape depends on what the data turns out to
 be, a new subsystem where half the design is still open questions, a course
 or a spec being written from nothing.
 
-Skip it when the work fits in one session, which is `/eng:architect` or
-`/eng:grill-me`. Skip it when the decisions are already made and what is left
-is execution: that is a task list, not a map.
+Skip it when the work fits in one session, which is `eng:investigate` or
+`/eng:grill-me`. Skip it when the decisions are already made and what is left is
+execution: that is a task list, not a map.
 
 ## How to use it
 
@@ -85,7 +85,7 @@ Four types:
 
 - **Research** (AFK). An answer that exists somewhere outside this repo: a
   third-party API's real behaviour, a library's constraints, what the data
-  actually looks like.
+  looks like.
 - **Prototype** (HITL). The question is "how should this look" or "how should
   this behave", and prose keeps going in circles. Build the cheapest rough
   thing that can be reacted to, and link it from the ticket.
@@ -93,7 +93,8 @@ Four types:
   default type. Ask one question at a time and follow the answer. Where the
   ticket needs a harder interrogation than this, ask the user to run
   `/eng:grill-me` on it and bring back the result. Where the answer is a shape
-  rather than a choice, ask them to run `/eng:architect`.
+  rather than a choice, such as an interface or a module boundary, run
+  `eng:investigate` on the ticket, which sketches the shape in its plan.
 - **Task** (HITL or AFK). Manual work that unblocks a decision without being
   one: getting an API key so the API can be judged, moving data so its shape
   can be seen, provisioning access. The answer records what was done and any
@@ -101,8 +102,10 @@ Four types:
 
 A session claims a ticket before doing any work.
 
-A ticket is **takeable** when it is open, unclaimed, and every ticket that
-blocks it is closed. Those are the frontier.
+A ticket is **takeable** when it is open, unclaimed, waiting on nothing, and
+every ticket that blocks it is closed. Those are the frontier. A ticket waits
+when it carries a `**Waits on:**` line, and it stays off the frontier until
+the user deletes that line.
 
 ## Fog
 
@@ -124,15 +127,15 @@ goes in the map's "out of scope" section with one line saying why.
 
 When a ticket that already exists turns out to be past the destination, close
 it, move one line to "out of scope", and leave it out of "decisions so far".
-That section records the route actually walked, and a scope boundary is not a
-step on it.
+That section records the route walked, and a scope boundary is not a step on
+it.
 
 ## Mode 1: chart the map
 
-1. **Name the destination.** Question the user until they can say in two lines
-   what reaching the end of this effort looks like. Where that needs a harder
-   interrogation, ask them to run `/eng:grill-me` first and come back with the
-   result.
+1. **Name the destination.** Question the user until they can say in two
+   lines what reaching the end of this effort looks like. Where that needs a
+   harder interrogation, ask them to run `/eng:grill-me` first and come back
+   with the result, and stop there.
 2. **Map the frontier.** Question them again, this time going wide rather
    than deep: fan out across the whole space, and write the list of open
    questions, marking which ones could be taken today. If this turns up no
@@ -142,30 +145,38 @@ step on it.
 4. **Write the tickets you can state sharply**, one file each, then wire the
    blocking edges in a second pass once all the files have numbers.
 5. **Run the research tickets** now, in parallel, and record their answers.
-6. **Stop** once those answers are recorded. Charting resolves no grilling,
-   prototype, or task tickets.
+   Where an answer waits on something this session cannot get, unclaim that
+   ticket and add a `**Waits on:**` line naming it.
+6. **Stop** once every research ticket has its answer or its
+   `**Waits on:**` line.
+   Charting resolves no grilling, prototype, or task tickets.
 
 **Done when:** the map file names a destination the user agreed to, every
 question from step 2 is either a ticket file or a line under "not yet
 specified", every ticket's blocked-by line names tickets that exist or says
-none, every research ticket created in step 4 is closed with its answer, and
-at least one ticket is takeable. Or step 2 turned up no fog, in which case
-nothing is written and the run has said the effort fits in one session.
+none, every research ticket created in step 4 is closed with its answer or is
+unclaimed with a `**Waits on:**` line, and at least one ticket is
+takeable or the report names the `**Waits on:**` lines holding every open
+ticket back. Or nothing is written and the run has stopped with its reason
+named, which is that step 1 sent the user to `/eng:grill-me`, or that step 2
+turned up no fog and the effort fits in one session.
 
 ## Mode 2: work the map
 
 1. **Read the map file only.** Not every ticket. The map is the low
    resolution view, and it is what fits alongside a session's real work.
-2. **Pick a ticket.** The one the user named, or the first line printed by
-   the takeable-tickets loop in the reference. **Claim it before anything
-   else.**
+2. **Pick a ticket.** The one the user named, or the first title the
+   takeable-tickets loop in the reference prints on stdout. **Claim it before
+   anything else.** When the loop prints nothing and every ticket is closed,
+   go to step 6. When open tickets remain, stop and name what holds them
+   back: a blocker, a claim, or a `**Waits on:**` line.
 3. **Resolve it.** Work out who answers before anything else. Research runs
    afk, prototype and grilling run hitl, and a task ticket carries its own
    `Driver` field. An hitl ticket waits for the human on every question, an
    afk ticket runs to its answer without one. Open closed tickets on demand when
    you need the detail behind a decision, and use the skills the map's notes
    name. Where the answer turns out to wait on something this session cannot
-   get, unclaim the ticket and write one line on it naming what it waits on.
+   get, unclaim the ticket and add a `**Waits on:**` line naming it.
 4. **Record the answer** in the ticket file, mark it closed, and append one
    line of gist plus the link to the map's decisions.
 5. **Update the route.** Four things, each of which gets a line saying what
@@ -173,17 +184,24 @@ nothing is written and the run has said the effort fits in one session.
    into tickets, anything the answer put past the destination, and open
    tickets the answer invalidated. Deleting a ticket includes removing its
    number from every blocked-by line that names it.
-6. **Check whether the map cleared.** When no ticket is open and nothing is
-   left under "not yet specified", write out what the map produced: the
-   destination, and the decisions that make the way to it clear.
+6. **Check whether the map cleared.** When a ticket is still open, name it.
+   When none is open and fog is left under "not yet specified", sharpen it
+   into tickets as Mode 1 step 4 does, and name any patch still too vague to
+   state as a question. When neither is left, write out what the map
+   produced: the destination, and the decisions that make the way to it
+   clear.
 
 **Done when:** the ticket is closed with its answer written down and an hitl
 ticket's answers came from the human rather than from the agent, the map's
-decisions has one new line linking it, each of step 5's four updates has a
-line saying what changed or that nothing did, and step 6 has either written
-the map out or named what is still open, whether a ticket or a patch of fog.
-Or the ticket is back to unclaimed with a line naming what it waits on, and
-the map is unchanged.
+decisions has one new line linking it, and each of step 5's four updates has a
+line saying what changed or that nothing did, or step 2 found every ticket
+closed and went straight to step 6. Either way, step 6 has named the tickets
+still open, or has turned the fog it can state sharply into ticket files whose
+blocked-by lines name tickets that exist or say none and named each patch
+still too vague, or has written the map out because neither was left. Or the
+ticket is back to unclaimed with a `**Waits on:**` line, and the map is
+unchanged. Or step 2 found open tickets but none takeable, and the run stopped
+naming what holds them back.
 
 ---
 

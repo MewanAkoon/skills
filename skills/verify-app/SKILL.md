@@ -19,11 +19,13 @@ opening it cold in the middle of a task. Write it for that reader.
 ## When to use it
 
 Once per project, when there is no scripted way to prove a feature works from
-the outside. Run it again when the app grows a second surface, such as a CLI
-next to the API.
+the outside. Run it again when the app grows a second interface, such as a
+CLI next to the API.
 
-Skip it when the repo is a library with no runnable surface. Its tests are
-the verification.
+Skip it when the repo is a library with nothing to run on its own, because
+its tests are the verification, or when a recipe from Claude Code's bundled
+`/run-skill-generator` already exists, because that also generates a
+per-project skill for driving the app.
 
 ## How to use it
 
@@ -40,9 +42,9 @@ the skill to the team, `git add -f .claude/skills/verify-<app>`.
 ## Step 1: Interview the repo
 
 Answer these from the code. Ask the user only what the repo cannot tell you,
-such as a credential.
+such as a credential, and for a secret, where the team gets it.
 
-- **Surface.** What does a user touch? An HTTP API, a Next.js UI, a CLI, a
+- **Interface.** What does a user touch? An HTTP API, a Next.js UI, a CLI, a
   worker consuming a queue. A repo can have several. Pick the primary one and
   name the others.
 - **Start.** The command that runs it locally, taken from `package.json`
@@ -52,8 +54,8 @@ such as a credential.
 - **Drive.** How an agent interacts with it without a human. Look for what
   already exists first: Playwright or Cypress specs, supertest setups, a
   seeded `mongodb-memory-server`, a Postman collection, curl examples in the
-  README. Only when none exists, pick a recipe: Playwright for a browser
-  surface, HTTP calls for an API, a PTY session for a CLI.
+  README. Only when none exists, pick a recipe: Playwright for a browser UI,
+  HTTP calls for an API, a PTY session for a CLI.
 - **Observe.** What proof can be captured. Screenshots, response bodies with
   status codes, a document read back out of Mongo, log lines, exit codes.
 - **Isolate.** Whether two instances can run at once: ports, database names,
@@ -61,20 +63,21 @@ such as a credential.
   to drive an instance it did not start.
 
 **Done when:** all five have an answer, and each answer names a real file, a
-real command, or a real port in this repo.
+real command, or a real port in this repo, or the run is waiting on the user
+for a value the repo cannot give.
 
 ## Step 2: Get it running yourself
 
-Start the app with the command from step 1 and confirm it serves. Fix the
-checkout first if it does not build, or report exactly what is broken and
-stop.
+Start the app with the command from step 1 and confirm it serves. When it
+does not build or does not serve, report the command and the error it
+printed, and stop. Fixing the app is a separate request for the user to make.
 
 A skill written against an app you never started teaches steps that do not
 work.
 
 **Done when:** the app started, one request or one command got a real
 response, and the teardown command stopped it, or the run has stopped with
-the build failure named and nothing written to disk.
+the failing command and its error named and nothing written to disk.
 
 ## Step 3: Write the skill
 
@@ -96,16 +99,19 @@ prints nothing either way and a run outside a repository exits 128 like any
 other error.
 
 The path does not have to exist yet for this to answer. On `not ignored`, say
-so and ask whether to add `.claude/` to the repo's own `.gitignore` first,
-because otherwise the generated skill lands in the next `git add -A`. Add it
-on yes. On no, say the generated skill will be committed along with everything
-else, and carry on. On `check-ignore failed`, print what git said and stop,
-because there is no repository to write a skill into.
+so and ask whether to add `.claude/skills/verify-<app>` to the repo's own
+`.gitignore` first, because otherwise the generated skill lands in the next
+`git add -A`. Add that one line on yes, so files the team may already commit
+under `.claude/`, such as `settings.json`, stay tracked. On no, say the
+generated skill will be committed along with everything else, and carry on.
+On `check-ignore failed`, print what git said and stop, because there is no
+repository to write a skill into.
 
 Create `.claude/skills/verify-<app>/SKILL.md` with frontmatter carrying
-`name: verify-<app>`, a description naming the app and the surface, and
-`disable-model-invocation: true`. Without frontmatter the skill never
-registers.
+`name: verify-<app>`, a description naming the app and the interface it
+drives, and `disable-model-invocation: true`. Cursor loads the skill only when
+the frontmatter carries a `description`. Claude Code loads it either way and
+falls back to the body's first paragraph.
 
 One file serves both tools. Cursor reads `.claude/skills` alongside its own
 directories, so a second link under `.cursor/skills` would list the skill
@@ -115,18 +121,20 @@ Write these sections, each holding real commands from this repo:
 
 - **Launch.** The exact command, the env it needs, and the signal that says
   it is ready: a log line, a port answering, a health endpoint returning 200.
-  Include the teardown command in the same section.
+  Name each secret by its env var and where the team gets it, never by its
+  value, because the team may commit this file. Include the teardown command
+  in the same section.
 - **Doctor.** One read-only check that answers "is this instance worth
   driving": the process is up, the port belongs to us, the build is current,
-  the auth token is valid. For a browser surface it also checks that the
+  the auth token is valid. For a browser UI it also checks that the
   browser binary is installed, with `npx playwright install chromium` as the
   fix. An agent runs Doctor first when anything looks strange.
 - **Drive.** The harness with this repo's real selectors, routes, and
   commands. Prefer handles that survive a redesign: `getByRole` and
   `getByLabel` first, `getByTestId` where the accessible name moves, then
   route paths and CLI flags. Coordinates and tab order go stale in a week.
-  End the section with one line: read `references/features/<name>.md` for the
-  feature being verified before driving it.
+  End the section with one line: before driving a feature, find its file in
+  `references/features/README.md` and read it.
 - **Evidence.** What to capture and where it lands. Capture the action and
   the state it produced, not only the final screen. Check the side effect too:
   the document written, the message queued, the file created. Drive the path a
@@ -140,9 +148,10 @@ Write these sections, each holding real commands from this repo:
 along with what the user chose when it said `not ignored`, the file exists,
 its Launch and teardown commands are the ones that worked in step 2, every
 other section holds a command built from a real path, port, or selector in
-this repo, and a grep for `TODO` and for `<placeholder>` style angle brackets
-returns nothing; or nothing was written because `check-ignore failed` and the
-run stopped with git's message printed.
+this repo, no secret appears by its value, and a grep for `TODO` and for
+`<placeholder>` style angle brackets returns nothing; or the run is waiting
+on the user's answer about the `.gitignore` line; or nothing was written
+because `check-ignore failed` and the run stopped with git's message printed.
 
 ## Step 4: Seed the feature map
 

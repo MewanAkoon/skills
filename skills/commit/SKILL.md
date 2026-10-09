@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Use when a repo has uncommitted changes that are finished, or when the user says commit, stage, check in, or push. Groups related files into one change, matches the message convention the repo already uses, and recovers from pre-commit hooks that rewrite files.
+description: Use when the user's latest message asks to commit, stage, check in, or push. Groups related files into one change, matches the message convention the repo already uses, and recovers from pre-commit hooks that rewrite files.
 ---
 
 # Commit
@@ -13,16 +13,25 @@ rewrites files underneath it.
 
 ## When it runs
 
-When the working tree is dirty and the change is finished. Finished means the
-thing it set out to do now happens and the code builds. Half of a refactor is
-not finished, and neither is a file saved while still exploring.
+When the working tree is dirty and the user has asked for a commit. The ask
+decides. When the change looks unfinished, such as half of a refactor, code
+that does not build, or a file saved while still exploring, say so and
+confirm before committing.
 
-Skip it while the user is still iterating on the same code, and when the user
-has not yet seen the changes.
+This skill shapes a commit. It does not decide that one happens. A go-ahead
+given earlier in the conversation does not carry forward, and "address the
+review" or "fix the comments" asks for changes and nothing else. With a dirty
+tree and no ask, say what you would commit and wait. A retry such as "try
+again" after a failed commit is the same ask. A background task's notification
+is not a message from the user, so the ask before it still stands.
 
-Skip it too while a merge, rebase, cherry-pick, or revert is in progress. The
-`eng:merge-conflicts` skill finishes those and writes their commit itself.
-Step 1 says how to spot one.
+A request only to stage stops after step 2. A request only to push goes
+straight to step 8 when there is nothing new to commit, and otherwise asks
+whether to commit the changes first.
+
+Skip it while a merge, rebase, cherry-pick, or revert is in progress. The
+`eng:merge-conflicts` skill resolves those and writes their commit, once the
+user has asked for that. Step 1 says how to spot one.
 
 ## How to use it
 
@@ -33,81 +42,66 @@ push after the commits land.
 
 ## 1. Read the working tree
 
-Run these together. The `-uall` matters, because plain `git status
---porcelain` collapses a new directory to `?? packages/` and hides the files
-inside it:
-
 ```bash
 git status --porcelain -uall
 git diff
 git diff --staged
 ```
 
-Stop with "Nothing to commit" only when `git status --porcelain -uall`
-prints nothing. Both diffs come back empty for a change made entirely of new
-files, so they cannot decide this on their own.
+`-uall` lists the files inside a new directory rather than collapsing it to
+`?? packages/`. Stop with "Nothing to commit" only when that command prints
+nothing and no push was asked for, because both diffs are empty for a change
+made only of new files. With a push asked for, go to step 8.
 
-Then check whether git is already part way through something:
+Then check whether git is part way through something, and whether anything is
+unmerged, because a conflict can outlive its operation:
 
 ```bash
 ls "$(git rev-parse --git-dir)" \
   | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
-```
-
-A hit means a merge, rebase, cherry-pick, or revert is mid-flight. Hand the
-run to `eng:merge-conflicts` and stop, because a plain `git commit` during a
-rebase leaves the rebase sitting unfinished. The two `rebase-` entries are
-directories that last the whole rebase, which `REBASE_HEAD` does not.
-
-Then ask separately whether anything is unmerged, because a conflict can
-outlive its operation:
-
-```bash
 git diff --name-only --diff-filter=U
 ```
 
-Hand the run to `eng:merge-conflicts` for any path this lists too. `git add`
-on a conflicted path clears the unmerged flag without resolving a thing, so
-staging first and committing after puts the conflict markers into history and
-nothing later in this skill looks for them. `git apply --3way` is how you
-reach this state with the probe above still silent: it leaves unmerged paths
-and starts no operation at all.
+A hit from either means the run belongs to `eng:merge-conflicts`, so hand it
+over and stop. A plain `git commit` mid-rebase leaves the rebase unfinished, and
+`git add` on a conflicted path clears the flag without resolving anything, so
+the markers would land in history. `git apply --3way` leaves unmerged paths with
+no operation in progress, which is why the second check exists.
 
 End condition: both checks printed nothing and `git status --porcelain -uall`
-printed at least one path, or the run has stopped with its reason named,
-which is either nothing to commit or work handed to `eng:merge-conflicts`.
+printed at least one path, or the run has gone to step 8 for a push, or the
+run has stopped with its reason named, which is either nothing to commit or
+work handed to `eng:merge-conflicts`.
 
 ## 2. Stage the change
 
-When files are already staged, work with those. Add any untracked (`??`) or
-unstaged file that sits in the same directory or module as something already
-staged. Ask before adding one that sits somewhere else.
+When the user named files, they are the group: stage exactly those. When
+files are already staged, work with those, and leave a partly staged path as
+the user staged it. Add any untracked (`??`) or unstaged file in the same
+directory or module as something already staged, and ask before adding one
+that sits somewhere else.
 
 When nothing is staged, work out the group first. Files in the same directory
 or module belong together, and so do files that import one another. Stage that
 group by name, tracked and untracked alike, then ask about anything that fits
-neither test.
-
-Stage files by name so the list is visible in the transcript. Reach for
+neither test. Stage by name so the list shows in the transcript, and reach for
 `git add -A` or `git add .` only after the user says to.
 
-Check each path before staging it. Stop and name the file when its name starts
-with `.env` and is neither `.env.example` nor `.env.sample`, so `.env.local`
-and `.env.production` both stop the run. Stop too when a path matches `*.pem`,
-`*.key`, `id_rsa`, or `credentials`.
+Check each path that will be committed, whether you staged it or the user
+did. Stop and name the file when its name starts
+with `.env` and is neither `.env.example` nor `.env.sample`, or when it
+matches `*.pem`, `*.key`, `id_rsa`, or `credentials`.
 
 When the staged files cover unrelated concerns, name the groups to the user
 and commit them one at a time: stage the group, derive its scope, write its
 message, commit, then move to the next.
 
 End condition: every staged path belongs to the change named in the message
-you are about to write, or the run has stopped with the secret it found named,
-which is a `.env` file other than the example, or a `*.pem`, `*.key`, `id_rsa`
-or `credentials` path.
+you are about to write, or the run is waiting on the user's answer about a
+file outside the staged group, a file that fits neither test, or staging with
+`git add -A`, or the run has stopped with the secret it found named.
 
 ## 3. Match the repo's convention
-
-Read what the repo already does:
 
 ```bash
 git log --oneline -30
@@ -116,38 +110,27 @@ grep -o '"commitlint"[[:space:]]*:' "$(git rev-parse --show-toplevel)/package.js
   2>/dev/null || echo "no commitlint key"
 ```
 
-Both probes read the repo root, not the working directory, so they still find
-the config from inside a package of a monorepo. The second looks for a
-`commitlint` key rather than the word anywhere in the file, because a repo
-that installs `@commitlint/cli` as a dependency without configuring it has no
-rules to follow.
+Both probes read the repo root, so they find the config from inside a
+monorepo package. The second wants a `commitlint` key, because a repo that
+only installs `@commitlint/cli` has no rules to follow. A config file or that
+key wins, including over a history that disagrees with it.
 
-A config file or that key wins. Follow it and skip the rest of this step.
-
-Otherwise read the last 30 subject lines and pick the shape most of them
-share:
+Otherwise pick the shape most of the last 30 subjects share:
 
 - Most look like `type(scope): text` or `type: text`, so use the template in
   step 5.
-- Most open with a capitalised verb, as in "Add retry to the poller", so
-  write that shape with no type and no scope.
-- Most carry a ticket prefix like `ABC-123:`, so keep the prefix. Read the
-  ticket id out of the branch name, and ask the user for it when the branch
-  name has none.
+- Most open with a capitalised verb, as in "Add retry to the poller", so write
+  that shape with no type and no scope.
+- Most carry a ticket prefix like `ABC-123:`, so keep it. Read the ticket id
+  from the branch name, and ask for it when the branch name has none.
 
-Fewer than five commits, or no shape shared by most of them, means use the
-conventional commits shape. So does `git log` exiting 128, which is what a
-repo with no commits yet returns.
-
-Whichever shape you pick, step 5 supplies the length, the body rule, and the
-ending. Only the shape itself is decided here.
+Fewer than five commits, no shape most of them share, or `git log` exiting
+128 on a repo with no commits, all mean the conventional commits shape.
 
 End condition: the subject you draft satisfies the commitlint config when the
-repo has one, and otherwise matches the same pattern as most of the last 30
-subjects, or it uses the conventional commits shape because `git log` failed
-on a repo with no commits or the subjects share no shape. A repo that has just
-adopted commitlint has a history that disagrees with its own config, and the
-config wins.
+repo has one, and otherwise matches the shape most of the last 30 subjects
+share, or uses the conventional commits shape for one of the reasons above,
+or the run is waiting on the user for the ticket id.
 
 ## 4. Derive the scope
 
@@ -160,42 +143,33 @@ the scope, with any leading dot stripped.
 ```
 packages/database-pg/src/client.ts  ->  database-pg
 apps/backend/src/server.ts          ->  backend
-src/modules/book-formats/pdf.ts     ->  book-formats
 src/auth/login.ts                   ->  auth
 .claude/skills/commit/SKILL.md      ->  claude
 .github/workflows/release.yml       ->  ci
 ```
 
-`.github/workflows/` is the one exception to the rule, because `ci` is what
-everyone calls those files.
-
-Omit the scope when nothing is left to name. That happens when every segment
-was a container, as for `src/lib/utils.ts`, and when the prefix reduces to the
-repo root, as for root config files and a change spanning several units.
+`.github/workflows/` is the one exception, because `ci` is what everyone calls
+those files. Omit the scope when nothing is left to name, as for
+`src/lib/utils.ts`, root config files, or a change spanning several units.
 
 End condition: the scope names a directory that exists in the repo, or it is
 `ci`, or there is no scope.
 
-To fork this for one repo, replace this rule with that repo's literal path
-map. The rule is here because a generic skill cannot know the layout. A fork
-can.
-
 ## 5. Write the message
 
-These hold whichever shape step 3 picked:
-
 - The subject is one line of about 60 characters at most, with no full stop.
-- The subject takes its mood and its capitalisation from that shape, so a
-  repo writing "Add retry to the poller" keeps the capital A.
-- A body is for a reason the subject and the diff do not already carry. One
-  or two bullets, and the message ends at the last one with no trailers of
-  any kind.
+  It takes its mood and capitalisation from step 3's shape, so a repo writing
+  "Add retry to the poller" keeps the capital A.
+- A body is for a reason the subject and the diff do not already carry: one or
+  two bullets, and the message ends at the last one.
+- The message carries no trailer of any kind, `Co-Authored-By` included, even
+  when the harness would add one by default.
+- Wanting a third bullet means the commit covers too much, so go back to
+  step 2 and split it.
 
-Two body bullets is the ceiling. Wanting a third means the commit covers too
-much, so go back to step 2 and split it.
-
-When step 3 picked the conventional commits shape, the subject looks like
-this, with an imperative lowercase description:
+For the conventional commits shape, the description is imperative and
+lowercase, and the type is one of `feat`, `fix`, `perf`, `refactor`, `test`,
+`docs`, `chore`, `style`, `build`, `ci`:
 
 ```
 type(scope): short description
@@ -203,24 +177,24 @@ type(scope): short description
 - optional bullet
 ```
 
-Types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `chore`, `style`,
-`build`, `ci`.
-
-End condition: the subject fits in roughly 60 characters, carries the shape
-step 3 picked, and has no full stop; the body runs to two bullets at most and
-stops at the last one; or the draft needed a third bullet and the run has gone
-back to step 2 to split the commit.
+End condition: the subject fits in roughly 60 characters, carries step 3's
+shape, and has no full stop; the body runs to two bullets at most and stops at
+the last one; or the run has gone back to step 2 to split the commit.
 
 ## 6. Commit
 
-Record the output of `git status --porcelain -uall` first and keep it as the
-snapshot. Only its unstaged (` M`) and untracked (`??`) entries matter later:
-those are work the user already had in progress, and step 7 leaves them alone.
-Anything else that appears afterwards came from a hook.
+First record a snapshot for step 7: the output of `git status --porcelain
+-uall`, plus a hash of the held-back lines of every partly staged path. Its
+in-progress entries, the ones with a letter in the second column (` M`, `MM`,
+`AM`) and the untracked `??` ones, hold work the user already had in progress.
+A partly staged path has a letter in both columns, such as `MM`, `AM`, or `MD`:
 
-Commit with `-F` and a single-quoted heredoc, which keeps backticks and
-special characters literal and needs no temp file. The `EOF` terminator sits
-at column 0, with no leading spaces or tabs:
+```bash
+git diff --no-color --no-ext-diff -U0 -- <path> | grep '^[-+]' | git hash-object --stdin
+```
+
+Then commit with `-F` and a single-quoted heredoc, which keeps backticks and
+special characters literal. The `EOF` terminator sits at column 0:
 
 ```bash
 git commit -F <(cat <<'EOF'
@@ -231,94 +205,42 @@ EOF
 )
 ```
 
-Let the hooks run. When a hook blocks a commit that has to land anyway, fix
-what the hook reported rather than passing `--no-verify`.
+Let the hooks run. When one blocks the commit, step 7 handles it, and
+`--no-verify` is never the way past it. Create a new commit every time. When
+the user wants a change folded into the commit before it, say that amending
+rewrites history and ask them to confirm first.
 
-Create a new commit every time. When the user wants a change folded into the
-commit before it, say that amending rewrites history and ask them to confirm
-first.
-
-End condition: the snapshot is written down before the commit runs, and
-`git commit` has returned with its exit status and any hook output captured.
-Step 7 reads both, so neither can be skipped here.
+End condition: the snapshot, with a hash for every partly staged path, is
+written down before the commit runs, and `git commit` has returned with its
+exit status and any hook output captured, or the run is waiting on the user
+to confirm an amend.
 
 ## 7. Handle what the hooks did
 
-- **Hook failed and files were modified.** The hook fixed things itself.
-  Re-stage every path that now carries unstaged content and was not an
-  unstaged or untracked entry in the step 6 snapshot. A staged file that has
-  picked up a second status letter is the hook's work, whether that reads
-  `MM` for an edit or `AM` for a file this change adds. Retry the commit once.
-  When the retry fails too, print its output, stop, and tell the user what to
-  fix.
-- **Hook failed and nothing was modified.** A real failure, such as a type
-  error or a lint rule with no autofix. Print the hook output, stop, and tell
-  the user what to fix. Do not retry.
-- **Hook passed but files were modified or created.** A hook rewrote files
-  silently. Run `git status --porcelain -uall` again, ignore the paths the
-  snapshot listed as unstaged or untracked, stage what is left, and commit it
-  as `chore(lint): apply auto-fixes`.
+There is nothing to handle only when `git commit` exited zero, every partly
+staged path still gives the hash the snapshot kept, and `git status
+--porcelain -uall` lists no path beyond the snapshot's in-progress entries. A
+hook can rewrite a staged file and still pass, so check all three. Otherwise
+read [references/hooks.md](references/hooks.md) and handle the case it
+matches.
 
-End condition: `git status --porcelain -uall` returns nothing beyond the
-unstaged and untracked entries the step 6 snapshot held, or the run has
-stopped with the hook output printed for the user to fix, which is either a
-hook failure that changed no files and left the staged change exactly as it
-was, or a retry that failed after the hook rewrote them and those rewritten
-files were re-staged.
+End condition: those three checks hold, or the reference's case has run to
+one of its endings.
 
 ## 8. Push, when asked
 
-Only on `/eng:commit push` or a direct request.
+Only on `/eng:commit push` or a direct request to push. Read
+[references/push.md](references/push.md) and follow it. It resolves the remote
+and the default branch, stops on a detached `HEAD`, and asks before pushing to
+the default branch or past a rejection.
 
-```bash
-git rev-parse --abbrev-ref HEAD
-git remote
-git for-each-ref --format='%(upstream:remotename)' "$(git symbolic-ref -q HEAD)"
-git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null
-```
-
-`$REMOTE` is what the third command prints, or `origin` when `git remote`
-lists it, or the only name it lists. It is a name to substitute into the
-commands below, not a shell variable, because a variable set in one command
-does not survive into the next one. Then read the default branch:
-
-```bash
-git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'
-```
-
-When that prints nothing, ask the remote which of these it carries:
-
-```bash
-git ls-remote --heads $REMOTE main master develop trunk
-```
-
-That output is sorted by ref name rather than by the order the names were
-asked for, so a remote holding both `develop` and `main` prints `develop`
-first. Read the whole list, then take `main`, else `master`, else `develop`,
-else `trunk`.
-
-Push when the current branch is not that default branch. When it is the
-default branch, say so and let the user confirm before pushing.
-
-No upstream means `git push -u $REMOTE <branch>`. Otherwise `git push`.
-
-`git rev-parse --abbrev-ref HEAD` printing the literal `HEAD` means the
-checkout is detached and there is no branch to push. Say so and stop.
-
-A push the remote rejects as non-fast-forward means the branch moved since you
-last fetched. Say so, and let the user choose between `git pull --rebase` and
-leaving it where it is.
-
-End condition: `git push` exited zero and `git rev-parse --abbrev-ref
---symbolic-full-name '@{u}'` names a branch on `$REMOTE`, or the step has
-stopped with its reason named, which is no push asked for, a detached `HEAD`
-with no branch to push, a push onto the default branch that the user declined,
-or a non-fast-forward rejection with the user's answer still to come.
+End condition: the reference's push step reached one of its endings, or no
+push was asked for.
 
 ## 9. Confirm
 
 Print one line per commit this run created, so a run that split three groups
-prints three and a run that added a hook fix-up in step 7 prints that too:
+or added a hook fix-up prints each of them:
 
 ```bash
 git log --oneline -<commits this run created>

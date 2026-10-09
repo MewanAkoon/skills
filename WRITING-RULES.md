@@ -33,6 +33,14 @@ first paragraph of the body, and it requires `name` to match the directory,
 where Claude Code takes the directory name regardless. `check.sh` already
 enforces the name.
 
+Write the description on one line, and keep `: ` and ` #` out of it. Both
+harnesses parse the frontmatter as YAML, which reads a colon followed by a
+space as a new key and a space followed by `#` as the start of a comment.
+Claude Code drops the whole frontmatter when the parse fails, so the skill
+loses its trigger with no error. Use a comma where the colon was, and start
+with a letter. `check.sh` rejects the colon, the comment, and the other shapes
+AGENTS.md lists, including a first character YAML reserves.
+
 Fires:
 
 ```yaml
@@ -56,12 +64,10 @@ carries triggers. Costs permanent context.
 becomes a plain one-line summary for a human browsing slash commands. Costs
 nothing.
 
-What caps the model-invoked set is conflict, not count. A description runs to
-a few hundred characters, so the whole set is under a thousand tokens. A false
-fire costs far more, because the agent reads an entire `SKILL.md` and then
-follows the wrong procedure. Print the set with the command below rather than
-trusting a number here, which goes stale every time a description is
-rewritten.
+What caps the model-invoked set is conflict, not count. `check.sh` holds each
+description to 300 bytes and the set to 3,900 bytes. A false fire costs far
+more, because the agent reads an entire `SKILL.md` and then follows the wrong
+procedure. Print the set with the command below to see what it holds today.
 
 So the test is competition, not overlap. Two skills compete when they claim
 the same decision and the agent has to pick one. Two skills compose when they
@@ -94,6 +100,31 @@ works in both harnesses from disk, and it will not upload to claude.ai.
 An agent that does not read the flag treats the skill as model-invoked. So
 for anything that must not auto-fire, also keep the description free of
 trigger phrases. The flag alone is not a guarantee.
+
+### Lifecycle skills
+
+Four skills own the phases of
+[standards/workflow.md](standards/workflow.md): `investigate`, `implement`,
+`review-diff`, and `pr-feedback`. Each is model-invoked, and the workflow
+names it at its step, so the change of phase is the cue rather than a search
+of the listing. A new skill that claims a phase competes with the one that
+owns it. Move its content into that skill's `references/` instead, which is
+how `how`, `architect`, and `diagnose-bug` became part of `investigate` and
+`implement`.
+
+A skill that two phases call, or that answers a question on its own, stays
+separate and gets called by name: "Call the Skill tool with `eng:why`". `why`
+and `blast-radius` are those.
+
+### Bundled skills
+
+Claude Code ships skills of its own, and they compete like any other. Its
+`code-review` is model-invoked and claims the same requests as `review-diff`.
+The workflow settles that one by naming `review-diff` at step 4, and typing
+`/code-review` still runs the bundled one. A personal skill with the same name
+as a bundled one replaces it. Skills from plugins, and personal skills from
+anywhere else, compete the same way. Before adding a model-invoked skill, read
+every description in the session's skill listing, not only the ones here.
 
 ### Ambient triggers
 
@@ -130,14 +161,15 @@ skill runs a bundled script and the prompt would be noise.
 
 `disallowed-tools` restricts. It takes the listed tools out of the pool while
 the skill is active. Reach for it when a skill must not do something, so the
-limit holds whatever the body says. `review-diff` lists `Edit, Write,
-NotebookEdit` for that reason: a review that can edit the diff it just pinned
-is reviewing a moving target.
+limit holds whatever the body says. No skill here carries it today.
+`review-diff` did while it only reported. Once it began fixing what it
+reviews, the read-only half moved to the `reviewer` agent, whose `tools` list
+leaves out every editing tool, because a review that can edit the diff it is
+reading is reviewing a moving target.
 
-Name only what the skill can do without. `review-diff` keeps `Bash`, because
-its first step runs `git diff` and its third runs the repo's own lint
-commands. A restriction that breaks the skill gets deleted the first time it
-bites.
+Name only what the skill or agent can do without. The reviewer keeps `Bash`,
+because it runs `git diff` and the repo's own checks. A restriction that breaks
+the skill gets deleted the first time it bites.
 
 The trade is worse than the one `disable-model-invocation` makes, because
 Cursor reads that flag and reads neither of these. The two fields also differ
@@ -174,7 +206,10 @@ run needs.
 
 **Anything only some runs reach goes in `references/`,** pointed to from
 `SKILL.md` with a line saying when to read it. Keep `SKILL.md` short enough to
-read in one sitting.
+read in one sitting. `check.sh` holds every `SKILL.md` to 15,000 bytes, well
+inside the 20,000 characters compaction keeps of a skill, and the lifecycle
+skills, which load in most sessions, to tighter budgets listed in
+[AGENTS.md](AGENTS.md).
 
 **Every step ends on something checkable.** "Every route handler has a parse
 call at the top" is verifiable. "Validation is handled properly" is an

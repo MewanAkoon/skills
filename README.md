@@ -18,10 +18,15 @@ can read, but the way they ship, the plugin and its manifests, is Claude Code
 packaging. Cursor support comes later; "If you use Cursor" below says where it
 stands.
 
+Two other files ship the same way:
+[standards/workflow.md](standards/workflow.md), the standing workflow every
+session follows, and [agents/reviewer.md](agents/reviewer.md), the read-only
+reviewer that `eng:review-diff` and `eng:investigate` start.
+
 Two narrow exceptions to "plain markdown", both named in [AGENTS.md](AGENTS.md)
-under "What belongs here": `review-diff` carries a Claude Code frontmatter
-field as a lock over a body that is right without it, and the Cursor rules
-file carries a `description` that gives it a second way in.
+under "What belongs here": the reviewer agent names a `tools` list Cursor does
+not read, as a lock over a body that is read-only without it, and the Cursor
+rules file carries a `description` that gives it a second way in.
 
 Other plugins stay out of this one. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md)
 says what pairs well with it, as a recommendation rather than a dependency.
@@ -74,7 +79,7 @@ A good run ends like this:
 
 ```
 doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it
-17 skills, 8 model-invoked
+17 skills, 13 model-invoked
 ok
 ```
 
@@ -197,6 +202,25 @@ claude plugin marketplace remove mewanakoon
 Remove the `skillOverrides` entry too if you want Claude Code's own `commit`
 and `pr` back.
 
+## The workflow
+
+[standards/workflow.md](standards/workflow.md) is eight standing steps:
+understand first, plan and stop, implement on approval, review until clean,
+commit and open PRs only when asked, handle PR feedback on evidence, never
+post, and report briefly. The workflow names the skill for each step that has
+a procedure, so a change of phase is the cue to load it:
+
+| Step | Skill |
+|---|---|
+| 1 and 2, understand and plan | `eng:investigate` |
+| 3, implement | `eng:implement` |
+| 4, review | `eng:review-diff`, which starts the `eng:reviewer` agent |
+| 5, commit and PR | `eng:commit`, `eng:pr` |
+| 6, PR feedback | `eng:pr-feedback` |
+
+The other skills hold knowledge a phase reaches for, or are modes you start
+yourself.
+
 ## Skills
 
 Every skill loads as `eng:<name>`. The tables link the folders.
@@ -218,14 +242,19 @@ above leaves out the ones you do not want.
 
 | Skill | Fires on | What it does |
 |---|---|---|
-| [plain-writing](skills/plain-writing/SKILL.md) | Any reply or prose being written, chat answers included | Strips AI tells, enforces plain language, gates code comments |
-| [commit](skills/commit/SKILL.md) | Finished changes sitting in the working tree | Stages one change, matches the repo's message convention, survives hooks |
-| [pr](skills/pr/SKILL.md) | A branch with commits ahead of its base | Resolves the base, writes title and body from the diff, creates or updates |
-| [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file | Discriminated unions, brands, narrowing, exhaustiveness |
-| [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, config, consumers, third-party calls | Validation at the edge, no guards inside |
-| [tdd-node-api](skills/tdd-node-api/SKILL.md) | Test-first backend work | Seams, red-green loop, three anti-patterns |
-| [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths after a merge, rebase, cherry-pick, revert, or stash pop | Traces both sides, resolves hunk by hunk, finishes the operation |
-| [why](skills/why/SKILL.md) | About to delete a guard, a retry, a timeout, or an odd constant | Traces the rationale from git history, evidence apart from inference |
+| [investigate](skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
+| [implement](skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, tests it, corrects docs it makes false |
+| [review-diff](skills/review-diff/SKILL.md) | Finished implementation work, or a request to review a branch, a PR, or uncommitted changes | Parallel `reviewer` passes, triage, fixes, and another round until clean |
+| [pr-feedback](skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
+| [plain-writing](skills/plain-writing/SKILL.md) | A reply longer than two sentences, or any prose a human will read | Strips AI tells, enforces plain language, gates code comments |
+| [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's message convention, survives hooks |
+| [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff, creates or updates |
+| [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
+| [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
+| [tdd-node-api](skills/tdd-node-api/SKILL.md) | A behaviour change in a Node service, route handler, or repository method in a repo with tests, or TDD | Seams, red-green-refactor loop, three anti-patterns |
+| [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers after a merge, rebase, cherry-pick, revert, stash pop, pull, or applied patch | Traces both sides, resolves hunk by hunk, finishes the operation |
+| [why](skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
+| [blast-radius](skills/blast-radius/SKILL.md) | Planning a change to something shared, or a question about what a change breaks | What a change breaks elsewhere, with evidence levels |
 
 ### User-invoked
 
@@ -233,13 +262,8 @@ Only fire when typed. Zero context cost.
 
 | Skill | Invoke | What it does |
 |---|---|---|
-| [diagnose-bug](skills/diagnose-bug/SKILL.md) | `/eng:diagnose-bug` | Six-phase debugging loop, gated |
-| [blast-radius](skills/blast-radius/SKILL.md) | `/eng:blast-radius` | What a change breaks elsewhere, with evidence levels |
 | [grill-me](skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
-| [architect](skills/architect/SKILL.md) | `/eng:architect` | Types and module shape before implementation |
 | [handoff](skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
-| [review-diff](skills/review-diff/SKILL.md) | `/eng:review-diff` | Diff against repo standards, plus a smell baseline |
-| [how](skills/how/SKILL.md) | `/eng:how` | Subsystem walkthrough, and where new code belongs |
 | [verify-app](skills/verify-app/SKILL.md) | `/eng:verify-app` | Generates a project-local skill that drives this app |
 | [wayfinder](skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
 

@@ -1,6 +1,6 @@
 ---
 name: api-boundaries
-description: Use when touching a route handler, controller, middleware, webhook, queue consumer, or config loader in a Node or TypeScript service, when reading process.env, req.body, or a parsed JSON payload, or when calling an API you do not own. Use it whenever you are deciding where a validation or a null check belongs. Puts validation at the edge and keeps internal code free of guards.
+description: Use when touching a Node or TypeScript route handler, controller, middleware, webhook, queue consumer, or config loader, reading process.env, req.body, or parsed JSON, calling an API you do not own, or deciding where a validation or null check belongs. Validates at the edge, not inside.
 ---
 
 # API boundaries
@@ -17,6 +17,14 @@ Automatically, on route handlers, controllers, middleware, config loaders,
 queue consumers, and outbound third-party calls. Also when a review turns up
 null checks buried in a service function.
 
+Where the run may not edit, such as in `eng:investigate` or a report-only
+review, or where the guard sits outside the approved plan or the named change,
+the parse to add and the guard to delete go in the plan, the findings, or the
+report, not the code.
+
+Skip it for tests and one-off scripts, which build their own input, and for
+generated client code.
+
 ## How to use it
 
 Nothing to invoke. When you are unsure whether a check belongs somewhere, ask
@@ -26,7 +34,7 @@ Nothing to invoke. When you are unsure whether a check belongs somewhere, ask
 
 ## Where the boundaries are
 
-In a Node service there are five, and only five:
+A typical Node service has five:
 
 1. **HTTP in.** Request body, query string, route params, headers.
 2. **Config in.** Environment variables, config files, secrets.
@@ -34,6 +42,8 @@ In a Node service there are five, and only five:
 4. **Messages in.** Queue payloads, webhooks, event consumers.
 5. **Third party in.** Response bodies from any API you do not own.
 
+Any other way data enters the process is a boundary too: CLI arguments,
+stdin, files read from disk, cache entries, and socket or IPC messages.
 Everything else is inside.
 
 ## What happens at a boundary

@@ -37,6 +37,9 @@ report="$(printf '%s\n' "$out" | grep -v '^Validating ' || true)"
 # hide a new one. The only finding allowed is the root CLAUDE.md warning.
 found="$(printf '%s\n' "$report" | sed -nE 's/.*Found ([0-9]+) (warning|error).*/\1 \2/p')"
 allowed="$(printf '%s\n' "$report" | grep -cF 'CLAUDE.md at the plugin root is not loaded' || true)"
+# There is one root CLAUDE.md, so it can excuse one finding at most, however
+# many lines repeat its text.
+[ "$allowed" -gt 1 ] && allowed=1
 total=0
 while read -r n _; do
   [ -n "$n" ] && total=$((total + n))

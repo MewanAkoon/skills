@@ -432,7 +432,8 @@ if [ "$doctor" = yes ]; then
     fix "jq is not installed, so the plugin list cannot be read"
   else
     # The README's minimum. 2.1.292 closed a hole that let the model run a
-    # user-invoked skill after compaction.
+    # user-invoked skill after compaction, and 2.1.293 is the first release
+    # every plugin check here ran on, so nothing older is known to work.
     cc="$(claude --version 2>/dev/null | sed -nE 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)"
     if [ -z "$cc" ]; then
       fix "claude --version printed no version, so the 2.1.293 minimum cannot be checked"
@@ -464,21 +465,23 @@ if [ "$doctor" = yes ]; then
   # this clone under any other name loads a second copy too, but link.sh did
   # not make it, so it is left for whoever did.
   skills_dir="$config/skills"
-  # The names an older install linked, which link.sh carries. Several stop
-  # being folders here once skills move, and a link left for one still loads.
-  legacy=" $(sed -n '/^LEGACY=(/,/^)/p' link.sh | sed '1d;$d' | tr -s '[:space:]' ' ') "
+  # The names an older install linked, and how to resolve a link, both shared
+  # with link.sh. Several of those names stop being folders here once skills
+  # move, and a link left for one still loads.
+  # shellcheck source=scripts/legacy.sh
+  . scripts/legacy.sh
   if [ -d "$skills_dir" ]; then
     for entry_path in "$skills_dir"/*; do
       [ -e "$entry_path" ] || [ -L "$entry_path" ] || continue
       name="$(basename "$entry_path")"
-      if [ -d "skills/$name" ] || case "$legacy" in *" $name "*) true ;; *) false ;; esac; then
+      if [ -d "skills/$name" ] || legacy_name "$name"; then
         if [ -L "$entry_path" ]; then
-          fix "$skills_dir/$name is an old link to $(readlink "$entry_path") and loads beside $plugin_name:$name. Run ./link.sh --unlink from that clone, or remove it"
+          fix "$skills_dir/$name is an old link to $(link_target "$entry_path" || readlink "$entry_path") and loads beside $plugin_name:$name. Run ./link.sh --unlink from that clone, or remove it"
         else
           fix "$skills_dir/$name is a personal copy of $plugin_name:$name and loads beside it"
         fi
       elif [ -L "$entry_path" ]; then
-        case "$(readlink "$entry_path")" in
+        case "$(link_target "$entry_path" || true)" in
           "$repo"/skills/*) fix "$skills_dir/$name links into this clone and loads a second copy of a skill. link.sh did not make it; remove it by hand" ;;
         esac
       fi

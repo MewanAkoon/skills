@@ -73,7 +73,7 @@ To confirm it worked from a clone of this repo:
 A good run ends like this:
 
 ```
-doctor: eng@mewanakoon 0.1.0 is installed and enabled, with no bare copies beside it
+doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it
 17 skills, 8 model-invoked
 ok
 ```
@@ -237,8 +237,8 @@ Only fire when typed. Zero context cost.
 | [verify-app](skills/verify-app/SKILL.md) | `/eng:verify-app` | Generates a project-local skill that drives this app |
 | [wayfinder](skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
 
-A bare form such as `/grill-me` also works while no other command has that
-name.
+Type the full name. A bare name is not sure to reach the plugin's skill:
+`commit` and `pr` are names Claude Code keeps for skills of its own.
 
 ## Writing new skills
 
@@ -261,7 +261,9 @@ validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
-installed from GitHub would receive the change.
+installed from GitHub would receive the change. Bump past whatever `main`
+carries when you merge: CI checks `main` again after each push, so two pull
+requests that picked the same version fail there.
 
 ## Usage counts
 

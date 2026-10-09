@@ -29,7 +29,8 @@ Three scripts, all bash, no build step. The commands they carry:
 None of them needs a package installed beyond `jq`, which macOS 15 and the CI
 runners ship, and `claude` for the validator and `--doctor`. All three resolve
 their own path with `readlink -f`, and `check.sh` takes its file list from
-`git`.
+`git`. `scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
+source it for the old skill names and for resolving where a link points.
 
 `package.json` carries those as `npm run check`, `doctor`, `validate`, and
 `unlink`, plus `npm run lint`, which runs shellcheck over every script.
@@ -120,7 +121,10 @@ follows, and enforcing it is what this repo is for.
   `.mcp.json` and `.lsp.json` once they exist),
   the version is newer than the one at that point, compared field by field.
   `CHECK_BASE` names another base. A clone without that ref gets a warning
-  instead.
+  instead. CI on a push to `main` sets it to `main` as it was before the push,
+  so two pull requests that bumped to the same version fail once the second
+  lands. Requiring branches to be up to date before merging stops that
+  earlier.
 - No skill takes a name Claude Code uses for a built-in command or bundled
   skill. `commit` and `pr` are the two kept on purpose, because every
   reference writes them `eng:commit` and `eng:pr` and the README's

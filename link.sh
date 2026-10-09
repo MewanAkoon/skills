@@ -21,22 +21,9 @@ SELF="$(readlink -f "$0" 2>/dev/null || true)"
 [ -n "$SELF" ] || { printf 'error: readlink -f cannot resolve %s\n' "$0" >&2; exit 1; }
 REPO="$(cd -P "$(dirname "$SELF")" && pwd)"
 
-# Where a symlink points, as a physical path comparable with $REPO. Reading the
-# target with `readlink` alone is not enough: it returns whatever string was
-# stored, which may be relative, and may spell a path through a symlink that
-# $REPO spells directly, so the comparison silently never matches. Resolving the
-# parent rather than the whole path keeps this working for a link left dangling
-# by a skill that has since been removed, which is most of what this cleans up.
-link_target() {
-  local raw dir
-  raw="$(readlink "$1")" || return 1
-  case "$raw" in
-    /*) ;;
-    *) raw="$(dirname "$1")/$raw" ;;
-  esac
-  dir="$(cd -P "$(dirname "$raw")" 2>/dev/null && pwd)" || return 1
-  printf '%s/%s\n' "$dir" "$(basename "$raw")"
-}
+# LEGACY, legacy_name and link_target, shared with check.sh --doctor.
+# shellcheck source=scripts/legacy.sh
+. "$REPO/scripts/legacy.sh"
 
 install_steps() {
   cat <<'STEPS'
@@ -68,27 +55,13 @@ if [ "$UNLINK" -eq 0 ]; then
   exit 1
 fi
 
-# Every skill an older install could have linked. Several of these stop
-# existing as folders once the plugin reorganises them, and a link left behind
-# for one of those dangles, so the names are carried here rather than read from
-# skills/.
-LEGACY=(
-  api-boundaries architect blast-radius commit diagnose-bug grill-me handoff
-  how merge-conflicts plain-writing pr review-diff tdd-node-api ts-types
-  verify-app wayfinder why
-)
-
-# A link this clone made carries one of those names, or the name of a skill
+# A link this clone made carries a legacy name, or the name of a skill
 # here now. Anything else pointing into the clone was made by hand, so it is
 # left alone.
 ours() {
   local name
   name="$(basename "$1")"
-  [ -d "$REPO/skills/$name" ] && return 0
-  for legacy in "${LEGACY[@]}"; do
-    [ "$legacy" = "$name" ] && return 0
-  done
-  return 1
+  [ -d "$REPO/skills/$name" ] || legacy_name "$name"
 }
 
 # The directories an older install wrote to: the default, the override it

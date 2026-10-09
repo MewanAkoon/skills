@@ -8,9 +8,12 @@ on:
 permissions:
   contents: read
 
-# A second push to the same branch cancels the run still in flight.
+# A second push to a pull request's branch cancels the run still in flight.
+# A push to main gets a group of its own, keyed by commit, so no run there is
+# ever cancelled or replaced while pending: each one checks the version rule
+# against main as it was before that push, and a cancelled run checks nothing.
 concurrency:
-  group: check-${{ github.ref }}
+  group: check-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -33,7 +36,13 @@ jobs:
           fetch-depth: 0
       - run: bash --version | head -1
       - run: jq --version
+      # On a pull request the version rule compares with origin/main. On a
+      # push to main it compares with main as it was before the push, so two
+      # pull requests that each bumped to the same version fail here once the
+      # second lands, rather than shipping its changes to nobody.
       - run: ./scripts/check.sh
+        env:
+          CHECK_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
 
   plugin:
     runs-on: ubuntu-latest

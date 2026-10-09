@@ -120,6 +120,10 @@ Add your clone as the marketplace instead of the GitHub one:
 /plugin install eng@mewanakoon
 ```
 
+Both sources are named `mewanakoon`, so if you added the GitHub one first,
+this repoints it at your clone, and the plugin you installed updates from the
+clone from then on. Claude Code prints how to undo that.
+
 A directory marketplace loads the plugin from the folder itself, so an edit
 shows up after `/reload-plugins`. To try the working tree for one session
 without installing anything:
@@ -179,7 +183,9 @@ npx skills add <you>/skills -s tdd-node-api
 ```
 
 That copies files into the current repo and needs Node. Default to the plugin
-instead.
+instead. The copy is a project skill without the plugin's prefix, so change its
+`eng:` names to bare ones, `/eng:tdd-node-api` to `/tdd-node-api`, as for
+Cursor above.
 
 ### Removing it
 

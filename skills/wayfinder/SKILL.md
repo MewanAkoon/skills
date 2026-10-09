@@ -22,17 +22,17 @@ visible yet. A migration whose shape depends on what the data turns out to
 be, a new subsystem where half the design is still open questions, a course
 or a spec being written from nothing.
 
-Skip it when the work fits in one session, which is `/architect` or
-`/grill-me`. Skip it when the decisions are already made and what is left is
-execution: that is a task list, not a map.
+Skip it when the work fits in one session, which is `/eng:architect` or
+`/eng:grill-me`. Skip it when the decisions are already made and what is left
+is execution: that is a task list, not a map.
 
 ## How to use it
 
 Two modes.
 
-- `/wayfinder <the loose idea>` charts a new map. It questions you first,
+- `/eng:wayfinder <the loose idea>` charts a new map. It questions you first,
   then writes the map and the first tickets, and stops.
-- `/wayfinder .scratch/<slug>` works the map: it picks the next ticket,
+- `/eng:wayfinder .scratch/<slug>` works the map: it picks the next ticket,
   resolves it with you, records the answer, and stops.
 
 One decision per session, so the answer gets a whole context window. Research
@@ -92,8 +92,8 @@ Four types:
 - **Grilling** (HITL). A decision that gets made by talking it through. The
   default type. Ask one question at a time and follow the answer. Where the
   ticket needs a harder interrogation than this, ask the user to run
-  `/grill-me` on it and bring back the result. Where the answer is a shape
-  rather than a choice, ask them to run `/architect`.
+  `/eng:grill-me` on it and bring back the result. Where the answer is a shape
+  rather than a choice, ask them to run `/eng:architect`.
 - **Task** (HITL or AFK). Manual work that unblocks a decision without being
   one: getting an API key so the API can be judged, moving data so its shape
   can be seen, provisioning access. The answer records what was done and any
@@ -129,10 +129,10 @@ step on it.
 
 ## Mode 1: chart the map
 
-1. **Name the destination.** Question the user until they can say in two
-   lines what reaching the end of this effort looks like. Where that needs a
-   harder interrogation, ask them to run `/grill-me` first and come back with
-   the result.
+1. **Name the destination.** Question the user until they can say in two lines
+   what reaching the end of this effort looks like. Where that needs a harder
+   interrogation, ask them to run `/eng:grill-me` first and come back with the
+   result.
 2. **Map the frontier.** Question them again, this time going wide rather
    than deep: fan out across the whole space, and write the list of open
    questions, marking which ones could be taken today. If this turns up no

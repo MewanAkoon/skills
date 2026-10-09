@@ -20,7 +20,7 @@ something unfinished. Before handing a branch to someone else.
 
 ## How to use it
 
-Type `/handoff`. Optionally say what the next session is for, which narrows
+Type `/eng:handoff`. Optionally say what the next session is for, which narrows
 what gets included. Paste the resulting document as the first message of the
 next session, or save it next to the branch.
 

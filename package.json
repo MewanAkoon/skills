@@ -2,13 +2,13 @@
   "name": "skills",
   "version": "0.0.0",
   "private": true,
-  "description": "Agent skills for Claude Code and Cursor, symlinked from one clone",
+  "description": "Engineering skills for Claude Code, shipped as the plugin eng",
   "license": "MIT",
   "scripts": {
     "check": "./scripts/check.sh",
     "doctor": "./scripts/check.sh --doctor",
-    "fired": "./scripts/fired.sh",
-    "link": "./link.sh",
+    "validate": "./scripts/validate-plugin.sh",
+    "unlink": "./link.sh --unlink",
     "lint": "SHELLCHECKJS_RELEASE=v0.11.0 npx --yes shellcheck@4.1.0 link.sh scripts/*.sh"
   }
 }

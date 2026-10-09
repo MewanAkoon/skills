@@ -22,11 +22,11 @@ codebase. When you know what to build and not where to put it. When a
 reviewer asks you to explain a flow you only half understand.
 
 Skip it for a single function you can read in one screen. Skip it when the
-question is why the code ended up this way, which is `/why`.
+question is why the code ended up this way, which is `/eng:why`.
 
 ## How to use it
 
-Type `/how` and the question: "how does the invoice webhook work", "walk me
+Type `/eng:how` and the question: "how does the invoice webhook work", "walk me
 through what happens when a user signs up", "which package should the retry
 helper live in".
 
@@ -131,11 +131,11 @@ opens first.
 ## What this leaves to other skills
 
 It explains the design without arguing with it. To find what a change would
-break, use `/blast-radius`. To pull apart a design before building it, use
-`/grill-me`. To find out why the design is what it is, use `/why`.
+break, use `/eng:blast-radius`. To pull apart a design before building it, use
+`/eng:grill-me`. To find out why the design is what it is, use `/eng:why`.
 
 ---
 
 Adapted from the `how` skill in cursor/plugins pstack, by Lauren Tan (MIT).
 The subagent fan-out and model routing are removed, and critique mode is
-dropped in favour of the existing `blast-radius` and `grill-me` skills.
+dropped in favour of the existing `eng:blast-radius` and `eng:grill-me` skills.

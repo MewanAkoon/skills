@@ -23,7 +23,7 @@ Skip it for a bug you already understand. A typo does not need six phases.
 
 ## How to use it
 
-Type `/diagnose-bug` and describe the symptom. The agent will not propose a
+Type `/eng:diagnose-bug` and describe the symptom. The agent will not propose a
 fix until phase 5, and it will say which phase it is in as it goes.
 
 ---

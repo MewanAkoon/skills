@@ -21,13 +21,13 @@ Skip it while the user is still iterating on the same code, and when the user
 has not yet seen the changes.
 
 Skip it too while a merge, rebase, cherry-pick, or revert is in progress. The
-`merge-conflicts` skill finishes those and writes their commit itself. Step 1
-says how to spot one.
+`eng:merge-conflicts` skill finishes those and writes their commit itself.
+Step 1 says how to spot one.
 
 ## How to use it
 
-Nothing to invoke. Type `/commit` to force a run, or `/commit push` to push
-after the commits land.
+Nothing to invoke. Type `/eng:commit` to force a run, or `/eng:commit push` to
+push after the commits land.
 
 ---
 
@@ -55,7 +55,7 @@ ls "$(git rev-parse --git-dir)" \
 ```
 
 A hit means a merge, rebase, cherry-pick, or revert is mid-flight. Hand the
-run to `merge-conflicts` and stop, because a plain `git commit` during a
+run to `eng:merge-conflicts` and stop, because a plain `git commit` during a
 rebase leaves the rebase sitting unfinished. The two `rebase-` entries are
 directories that last the whole rebase, which `REBASE_HEAD` does not.
 
@@ -66,8 +66,8 @@ outlive its operation:
 git diff --name-only --diff-filter=U
 ```
 
-Hand the run to `merge-conflicts` for any path this lists too. `git add` on a
-conflicted path clears the unmerged flag without resolving a thing, so
+Hand the run to `eng:merge-conflicts` for any path this lists too. `git add`
+on a conflicted path clears the unmerged flag without resolving a thing, so
 staging first and committing after puts the conflict markers into history and
 nothing later in this skill looks for them. `git apply --3way` is how you
 reach this state with the probe above still silent: it leaves unmerged paths
@@ -75,7 +75,7 @@ and starts no operation at all.
 
 End condition: both checks printed nothing and `git status --porcelain -uall`
 printed at least one path, or the run has stopped with its reason named,
-which is either nothing to commit or work handed to `merge-conflicts`.
+which is either nothing to commit or work handed to `eng:merge-conflicts`.
 
 ## 2. Stage the change
 
@@ -268,7 +268,7 @@ files were re-staged.
 
 ## 8. Push, when asked
 
-Only on `/commit push` or a direct request.
+Only on `/eng:commit push` or a direct request.
 
 ```bash
 git rev-parse --abbrev-ref HEAD

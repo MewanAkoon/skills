@@ -16,7 +16,7 @@ usually go wrong.
 
 Automatically when a task is building or fixing behaviour in a service, route
 handler, or repository function and a test path exists. You can also start it
-by hand with `/tdd-node-api`.
+by hand with `/eng:tdd-node-api`.
 
 Skip it for one-line config edits, type-only changes, and throwaway scripts.
 

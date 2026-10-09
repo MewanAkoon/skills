@@ -27,7 +27,7 @@ the verification.
 
 ## How to use it
 
-Type `/verify-app` in the repo. It reads the repo, asks only what it cannot
+Type `/eng:verify-app` in the repo. It reads the repo, asks only what it cannot
 find, writes `.claude/skills/verify-<app>/`, then runs its own output once to
 prove it works.
 

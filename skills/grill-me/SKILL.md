@@ -26,7 +26,7 @@ Skip it for a task you could describe completely in one sentence.
 
 ## How to use it
 
-Type `/grill-me` and describe the thing, roughly. Answer the questions.
+Type `/eng:grill-me` and describe the thing, roughly. Answer the questions.
 Say "enough" when you want it to stop early, or "I don't know, decide" for a
 question you have no opinion on.
 

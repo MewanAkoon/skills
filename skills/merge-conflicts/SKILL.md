@@ -194,7 +194,7 @@ git add <files>
 git merge --continue    # or: rebase, cherry-pick, revert, am
 ```
 
-Each `--continue` writes the message git already prepared, so the `commit`
+Each `--continue` writes the message git already prepared, so the `eng:commit`
 skill stays out of those paths. A rebase or a cherry-pick needs its own
 continue rather than a fresh `git commit`.
 
@@ -203,7 +203,7 @@ out.
 
 A bare `git apply --3way` started no operation, so there is nothing to
 continue and git prepared no message. Stage the resolved files and hand the
-run to the `commit` skill, which scans them for secrets, matches the repo's
+run to the `eng:commit` skill, which scans them for secrets, matches the repo's
 message convention, and recovers from a hook that rewrites files.
 
 A stash pop has no continue. Stage the resolved files, confirm the working
@@ -220,7 +220,7 @@ Finish the operation rather than backing out of it. When the right move is
 paths, and for a stash pop `git stash list` no longer holds the entry that
 produced the conflict, or the run has handed off with its destination named,
 which is a rebase that stopped on its next commit and restarted at step 1, an
-`apply --3way` passed to the `commit` skill, or an `--abort` waiting on the
+`apply --3way` passed to the `eng:commit` skill, or an `--abort` waiting on the
 user's answer.
 
 ---

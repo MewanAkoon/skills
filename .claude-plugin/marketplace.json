@@ -1,0 +1,16 @@
+{
+  "name": "mewanakoon",
+  "owner": {
+    "name": "MewanAkoon",
+    "url": "https://github.com/MewanAkoon"
+  },
+  "description": "MewanAkoon's engineering skills for Claude Code.",
+  "plugins": [
+    {
+      "name": "eng",
+      "source": "./",
+      "description": "Engineering skills for Claude Code: commits and PRs only when asked, TypeScript and API practice, debugging, review, and plain writing.",
+      "category": "engineering"
+    }
+  ]
+}

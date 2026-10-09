@@ -1,25 +1,28 @@
 # Optional extras
 
-Nothing in this file is part of this repo. The skills work with none of it
-installed, no session loads it, and no skill or script depends on it.
+Nothing in this file is part of this repo's plugin. The skills work with none
+of it installed, no session loads it, and no skill or script depends on it.
 `check.sh` lints its links and its prose the way it lints every file here, and
 that is the whole of its involvement. These are notes on what pairs well with
 these skills in each tool, written down so the same ground is not covered
 twice.
 
-## Why plugins are not part of this repo
+## Why other plugins stay out
 
-A Claude Code plugin and a Cursor plugin are different artifacts. Claude Code
-installs one under `~/.claude/plugins` and reads its manifest at
+This repo ships one Claude Code plugin, `eng`, and nothing else rides inside
+it. Bundling someone else's plugin would make every install carry components
+nobody here audited, and would tie this one's release to theirs.
+
+A Claude Code plugin and a Cursor plugin are also different artifacts. Claude
+Code installs one under `~/.claude/plugins` and reads its manifest at
 `.claude-plugin/plugin.json`. Cursor installs from its own marketplace under
-`~/.cursor/plugins` and reads `.cursor-plugin/plugin.json`. The two trees do
-not overlap: nothing installed in one shows up in the other. A vendor can ship
+`~/.cursor/plugins` and reads `.cursor-plugin/plugin.json`. A vendor can ship
 both manifests from one repo, as `figma` does, and it is still two installs
 with two enabled states.
 
-[AGENTS.md](AGENTS.md) under "What belongs here" says why that keeps plugins
-out of the repo. Install what you want in your own tool. What follows is a
-recommendation, never a dependency.
+[AGENTS.md](AGENTS.md) under "What belongs here" holds the rule. Install what
+you want in your own tool. What follows is a recommendation, never a
+dependency.
 
 ## With Claude Code
 
@@ -71,7 +74,7 @@ below.
 
 Cursor also syncs its own skills into `~/.cursor/skills-cursor`, several of
 them review skills, so read those before adding anything that reviews a diff.
-That directory is Cursor's, and `link.sh` neither writes to it nor prunes it.
+That directory is Cursor's, and nothing in this repo writes to it or prunes it.
 
 ## Before enabling any of them
 

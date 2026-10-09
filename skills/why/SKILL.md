@@ -22,20 +22,21 @@ looks wrong or redundant. When a reviewer asks why the code is like this and
 nobody left a comment.
 
 It runs on its own for that first case, because deleting a guard is something
-an agent reaches on its own with nobody watching to ask for it. `api-boundaries`
-tells the agent to delete guards; this is the check that runs first.
+an agent reaches on its own with nobody watching to ask for it.
+`eng:api-boundaries` tells the agent to delete guards; this is the check that
+runs first.
 
 Skip it for code written this week that you already understand, and for code
 you are adding rather than removing. Skip it when the question is what the
-code does, which is `/how`. Skip the full report when the commit that added
+code does, which is `/eng:how`. Skip the full report when the commit that added
 the line already explains it: say what that commit says and stop.
 
 ## How to use it
 
-Nothing to invoke when it fires on its own. To ask directly, type `/why` with
-a file, a line range, or a symbol name. Either way you get a short report with
-a citation on every claim, and a list of everywhere that was searched and came
-back empty.
+Nothing to invoke when it fires on its own. To ask directly, type `/eng:why`
+with a file, a line range, or a symbol name. Either way you get a short report
+with a citation on every claim, and a list of everywhere that was searched and
+came back empty.
 
 ---
 

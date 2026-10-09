@@ -22,7 +22,7 @@ Also useful on a diff someone else wrote that you do not trust yet.
 
 ## How to use it
 
-Type `/blast-radius` with the change described, or point it at a diff or a
+Type `/eng:blast-radius` with the change described, or point it at a diff or a
 branch. It comes back with a short list of risks and the evidence level for
 each one.
 

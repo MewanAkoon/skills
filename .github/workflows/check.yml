@@ -8,15 +8,19 @@ on:
 permissions:
   contents: read
 
-# A second push to the same branch cancels the run still in flight.
+# A second push to a pull request's branch cancels the run still in flight.
+# A push to main gets a group of its own, keyed by commit, so no run there is
+# ever cancelled or replaced while pending: each one checks the version rule
+# against main as it was before that push, and a cancelled run checks nothing.
 concurrency:
-  group: check-${{ github.ref }}
+  group: check-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
-    # run. --doctor is left out: a fresh runner has no ~/.claude to inspect.
+    # run. --doctor is left out: a fresh runner has no Claude Code install to
+    # inspect.
     strategy:
       fail-fast: false
       matrix:
@@ -26,8 +30,28 @@ jobs:
       # Pinned to a commit, because a moving tag on the only gate this repo
       # has is a gate someone else can change.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The version rule compares against origin/main, which a shallow
+          # clone does not have.
+          fetch-depth: 0
       - run: bash --version | head -1
+      - run: jq --version
+      # On a pull request the version rule compares with origin/main. On a
+      # push to main it compares with main as it was before the push, so two
+      # pull requests that each bumped to the same version fail here once the
+      # second lands, rather than shipping its changes to nobody.
       - run: ./scripts/check.sh
+        env:
+          CHECK_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
+
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Pinned, because the validator's rules change with each release, and a
+      # gate that moves on its own is one someone else controls. It needs no
+      # login: it reads the manifests and makes no model call.
+      - run: CLAUDE_BIN="npx --yes @anthropic-ai/claude-code@2.1.293" ./scripts/validate-plugin.sh
 
   shellcheck:
     runs-on: ubuntu-latest

@@ -252,12 +252,16 @@ Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
 here follows.
 
 Run the checker before committing, and the plugin validator when a manifest
-changes:
+changes. Run the validator on the same pinned Claude Code as CI, because its
+rules change between releases:
 
 ```bash
 ./scripts/check.sh
-./scripts/validate-plugin.sh
+CLAUDE_BIN="npx --yes @anthropic-ai/claude-code@2.1.293" ./scripts/validate-plugin.sh
 ```
+
+Without `CLAUDE_BIN` it uses the `claude` on your PATH, which may disagree
+with CI.
 
 The checker covers the mechanical half of that standard, and
 [AGENTS.md](AGENTS.md) lists what it checks. CI runs it on every pull request
@@ -277,8 +281,9 @@ A skill stays whether or not it fires. To see how often each one has fired,
 run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
 when it last ran, and what its description costs on every turn.
 
-Every script is also an `npm run` target, which is the only reason
-`package.json` exists. It declares no dependencies.
+Every script you run is also an `npm run` target, which is the only reason
+`package.json` exists. It declares no dependencies. `scripts/legacy.sh` has no
+target, because it is never run on its own: `link.sh` and `--doctor` load it.
 
 ## Optional extras
 

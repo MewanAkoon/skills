@@ -187,7 +187,16 @@ the last one; or the run has gone back to step 2 to split the commit.
 
 ## 6. Commit
 
-First record a snapshot for step 7: the output of `git status --porcelain
+First write the message alone to `commit-message.txt`, replacing any earlier
+one. Put it in the scratchpad directory your system prompt names, or when it
+names none, in one directory per run from `mktemp -d`. The file keeps quotes,
+backticks, and `$` literal in every shell. macOS's bash 3.2 rejects or garbles
+a heredoc inside `<( )` when the text holds an unmatched quote or bracket,
+such as a single apostrophe. Writing the file before the snapshot means that,
+should that directory sit inside the repo, step 7 does not take the file for a
+hook's output.
+
+Then record a snapshot for step 7: the output of `git status --porcelain
 -uall`, plus a hash of the held-back lines of every partly staged path. Its
 in-progress entries, the ones with a letter in the second column (` M`, `MM`,
 `AM`) and the untracked `??` ones, hold work the user already had in progress.
@@ -197,16 +206,10 @@ A partly staged path has a letter in both columns, such as `MM`, `AM`, or `MD`:
 git diff --no-color --no-ext-diff -U0 -- <path> | grep '^[-+]' | git hash-object --stdin
 ```
 
-Then commit with `-F` and a single-quoted heredoc, which keeps backticks and
-special characters literal. The `EOF` terminator sits at column 0:
+Then commit from the message file:
 
 ```bash
-git commit -F <(cat <<'EOF'
-type(scope): short description
-
-- optional bullet
-EOF
-)
+git commit -F "<message path>"
 ```
 
 Let the hooks run. When one blocks the commit, step 7 handles it, and
@@ -214,10 +217,10 @@ Let the hooks run. When one blocks the commit, step 7 handles it, and
 the user wants a change folded into the commit before it, say that amending
 rewrites history and ask them to confirm first.
 
-End condition: the snapshot, with a hash for every partly staged path, is
-written down before the commit runs, and `git commit` has returned with its
-exit status and any hook output captured, or the run is waiting on the user
-to confirm an amend.
+End condition: the message file and the snapshot, with a hash for every
+partly staged path, are written in that order before the commit runs, and
+`git commit` has returned with its exit status and any hook output captured,
+or the run is waiting on the user to confirm an amend.
 
 ## 7. Handle what the hooks did
 
@@ -235,8 +238,9 @@ one of its endings.
 
 Only on `/eng:commit push` or a direct request to push. Read
 [references/push.md](references/push.md) and follow it. It resolves the remote
-and the default branch, stops on a detached `HEAD`, and asks before pushing to
-the default branch or past a rejection.
+and the default branch, stops on a detached `HEAD` or a repo with no remote,
+and asks before a push from the default branch, with the default unknown, or
+from a branch that tracks another one, and after a rejection.
 
 End condition: the reference's push step reached one of its endings, or no
 push was asked for.

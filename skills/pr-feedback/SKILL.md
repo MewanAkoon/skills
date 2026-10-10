@@ -38,7 +38,7 @@ Read every review thread with its state, which the REST list hides.
 `--paginate` reads past 100 threads:
 
 ```bash
-gh api graphql --paginate -F owner=<owner> -F repo=<repo> -F n=<n> -f query='
+gh api graphql --paginate -f owner=<owner> -f repo=<repo> -F n=<n> -f query='
 query($owner:String!,$repo:String!,$n:Int!,$endCursor:String){repository(owner:$owner,name:$repo){
 pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}
 nodes{isResolved isOutdated path line

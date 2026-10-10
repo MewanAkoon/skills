@@ -38,10 +38,11 @@ Check the first case before the others, whether the hook passed or failed.
   the user what to fix, without retrying.
 - **Hook passed but files were modified or created.** A hook rewrote files
   silently. Run `git status --porcelain -uall` again, ignore the snapshot's
-  in-progress paths, and stage what is left. Commit it with a message in the
-  shape step 3 picked and the scope step 4 derives from these paths, written
-  to step 5's rules. In a conventional commits repo, fixes under `src/auth/`
-  give `chore(auth): apply auto-fixes`.
+  in-progress paths, and stage what is left. Rewrite step 6's message file
+  and commit from it with `-F`. The new message takes the shape step 3
+  picked and the scope step 4 derives from these paths, written to step 5's
+  rules. In a conventional commits repo, fixes under `src/auth/` give
+  `chore(auth): apply auto-fixes`.
 
 **Done when:** `git status --porcelain -uall` lists no path beyond those of
 the snapshot's in-progress entries, or the run has stopped with the hook

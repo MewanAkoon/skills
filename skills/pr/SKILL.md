@@ -43,8 +43,8 @@ as a draft.
 Read [references/remote.md](references/remote.md) and follow it. It names
 `$REMOTE`, `$CURRENT_BRANCH`, and the default branch, and stops on a detached
 `HEAD`, which leaves no branch to open a PR from, or on a repo with no remote,
-which leaves nowhere to open one. A branch with no upstream is what step 6
-checks before it pushes.
+which leaves nowhere to open one. Step 6 reads the branch's upstream before it
+pushes.
 
 `$BASE` starts as that default branch, and step 2 settles it. Like `$REMOTE`,
 it is a name to write into the commands below, not a shell variable. When the
@@ -119,8 +119,8 @@ Call the result `PR_DATA`.
   host's `/` or `:`, with nothing after it but an optional `.git`, ignoring
   case as GitHub does. When no remote matches, or more than one, say which
   repository the push needs and stop. A failed push prints its output and
-  stops. No means steps 3 to 5 describe only what the PR holds, read from
-  `<headRefOid>` rather than `HEAD`.
+  stops. No means steps 3 to 5 describe only what the PR holds, so write
+  `<headRefOid>` wherever their commands say `HEAD`.
 - `PR_DATA` is empty, or `state` is `CLOSED` or `MERGED`: take the base the
   user's message named, or else ask "What is the base branch for this PR?
   (default: <resolved default>)" and take their answer, or the resolved
@@ -263,7 +263,8 @@ Evidence comes from a run this session made: the test `eng:implement` saw fail
 and then pass, the checks its review ran, or output the change altered. A green
 run on its own is a claim, and the before and after together are the
 evidence. When this session ran nothing, run the repo's tests now for the
-After line, and write that the before was not observed.
+After line, and write that the before was not observed. When step 2 kept local
+commits off the PR, say the run included them.
 
 Merge danger is always there. A one-way door is a change a revert does not
 undo: a destructive migration, deleting or backfilling data, removing a
@@ -294,8 +295,12 @@ hides them when it renders the page.
 
 ## 6. Create, when no PR exists
 
-Push first when the branch has no upstream, or has commits its upstream
-lacks:
+Read the upstream with
+`git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"`.
+When it names a branch other than `$REMOTE/$CURRENT_BRANCH`, such as
+`origin/main`, say so and ask first, because the push below goes to `$REMOTE`
+and moves the upstream, and stop on no. Push unless it names
+`$REMOTE/$CURRENT_BRANCH` and `git rev-list --count '@{u}..HEAD'` prints 0:
 
 ```bash
 git push -u $REMOTE $CURRENT_BRANCH
@@ -305,21 +310,15 @@ When the push fails, for a reason such as no permission to push, a pre-push
 hook that exits non-zero, or a branch of the same name that has moved on the
 remote, print what `git push` said and stop.
 
-Then create it. The single-quoted heredoc keeps backticks and special
-characters literal, and process substitution avoids a temp file. Every `EOF`
-terminator sits at column 0, with no leading spaces or tabs. Add `--draft` on
-`/eng:pr draft`:
+Then write the title alone to `pr-title.txt` and the body alone to
+`pr-body.md`, replacing any earlier ones. Put both in the scratchpad directory
+your system prompt names, or when it names none, in one directory per run
+from `mktemp -d`. The files keep quotes, backticks, and `$` literal in every
+shell, where a heredoc inside `$( )` breaks macOS's bash 3.2 on one
+apostrophe. Add `--draft` on `/eng:pr draft`:
 
 ```bash
-gh pr create \
-  --title "$(cat <<'EOF'
-<title>
-EOF
-)" \
-  --body-file <(cat <<'EOF'
-<body>
-EOF
-) \
+gh pr create --title "$(cat "<title path>")" --body-file "<body path>" \
   --base $BASE
 ```
 
@@ -328,9 +327,10 @@ already open for this branch. Name its number so the user can rerun and take
 step 7 instead.
 
 End condition: `gh pr create` printed a URL and the branch now has an upstream
-on `$REMOTE`, or the run has stopped with the command's own output printed,
-which is a failed `git push`, a PR already open for this branch, or another
-`gh pr create` error.
+on `$REMOTE`, or the run is waiting on the user about a push from a branch
+that tracks another one, or has stopped on their no, or has stopped with the
+command's own output printed, which is a failed `git push`, a PR already open
+for this branch, or another `gh pr create` error.
 
 ## 7. Update, when a PR is open
 
@@ -348,18 +348,10 @@ Proposed summary: <new summary>
 
 Ask "Apply these updates to the PR? (yes / no)" and stop on no.
 
-On yes:
+On yes, write the title and body files as step 6 says, then:
 
 ```bash
-gh pr edit \
-  --title "$(cat <<'EOF'
-<title>
-EOF
-)" \
-  --body-file <(cat <<'EOF'
-<body>
-EOF
-)
+gh pr edit --title "$(cat "<title path>")" --body-file "<body path>"
 ```
 
 When `gh pr edit` exits non-zero, read

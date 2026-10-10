@@ -8,20 +8,15 @@ Replace `{number}` with the number from `PR_DATA`, and leave `{owner}` and
 `{branch}` from the current repo and no other placeholder, so a literal
 `{number}` returns a 404 that looks like a missing PR.
 
-Pass the title and body with `-f`, which sends each value as a plain string.
-`-F` would turn a body reading `true` or `42` into a JSON boolean or number,
-and would read a value starting with `@` as a filename:
+Send the title and body files step 7 wrote. `-f` sends the title as a plain
+string, and `-F` with `@` and a path sends the body file's contents as one
+too. `gh` converts only a value typed after `-F`, where `true`, `42`, and
+`{owner}` become a boolean, a number, and the repo's owner, so a body holding
+any of them arrives as written.
 
 ```bash
 gh api repos/{owner}/{repo}/pulls/{number} --method PATCH \
-  -f title="$(cat <<'EOF'
-<title>
-EOF
-)" \
-  -f body="$(cat <<'EOF'
-<body>
-EOF
-)"
+  -f title="$(cat "<title path>")" -F body=@"<body path>"
 ```
 
 When this fails too, print what `gh api` said and stop.

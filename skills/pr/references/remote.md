@@ -16,11 +16,11 @@ The first printing the literal `HEAD` means the checkout is detached and there
 is no branch. Say so and stop.
 
 The third command names the remote this branch already tracks. Take it when it
-prints something. Otherwise take `origin` when `git remote` lists it, or the
-only name listed when there is exactly one. Ask the user which to use when
-several are listed and none is `origin`. Stop when `git remote` lists nothing,
-because there is no remote to work with. An empty third command also means the
-branch has no upstream, which decides how the caller pushes.
+prints a name other than `.`, which it prints for a branch tracking a local
+branch. Otherwise take `origin` when `git remote` lists it, or the only name
+listed when there is exactly one. Ask the user which to use when several are
+listed and none is `origin`. Stop when `git remote` lists nothing, because
+there is no remote to work with.
 
 Call that name `$REMOTE`, and the branch `$CURRENT_BRANCH`. They are names to
 write into the commands below, not shell variables, because a variable set in
@@ -52,7 +52,7 @@ asked for, so a remote holding both `develop` and `main` prints `develop`
 first. Read the whole list, then take `main`, else `master`, else `develop`,
 else `trunk`. When it prints none of them, the default branch is unknown.
 
-**Done when:** `$REMOTE` is one of the names `git remote` printed, the branch
-says whether it has an upstream, and the default branch is named or recorded
-as unknown. Or the run is waiting on the user to pick a remote, or has stopped
-on a detached `HEAD` or a repo with no remote.
+**Done when:** `$REMOTE` is one of the names `git remote` printed, and the
+default branch is named or recorded as unknown. Or the run is waiting on the
+user to pick a remote, or has stopped on a detached `HEAD` or a repo with no
+remote.

@@ -251,7 +251,7 @@ above leaves out the ones you do not want.
 | [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's message convention, survives hooks |
 | [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff, creates or updates |
-| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, or close an issue | Drafts from the repo's template and labels to a file, files only when asked |
+| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, or close an issue | Drafts from the repo's template and labels to files, files only when asked |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
 | [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |

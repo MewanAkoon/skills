@@ -467,9 +467,11 @@ grep -qx 'alwaysApply: false' "$cursor_rule" \
   || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
 # link.sh, scripts/*.sh, tests/*/*.sh and evals/*/scaffold.sh parse as bash,
-# and the plugin's hook as sh. This script embeds awk programs in single quotes, so an unbalanced
-# apostrophe in a printed string ends the program and leaves a file that fails
-# only when someone runs it, and nothing else here runs the others.
+# because nothing here runs most of them. This script embeds awk programs in
+# single quotes, so an unbalanced apostrophe in a printed string ends the
+# program and leaves a file that fails only when someone runs it. The plugin's
+# hook parses as sh, which names a syntax error plainly before its fixtures
+# below fail on it.
 #
 # `npm run lint` catches that too, and more of it: a balanced pair of
 # apostrophes passes the parse below while leaving an awk program mangled,

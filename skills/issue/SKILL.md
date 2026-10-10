@@ -1,6 +1,6 @@
 ---
 name: issue
-description: Use when the user's latest message asks to draft, file, edit, label, or close a GitHub issue or a ticket, or to turn a plan or deferred review items into issues. Writes the draft to a file and changes GitHub only when asked. Working on an issue you were handed is eng:investigate.
+description: Use when the user's latest message asks to draft, file, edit, label, or close a GitHub issue or a ticket, or to turn a plan or deferred review items into issues. Writes the draft to files and changes GitHub only when asked. Working on an issue you were handed is eng:investigate.
 ---
 
 # Issue
@@ -27,7 +27,8 @@ an issue, and never passes `--comment` to `gh issue close`.
 ## How to use it
 
 Say what the issue is about, or point at the plan or the review items. You get
-a draft file and the command that would file it. Say "file it" to create it.
+the draft's title and body files and the command that would file it. Say "file
+it" to create it.
 
 ---
 
@@ -95,17 +96,22 @@ breakdown is proposed and the run is waiting for the user's approval.
 
 Write the body alone to `issue-<slug>.md` in the scratchpad directory your
 system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, so the
-file can be passed to `gh` as it stands. In the reply, give the title, the
-labels, the file's path, and the exact command that would file it. Always pass
-a title and a body file, so `gh` never prompts:
+file can be passed to `gh` as it stands, and the title alone to
+`issue-<slug>.title` beside it. In the reply, give the title, the labels, both
+files' paths, and the exact command that would file it. Always pass a title
+and a body file, so `gh` never prompts. Reading the title from its file keeps
+a backtick, a `$`, or an apostrophe in it literal in every shell. Typed into
+the command, a title in double quotes is expanded, and one in single quotes
+breaks on an apostrophe:
 
 ```bash
-gh issue create --repo <owner/repo> --title "<title>" --body-file <path> --label <name>
+gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \
+  --body-file "<body path>" --label <name>
 ```
 
 Stop there unless the user's latest message asked to file it.
 
-**Done when:** the body file's path, the title, and the command are in the
+**Done when:** both files' paths, the title, and the command are in the
 reply, or for another tracker the copy-paste text is, or the latest message
 asked to file it and the run goes on to step 6.
 
@@ -132,7 +138,7 @@ output is reported.
 
 ## Report
 
-The draft's path, or the issue's URL. The labels as GitHub shows them. A
+The draft's two paths, or the issue's URL. The labels as GitHub shows them. A
 duplicate found instead, with its link. What the user still has to do, such
 as filing in another tracker.
 

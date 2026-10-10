@@ -1,7 +1,7 @@
 # Review loop
 
 Read this at implement's step 5. Review runs through the built-in `code-review`,
-plus one intent check it lacks. Never pass `ultra`, `--comment`, or `--fix`.
+plus an intent check it lacks. Never pass `ultra`, `--comment`, or `--fix`.
 
 ## 1. Snapshot
 
@@ -27,20 +27,22 @@ Run the repo's lint, typecheck, and tests in their report-only modes. Then
 call the Skill tool with `code-review` and the arguments
 `medium <parent>..<snapshot>`, hashes written out.
 
-In the first round, always and at the same time, brief a general-purpose
-subagent with the intent check: each plan item done, missing, extra, or wrong,
-quoting the plan line; each bug fix's test seen failing on the old code,
-extracted with `mkdir "$R/old" && git archive <parent> | tar -x -C "$R/old"`, or
-reported as unproven when the extract lacks the dependencies, env, or fixtures
-to run it; every changed sentence of prose backed by a `file:line`. Name the
-files implement's step 1 found already changed, so it does not call them extra.
-It edits, commits, and posts nothing, writes nothing outside this machine,
-starts no subagents, and writes only under `R`.
+In every round, at the same time, brief a general-purpose subagent with the
+intent check. In the first round it covers the whole change: each plan item
+done, missing, extra, or wrong, quoting the plan line; each bug fix's test seen
+failing on the old code, extracted from the top of the tree with
+`mkdir "$R/old" && git -C "$(git rev-parse --show-toplevel)" archive <parent> | tar -x -C "$R/old"`,
+or reported as unproven when the extract lacks the dependencies, env, or
+fixtures to run it; every changed sentence of prose backed by a `file:line`.
+In a later round it checks, on that round's range, that the fix left each plan
+item it touched done.
+Name the files implement's step 1 found already changed, so it does not call
+them extra. It edits, commits, and posts nothing, writes nothing outside this
+machine, starts no subagents, and writes only under `R`.
 
-**Done when:** the review's result is in, and in the first round the intent
-check's too. In the terminal `code-review` runs in the background: if the turn
-must end first, say the review is still running, and carry on from section 3
-when it reports.
+**Done when:** the review's result and the intent check's are in. In the
+terminal `code-review` runs in the background: if the turn must end first, say
+the review is still running, and carry on from section 3 when it reports.
 
 ## 3. Triage
 
@@ -62,9 +64,10 @@ is the last, and fixes nothing: what it finds goes in the report.
 ## 5. Report
 
 Ready only when every check passes, no valid blocking finding remains, the
-intent check ran, and the last review saw the final tree. Otherwise not ready,
-with each reason. List what was fixed, each finding left and why, each claim
-beside its evidence (a check, a test, a `file:line`), and what was not checked.
+intent check ran in every round, and the last review saw the final tree.
+Otherwise not ready, with each reason. List what was fixed, each finding left
+and why, each claim beside its evidence (a check, a test, a `file:line`), and
+what was not checked.
 Name `/security-review` when the diff touches authentication, payments, secrets,
 or cryptography, and `/verify`, or `/run-skill-generator` first, when the change
 has a runtime surface.
@@ -73,5 +76,5 @@ has a runtime surface.
 
 ## Without code-review
 
-Where `code-review` is missing or fails, run the intent check in every round,
-with a bug lens added, and say in the report that the built-in did not run.
+Where `code-review` is missing or fails, add a bug lens to the intent check,
+and say in the report that the built-in did not run.

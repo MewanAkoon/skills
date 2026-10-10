@@ -25,10 +25,18 @@ carries none of the uncommitted work. Record the starting commit with `git
 rev-parse HEAD` and put it in the brief. Before its first edit, the part checks
 its own `HEAD` and runs `git checkout --detach <sha>` when it differs, since a
 worktree can start from the default branch instead. The part leaves its change
-uncommitted, with `git add -N .` so new files show. The main session then
-applies it, unstaged, with `git -C <worktree> diff --binary <sha> | git apply`.
-`--binary` carries binary files, and `--3way` is only for when the plain apply
-fails, because it stages what it applies.
+uncommitted, with `git add -N :/` so new files show. The main session then
+applies it, unstaged:
+
+```bash
+git -C <worktree> diff --binary <sha> | git -C "$(git rev-parse --show-toplevel)" apply
+```
+
+`:/` and `--show-toplevel` name the top of the tree, because from a
+subdirectory `git add -N .` marks only that directory, and `git apply` skips
+every path outside it and still exits 0. `--binary` carries binary files, and
+`--3way` is only for when the plain apply fails, because it stages what it
+applies.
 
 A worktree also lacks ignored files such as `.env`, fixtures, and
 `node_modules`, so its tests can skip or pass for the wrong reason. The part

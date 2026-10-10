@@ -13,6 +13,10 @@ cd "$(dirname "$SELF")/.." || exit 1
 fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 
+# Values left over from the calling shell would point the hook at another
+# copy's files, so each run below gets only the ones it sets.
+unset CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA
+
 hook=hooks/eng-hook
 inputs=tests/hooks/session-start
 contract=standards/workflow.md
@@ -81,7 +85,25 @@ mkdir -p "$spaced/standards" "$spaced/skills/plain-writing"
 cp "$contract" "$spaced/standards/"
 cp skills/plain-writing/SKILL.md "$spaced/skills/plain-writing/"
 run "$inputs/startup.json" CLAUDE_PLUGIN_ROOT="$spaced"
-[ "$status" -eq 0 ] && check_block "spaced root" "$(jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null)"
+[ "$status" -eq 0 ] || bad "spaced root: exited $status"
+check_block "spaced root" "$(jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null)"
+# The command line hooks.json gives Claude Code, run through sh as a hook runs,
+# with the root left for the shell to expand and with it written in place. A
+# lost quote around the root splits the path at the space.
+mkdir -p "$spaced/hooks"
+cp "$hook" "$spaced/hooks/"
+command="$(jq -r '.hooks.SessionStart[0].hooks[0].command' hooks/hooks.json)"
+for form in expanded written; do
+  line="$command"
+  # Split around the placeholder rather than substitute, because bash 5.2
+  # reads & in a replacement as the matched text, and bash 3.2 keeps quotes.
+  [ "$form" = written ] &&
+    line="${command%%"\${CLAUDE_PLUGIN_ROOT}"*}$spaced${command#*"\${CLAUDE_PLUGIN_ROOT}"}"
+  env CLAUDE_PLUGIN_ROOT="$spaced" sh -c "$line" < "$inputs/startup.json" > "$scratch/out" 2> "$scratch/err"
+  status=$?
+  [ "$status" -eq 0 ] || bad "hooks.json command, root $form: exited $status"
+  check_block "hooks.json command, root $form" "$(jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null)"
+done
 # Without plain-writing the contract still goes out, and the log says why the
 # writing rules did not.
 mv "$spaced/skills/plain-writing/SKILL.md" "$scratch/SKILL.md"

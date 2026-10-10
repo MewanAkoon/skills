@@ -41,7 +41,8 @@ session_start() {
   text="$(cat "$contract")"
 
   if [ -r "$writing" ]; then
-    # From the Punctuation heading to the heading after Word choice.
+    # The Punctuation and Word choice sections, each from its heading to the
+    # next one. Any section between or after them stays out.
     rules="$(awk '
       /^## / { keep = ($0 == "## Punctuation" || $0 == "## Word choice") }
       keep

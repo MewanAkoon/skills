@@ -80,10 +80,10 @@ worktree `.git` is a file, so every hardcoded path under it fails.
 
 `$OTHER` below stands for the SHA that prints. Write it into each command
 yourself, because a shell variable set in one command does not survive into
-the next one. Empty output means all four reads failed, and `HEAD...` with
-nothing after it compares HEAD to itself and prints nothing at all. Stop there
-and name the operation from step 1, unless it is one of the three that keep no
-such ref.
+the next one. When the read prints no SHA because the file is missing,
+`HEAD...` with nothing after it would compare HEAD to itself and print nothing
+at all. Stop there and name the operation from step 1, unless it is one of the
+three that keep no such ref.
 
 For a merge or a rebase, read the history on both sides:
 
@@ -264,15 +264,23 @@ paths. A rebase or a cherry-pick needs its own continue rather than a fresh
 `git commit`.
 
 A merge, cherry-pick, or revert continue runs the repo's pre-commit and
-commit-msg hooks, and an am continue runs pre-applypatch, so record
-`git status --porcelain -uall` before running it. A hook that exits non-zero
-prints its output and leaves the operation paused. Handle that as the first
-three cases of the `eng:commit` skill's `references/hooks.md` describe, with the
-recorded status as its snapshot and one more continue as its retry, and run
-none of that skill's other steps. A hook that passes can still rewrite files:
-compare `git status --porcelain -uall` after the continue with the recorded
-one, leave any path the hook changed unstaged, and name it in the report,
-because committing it is a separate request.
+commit-msg hooks, and an am continue runs pre-applypatch. So before running it,
+record a snapshot the way the `eng:commit` skill's step 6 does: the output of
+`git status --porcelain -uall`, plus, for every partly staged path, the hash of
+its held-back lines:
+
+```bash
+git diff --no-color --no-ext-diff -U0 -- <path> | grep '^[-+]' | git hash-object --stdin
+```
+
+A hook that exits non-zero prints its output and leaves the operation paused.
+Handle that as the first three cases of the `eng:commit` skill's
+`references/hooks.md` describe, with that snapshot and one more continue as its
+retry, and run none of that skill's other steps. A hook that passes can still
+rewrite files: compare `git status --porcelain -uall` and each partly staged
+path's hash after the continue with the snapshot, leave any path the hook
+changed unstaged, and name it in the report, because committing it is a
+separate request.
 
 A rebase stops again on the next commit. Repeat from step 1 until it runs
 out.

@@ -40,56 +40,18 @@ as a draft.
 
 ## 1. Resolve the remote and the base branch
 
-```bash
-git rev-parse --abbrev-ref HEAD
-git remote
-git for-each-ref --format='%(upstream:remotename)' "$(git symbolic-ref -q HEAD)"
-```
+Read [references/remote.md](references/remote.md) and follow it. It names
+`$REMOTE`, `$CURRENT_BRANCH`, and the default branch, and stops on a detached
+`HEAD`, which leaves no branch to open a PR from, or on a repo with no remote,
+which leaves nowhere to open one. A branch with no upstream is what step 6
+checks before it pushes.
 
-The third command names the remote this branch already tracks. Take it when it
-prints something. Otherwise take `origin` when `git remote` lists it, or the
-only name listed when there is exactly one. Ask the user which to use when
-several are listed and none is `origin`. Stop when `git remote` lists nothing
-at all, because there is nowhere to open a PR.
+`$BASE` starts as that default branch, and step 2 settles it. Like `$REMOTE`,
+it is a name to write into the commands below, not a shell variable. When the
+default is unknown, ask the user which branch the PR targets.
 
-An empty third command also means the branch has no upstream, which is what
-step 6 checks before it pushes.
-
-Call that name `$REMOTE`. It, `$BASE` and `$CURRENT_BRANCH` are names to
-substitute into the commands below, not shell variables, because a variable
-set in one command does not survive into the next one.
-
-Then the base branch:
-
-```bash
-git symbolic-ref --short refs/remotes/$REMOTE/HEAD 2>/dev/null | sed 's|^[^/]*/||'
-```
-
-When that prints nothing, ask the remote itself:
-
-```bash
-git remote show $REMOTE | sed -n '/HEAD branch/s/.*: //p'
-```
-
-When that prints nothing, or prints `(unknown)` as it does for an empty
-remote, ask the remote which of these it carries:
-
-```bash
-git ls-remote --heads $REMOTE \
-  refs/heads/main refs/heads/master refs/heads/develop refs/heads/trunk
-```
-
-Each name is a full ref, because a bare `main` also matches
-`refs/heads/release/main`. That output is sorted by ref name rather than by
-the order the names were asked for, so a remote holding both `develop` and
-`main` prints `develop` first. Read the whole list, then take `main`, else
-`master`, else `develop`, else `trunk`. When it prints none of them, ask the
-user which branch the PR targets.
-
-Stop and tell the user when the current branch is that default branch,
-because a PR cannot be opened from it. Stop too when the checkout is
-detached, which is what `git rev-parse --abbrev-ref HEAD` printing the
-literal `HEAD` means, because there is no branch to open a PR from.
+Stop and tell the user when the current branch is the default branch, because
+a PR cannot be opened from it.
 
 End condition: `$REMOTE` is one of the names `git remote` printed and `$BASE`
 names a branch that remote has, or the run is waiting on the user to name the
@@ -132,19 +94,33 @@ create anything.
 Otherwise look for an existing PR in one call:
 
 ```bash
-gh pr view --json baseRefName,number,url,title,body,state 2>/dev/null || true
+gh pr view --json baseRefName,headRefName,headRefOid,headRepository,number,url,title,body,state 2>/dev/null || true
 ```
 
 Call the result `PR_DATA`.
 
 - `PR_DATA` has content and `state` is `OPEN`: take `baseRefName` as the
-  base, work through steps 3 to 5, then update the PR in step 7. When
-  `git rev-list --count @{u}..HEAD` prints more than zero, those commits are
-  not on the PR yet, so ask "<n> local commits are not on the PR yet. Push
-  them first? (yes / no)". Yes means `git push` before step 7, never with
-  `--force`, and a failed push prints its output and stops. No means steps 3
-  to 5 describe only what the remote holds, read from `@{u}` rather than
-  `HEAD`.
+  base, work through steps 3 to 5, then update the PR in step 7. First check
+  the branch against `headRefOid`, the commit the PR shows, which works
+  whether or not the branch tracks anything.
+
+  When `git merge-base --is-ancestor <headRefOid> HEAD` fails, the PR's head
+  is not in this branch: someone pushed commits this clone lacks, or the
+  branch was rebased since its last push. Say so and stop, because the first
+  needs a pull and the second a force push, and the user decides either.
+
+  When `git rev-list --count <headRefOid>..HEAD` prints more than zero, those
+  commits are not on the PR yet, so ask "<count> local commits are not on the
+  PR yet. Push them first? (yes / no)". Yes means
+  `git push <head remote> HEAD:<headRefName>` before step 7, never with
+  `--force`. `<head remote>` is the remote for the repository the PR's head
+  lives in, whether that is this one or a fork: the one whose
+  `git remote get-url` holds `headRepository.nameWithOwner` right after the
+  host's `/` or `:`, with nothing after it but an optional `.git`, ignoring
+  case as GitHub does. When no remote matches, or more than one, say which
+  repository the push needs and stop. A failed push prints its output and
+  stops. No means steps 3 to 5 describe only what the PR holds, read from
+  `<headRefOid>` rather than `HEAD`.
 - `PR_DATA` is empty, or `state` is `CLOSED` or `MERGED`: take the base the
   user's message named, or else ask "What is the base branch for this PR?
   (default: <resolved default>)" and take their answer, or the resolved
@@ -156,7 +132,8 @@ End condition: `PR_DATA` is on the record, or the run is waiting on the
 user's answer about the base or about pushing, or `gh` is unusable and the
 run goes on to steps 3 to 5 only to print the title and body, or the run has
 stopped with its reason named, which is an operation in flight, an unmerged
-path, a declined prompt, or a failed push.
+path, a declined prompt, a PR head this branch does not contain, no remote
+for the PR's head repository, or a failed push.
 
 ## 3. Read the diff
 

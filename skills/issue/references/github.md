@@ -11,22 +11,24 @@ File in dependency order, so every number a later command needs exists:
 2. Each issue that blocks another.
 3. The rest, each naming its parent and its blockers as it is created.
 
-Draft all of them first, one body file per issue (`issue-<slug>-1.md` and on),
-with every command listed in the reply, and file only after the user approves
-the breakdown and asks to file.
+Draft all of them first, one body file and one title file per issue
+(`issue-<slug>-1.md` and `issue-<slug>-1.title`, and on), with every command
+listed in the reply, and file only after the user approves the breakdown and
+asks to file.
 
 ## With gh 2.94 or later
 
 `gh issue create` and `gh issue edit` take the relationships directly:
 
 ```bash
-gh issue create --repo <owner/repo> --title "<title>" --body-file <path> \
-  --parent <parent> --blocked-by <n>,<m>
+gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \
+  --body-file "<body path>" --parent <parent> --blocked-by <n>,<m>
 gh issue edit <n> --repo <owner/repo> --add-sub-issue <a>,<b>
 gh issue edit <n> --repo <owner/repo> --add-blocked-by <m>
 ```
 
-Check the version with `gh --version` before using these.
+Check the version with `gh --version` before using these. The title comes
+from its file for the reason `SKILL.md`'s step 5 gives.
 
 ## With an older gh
 

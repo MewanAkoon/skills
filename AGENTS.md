@@ -135,9 +135,10 @@ follows, and enforcing it is what this repo is for.
   `implement/references/review.md` at most 3,500. Every other `SKILL.md` and
   every reference file is at most 15,000 bytes, inside the 20,000 characters
   compaction keeps of a skill.
-- `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and
-  `evals/*/scaffold.sh` parse under `bash -n`, and `hooks/eng-hook` under `sh -n`, because nothing else in the
-  checker runs them. The hook's fixtures pass.
+- `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and `evals/*/scaffold.sh`
+  parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
+  parses under `sh -n`, which names a syntax error plainly, and its fixtures
+  pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
   a `MAJOR.MINOR.PATCH` version.

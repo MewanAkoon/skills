@@ -5,8 +5,8 @@
 # --doctor adds the checks CI cannot run, because a fresh runner has no
 # Claude Code install to inspect: whether Claude Code is new enough, whether
 # the plugin is installed at user scope at this version, whether bare copies
-# of its skills are still loading beside it, and whether the skillOverrides
-# entry the README asks for is in place.
+# of its skills are still loading beside it, whether the skillOverrides entry
+# the README asks for is in place, and whether the session hook logged errors.
 
 set -uo pipefail
 
@@ -276,11 +276,20 @@ for skill_file in skills/*/SKILL.md; do
   budget "$skill_file" 15000
 done
 
-budget standards/workflow.md 2500
+# A reference loads whole when a step reads it, and compaction keeps it the
+# same way, so the same cap applies.
+for reference in skills/*/references/*.md; do
+  [ -f "$reference" ] || continue
+  budget "$reference" 15000
+done
+
+budget standards/workflow.md 2800
 budget skills/investigate/SKILL.md 6500
-for lifecycle in implement review-diff pr-feedback; do
+for lifecycle in implement pr-feedback; do
   budget "skills/$lifecycle/SKILL.md" 5000
 done
+budget skills/implement/references/review.md 3000
+budget skills/issue/SKILL.md 6000
 
 # Every skill the workflow names exists and is model-invoked, since the name
 # is the cue to load it and a user-invoked skill refuses that call. The pattern
@@ -305,25 +314,6 @@ while IFS= read -r named; do
     *) bad "standards/workflow.md names the $named skill, which is not a model-invoked skill here" ;;
   esac
 done <<< "$workflow_names"
-
-# Every agent has a name matching its file and a description, which is what
-# both harnesses read to decide when to start it.
-for agent in agents/*.md; do
-  [ -f "$agent" ] || continue
-  base="$(basename "$agent" .md)"
-  afm="$(frontmatter "$agent")"
-  aname="$(printf '%s\n' "$afm" | sed -n 's/^name:[[:space:]]*//p' | head -1)"
-  [ "$aname" = "$base" ] || bad "$agent: frontmatter name is '$aname', file is '$base'"
-  adesc="$(printf '%s\n' "$afm" | sed -n 's/^description:[[:space:]]*//p' | head -1)"
-  if [ -z "$adesc" ]; then
-    bad "$agent: frontmatter has no description"
-  else
-    plain_yaml "$agent" "$adesc"
-    continued_description "$agent" "$afm"
-  fi
-  budget "$agent" 6500
-done
-
 
 # Every README row points at a skill that exists.
 while IFS= read -r linked; do
@@ -401,8 +391,8 @@ fi
 # tells someone to type, uses the full name.
 if [ -n "$plugin_name" ]; then
   while IFS= read -r ref; do
-    [ -f "skills/$ref/SKILL.md" ] || [ -f "agents/$ref.md" ] \
-      || bad "a skill references $plugin_name:$ref, which is not a skill or an agent here"
+    [ -f "skills/$ref/SKILL.md" ] \
+      || bad "a skill references $plugin_name:$ref, which is not a skill here"
   done < <(grep -rhoE "(^|[^a-z0-9-])$plugin_name:[a-z0-9-]+" skills --include='*.md' \
              | sed "s/^.*$plugin_name://" | sort -u)
 
@@ -476,19 +466,25 @@ grep -qx 'globs: skills/\*\*' "$cursor_rule" \
 grep -qx 'alwaysApply: false' "$cursor_rule" \
   || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
-# link.sh and scripts/*.sh parse as bash. This script embeds awk programs in
-# single quotes, so an unbalanced apostrophe in a printed string ends the
-# program and leaves a file that fails only when someone runs it, and nothing
-# else here runs the others.
+# link.sh, scripts/*.sh, tests/*/*.sh and evals/*/scaffold.sh parse as bash,
+# and the plugin's hook as sh. This script embeds awk programs in single quotes, so an unbalanced
+# apostrophe in a printed string ends the program and leaves a file that fails
+# only when someone runs it, and nothing else here runs the others.
 #
 # `npm run lint` catches that too, and more of it: a balanced pair of
 # apostrophes passes the parse below while leaving an awk program mangled,
 # and shellcheck reports it. This check earns its place by needing only bash,
 # because it runs before a commit, where fetching shellcheck over the network
 # would not.
-for f in link.sh scripts/*.sh; do
+for f in link.sh scripts/*.sh tests/*/*.sh evals/*/scaffold.sh; do
   bash -n "$f" || bad "$f: does not parse"
 done
+sh -n hooks/eng-hook || bad "hooks/eng-hook: does not parse"
+
+# The hook runs at every session start, and a broken one fails silently by
+# design, so its fixtures run here as well as in CI. The script holds the
+# 5,000-byte budget for the block it sends.
+./scripts/test-hooks.sh >/dev/null || bad "scripts/test-hooks.sh failed; run it for the details"
 
 # Every command block marked runnable actually runs. A block opts in with
 # `bash checked` on its fence, because most blocks in this repo are templates
@@ -623,10 +619,14 @@ if [ "$doctor" = yes ]; then
       [ -e "$entry_path" ] || [ -L "$entry_path" ] || continue
       name="$(basename "$entry_path")"
       if [ -d "skills/$name" ] || legacy_name "$name"; then
+        # A retired name has no plugin skill to sit beside, but a copy of it
+        # still loads as a bare skill nobody maintains.
+        what="$plugin_name:$name, and loads beside it"
+        [ -d "skills/$name" ] || what="a skill the plugin retired, which can still load as a bare skill"
         if [ -L "$entry_path" ]; then
-          fix "$skills_dir/$name is an old link to $(link_target "$entry_path" || readlink "$entry_path") and loads beside $plugin_name:$name. Run ./link.sh --unlink from that clone, or remove it"
+          fix "$skills_dir/$name is an old link to $(link_target "$entry_path" || readlink "$entry_path"), a copy of $what. Run ./link.sh --unlink from that clone, or remove it"
         else
-          fix "$skills_dir/$name is a personal copy of $plugin_name:$name and loads beside it"
+          fix "$skills_dir/$name is a personal copy of $what"
         fi
       elif [ -L "$entry_path" ]; then
         case "$(link_target "$entry_path" || true)" in
@@ -634,6 +634,15 @@ if [ "$doctor" = yes ]; then
         esac
       fi
     done
+  fi
+
+  # The session hook fails open, so a broken one only shows in its log. Claude
+  # Code names the data directory after the plugin id, with every character
+  # other than a letter, a digit, _ or - turned into -.
+  data_root="${CLAUDE_CODE_PLUGIN_CACHE_DIR:-$config/plugins}/data"
+  hook_log="$data_root/$(printf '%s' "$id" | sed 's/[^A-Za-z0-9_-]/-/g')/eng-hook.log"
+  if [ -s "$hook_log" ]; then
+    fix "the session hook logged $(wc -l < "$hook_log" | tr -d ' ') error(s) in $hook_log, the latest: $(tail -1 "$hook_log"). Fix the cause, then delete the log"
   fi
 
   # The README's skillOverrides entry. Without it a bare commit or pr, from

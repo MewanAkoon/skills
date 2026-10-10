@@ -103,14 +103,15 @@ trigger phrases. The flag alone is not a guarantee.
 
 ### Lifecycle skills
 
-Four skills own the phases of
+Three skills own the phases of
 [standards/workflow.md](standards/workflow.md): `investigate`, `implement`,
-`review-diff`, and `pr-feedback`. Each is model-invoked, and the workflow
-names it at its step, so the change of phase is the cue rather than a search
-of the listing. A new skill that claims a phase competes with the one that
-owns it. Move its content into that skill's `references/` instead, which is
-how `how`, `architect`, and `diagnose-bug` became part of `investigate` and
-`implement`.
+and `pr-feedback`. Each is model-invoked, and the workflow names it at its
+step, so the change of phase is the cue rather than a search of the listing.
+Step 5's writes go through `commit`, `pr`, and `issue`, named the same way. A
+new skill that claims a phase competes with the one that owns it. Move its
+content into that skill's `references/` instead, which is how `how`,
+`architect`, and `diagnose-bug` became part of `investigate`, and
+`tdd-node-api` became `implement`'s `references/tdd.md`.
 
 A skill that two phases call, or that answers a question on its own, stays
 separate and gets called by name: "Call the Skill tool with `eng:why`". `why`
@@ -119,12 +120,14 @@ and `blast-radius` are those.
 ### Bundled skills
 
 Claude Code ships skills of its own, and they compete like any other. Its
-`code-review` is model-invoked and claims the same requests as `review-diff`.
-The workflow settles that one by naming `review-diff` at step 4, and typing
-`/code-review` still runs the bundled one. A personal skill with the same name
-as a bundled one replaces it. Skills from plugins, and personal skills from
-anywhere else, compete the same way. Before adding a model-invoked skill, read
-every description in the session's skill listing, not only the ones here.
+`code-review` is model-invoked and claims review requests, so nothing here
+claims them too: `implement`'s review step calls it, and the workflow sends a
+request to review a PR or a diff straight to it. `verify-app` gave way to the
+bundled `/verify`, `/run`, and `/run-skill-generator` the same way. A personal
+skill with the same name as a bundled one replaces it. Skills from plugins, and
+personal skills from anywhere else, compete the same way. Before adding a
+model-invoked skill, read every description in the session's skill listing, not
+only the ones here.
 
 ### Ambient triggers
 
@@ -135,9 +138,11 @@ covers it, and a description listing artifacts reads as a list of things that
 are not this.
 
 Write an ambient trigger as the first clause, as a condition rather than an
-instruction, and give it something countable. `plain-writing` opens on a reply
-longer than two sentences for that reason. An agent can check a length; it
-cannot check whether prose is the kind a human will read.
+instruction, and give it something countable. An agent can check a length; it
+cannot check whether prose is the kind a human will read. Better still, put a
+rule every turn needs into the always-on text. `plain-writing`'s core reaches
+every session through the plugin's session hook for that reason, which leaves
+its description to name the artifacts that need the whole skill.
 
 Expect an ambient trigger to fire less reliably than a task-shaped one even
 after that, because the moment it depends on is one the agent passes through
@@ -161,15 +166,14 @@ skill runs a bundled script and the prompt would be noise.
 
 `disallowed-tools` restricts. It takes the listed tools out of the pool while
 the skill is active. Reach for it when a skill must not do something, so the
-limit holds whatever the body says. No skill here carries it today.
-`review-diff` did while it only reported. Once it began fixing what it
-reviews, the read-only half moved to the `reviewer` agent, whose `tools` list
-leaves out every editing tool, because a review that can edit the diff it is
-reading is reviewing a moving target.
+limit holds whatever the body says. No skill here carries it today. The
+retired `review-diff` did while it only reported, because a review that can
+edit the diff it is reading is reviewing a moving target. Review now runs
+through the bundled `code-review`, which edits nothing unless given `--fix`.
 
-Name only what the skill or agent can do without. The reviewer keeps `Bash`,
-because it runs `git diff` and the repo's own checks. A restriction that breaks
-the skill gets deleted the first time it bites.
+Name only what the skill can do without. A reviewer that runs `git diff` and
+the repo's own checks still needs `Bash`. A restriction that breaks the skill
+gets deleted the first time it bites.
 
 The trade is worse than the one `disable-model-invocation` makes, because
 Cursor reads that flag and reads neither of these. The two fields also differ

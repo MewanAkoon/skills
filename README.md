@@ -18,15 +18,15 @@ can read, but the way they ship, the plugin and its manifests, is Claude Code
 packaging. Cursor support comes later; "If you use Cursor" below says where it
 stands.
 
-Two other files ship the same way:
+One other file ships the same way:
 [standards/workflow.md](standards/workflow.md), the standing workflow every
-session follows, and [agents/reviewer.md](agents/reviewer.md), the read-only
-reviewer that `eng:review-diff` and `eng:investigate` start.
+session follows. A SessionStart hook in the plugin sends it, with
+`plain-writing`'s core rules, at the start of every session and again after
+each compaction. The hook is Claude Code packaging, like the manifests.
 
-Two narrow exceptions to "plain markdown", both named in [AGENTS.md](AGENTS.md)
-under "What belongs here": the reviewer agent names a `tools` list Cursor does
-not read, as a lock over a body that is read-only without it, and the Cursor
-rules file carries a `description` that gives it a second way in.
+One narrow exception to "plain markdown", named in [AGENTS.md](AGENTS.md)
+under "What belongs here": the Cursor rules file carries a `description` that
+gives it a second way in.
 
 Other plugins stay out of this one. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md)
 says what pairs well with it, as a recommendation rather than a dependency.
@@ -79,14 +79,15 @@ A good run ends like this:
 
 ```
 doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it
-17 skills, 13 model-invoked
+15 skills, 12 model-invoked
 ok
 ```
 
 It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
-when an old link or a personal copy of one of these skills is still loading, or
-when the `skillOverrides` entry is missing.
+when an old link or a personal copy of one of these skills is still loading,
+when the `skillOverrides` entry is missing, or when the plugin's session hook
+has logged an error.
 
 ### Updating
 
@@ -151,9 +152,9 @@ make for Cursor.
 ### Keeping working repos clean
 
 The plugin installs under `~/.claude/plugins`, so nothing lands in a project.
-Some skills write working files, such as `wayfinder` under `.scratch/`. As an
-optional safety net you can ignore those globally. Check what you already have
-first, because setting `core.excludesfile` replaces it:
+Some skills write working files, such as `wayfinder` under `.claude/plans/`.
+As an optional safety net you can ignore those globally. Check what you
+already have first, because setting `core.excludesfile` replaces it:
 
 ```bash
 git config --global core.excludesfile
@@ -163,7 +164,7 @@ If that prints a path, append to that file instead of the one below. If it
 prints nothing:
 
 ```bash
-printf '.claude/\n.scratch/\n.skills.json\n' >> ~/.gitignore_global
+printf '.claude/\n.skills.json\n' >> ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
@@ -184,13 +185,12 @@ than replacing it.
 Only when the team should have it too, and only from your own fork:
 
 ```bash
-npx skills add <you>/skills -s tdd-node-api
+npx skills add <you>/skills -s why
 ```
 
 That copies files into the current repo and needs Node. Default to the plugin
 instead. The copy is a project skill without the plugin's prefix, so change its
-`eng:` names to bare ones, `/eng:tdd-node-api` to `/tdd-node-api`, as for
-Cursor above.
+`eng:` names to bare ones, `/eng:why` to `/why`, as for Cursor above.
 
 ### Removing it
 
@@ -207,15 +207,16 @@ and `pr` back.
 [standards/workflow.md](standards/workflow.md) is eight standing steps:
 understand first, plan and stop, implement on approval, review until clean,
 commit and open PRs only when asked, handle PR feedback on evidence, never
-post, and report briefly. The workflow names the skill for each step that has
-a procedure, so a change of phase is the cue to load it:
+post, and report briefly. The plugin's SessionStart hook sends it at the start
+of every session and after each compaction. It names the skill for each step
+that has a procedure, so a change of phase is the cue to load it:
 
 | Step | Skill |
 |---|---|
 | 1 and 2, understand and plan | `eng:investigate` |
 | 3, implement | `eng:implement` |
-| 4, review | `eng:review-diff`, which starts the `eng:reviewer` agent |
-| 5, commit and PR | `eng:commit`, `eng:pr` |
+| 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
+| 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
 | 6, PR feedback | `eng:pr-feedback` |
 
 The other skills hold knowledge a phase reaches for, or are modes you start
@@ -234,25 +235,24 @@ words in it. What costs you is two skills claiming the same decision, because
 the agent picks one, reads a whole `SKILL.md`, and follows the wrong
 procedure. Add a skill when nothing here would contradict it.
 
-Three of these assume a stack, and say so in their own descriptions:
-`ts-types` is TypeScript only, and `tdd-node-api` and `api-boundaries` are
-written for Node services. The rest are language-neutral, though a few reach
+Two of these assume a stack, and say so in their own descriptions:
+`ts-types` is TypeScript only, and `api-boundaries` is written for Node
+services. The rest are language-neutral, though a few reach
 for a TypeScript example. If you work in something else, "Taking a subset"
 above leaves out the ones you do not want.
 
 | Skill | Fires on | What it does |
 |---|---|---|
 | [investigate](skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
-| [implement](skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, tests it, corrects docs it makes false |
-| [review-diff](skills/review-diff/SKILL.md) | Finished implementation work, or a request to review a branch, a PR, or uncommitted changes | Parallel `reviewer` passes, triage, fixes, and another round until clean |
+| [implement](skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change test-first in the repo's patterns, corrects docs it makes false, reviews it through `/code-review` |
 | [pr-feedback](skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
-| [plain-writing](skills/plain-writing/SKILL.md) | A reply longer than two sentences, or any prose a human will read | Strips AI tells, enforces plain language, gates code comments |
+| [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's message convention, survives hooks |
 | [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff, creates or updates |
+| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, or close an issue | Drafts from the repo's template and labels to a file, files only when asked |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
-| [tdd-node-api](skills/tdd-node-api/SKILL.md) | A behaviour change in a Node service, route handler, or repository method in a repo with tests, or TDD | Seams, red-green-refactor loop, three anti-patterns |
-| [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers after a merge, rebase, cherry-pick, revert, stash pop, pull, or applied patch | Traces both sides, resolves hunk by hunk, finishes the operation |
+| [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |
 | [why](skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
 | [blast-radius](skills/blast-radius/SKILL.md) | Planning a change to something shared, or a question about what a change breaks | What a change breaks elsewhere, with evidence levels |
 
@@ -264,8 +264,11 @@ Only fire when typed. Zero context cost.
 |---|---|---|
 | [grill-me](skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
 | [handoff](skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
-| [verify-app](skills/verify-app/SKILL.md) | `/eng:verify-app` | Generates a project-local skill that drives this app |
-| [wayfinder](skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.scratch/` |
+| [wayfinder](skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.claude/plans/` |
+
+To see a change working in the running app, Claude Code's built-in `/verify`
+runs it, `/run` drives it, and `/run-skill-generator` writes the per-project
+skill both follow.
 
 Type the full name. A bare name is not sure to reach the plugin's skill:
 `commit` and `pr` are names Claude Code keeps for skills of its own.
@@ -290,8 +293,9 @@ with CI.
 The checker covers the mechanical half of that standard, and
 [AGENTS.md](AGENTS.md) lists what it checks. CI runs it on every pull request
 and on every push to `main`, on Linux and on macOS, without `--doctor`, since
-a fresh runner has no Claude Code install to inspect. CI also runs the
-validator on a pinned Claude Code.
+a fresh runner has no Claude Code install to inspect. The checker also runs
+`./scripts/test-hooks.sh`, which feeds the session hook its inputs and checks
+what it sends. CI also runs the validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
@@ -299,15 +303,45 @@ installed from GitHub would receive the change. Bump past whatever `main`
 carries when you merge: CI checks `main` again after each push, so two pull
 requests that picked the same version fail there.
 
+### Evals
+
+`evals/` holds cases for `claude plugin eval`: each workflow skill loads at its
+moment, `eng:issue` stays out of "look into issue 42", the contract is in
+context at the start, and looking into a repo commits nothing. Every run is a
+model call on your account, so they stay out of CI. Run them before a release:
+
+```bash
+claude plugin eval . --ablation none --runs 1 --scaffold --allow-tools Bash \
+  --no-publish --max-cost-usd 2
+```
+
+`--scaffold` builds the scratch repo one case needs. Bash is a gated tool, so a
+case gets it only when it lists Bash in `allowed_tools` and the run passes
+`--allow-tools Bash`; the case that forbids `git commit` does both.
+
+The eval sandbox blocks `git`, so the review loop is checked by hand. In an
+empty directory, run `tests/review-loop/setup.sh` from the clone, then:
+
+```bash
+claude -p "The plan in PLAN.md is approved. Implement it." \
+  --plugin-dir <clone> --allowedTools "Read Glob Grep Edit Write Bash Skill Agent" \
+  --output-format stream-json --verbose
+```
+
+A good run calls `code-review` with `medium` and a `<hash>..<hash>` range,
+briefs the intent check beside it, and commits nothing.
+
 ## Usage counts
 
 A skill stays whether or not it fires. To see how often each one has fired,
 run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
 when it last ran, and what its description costs on every turn.
 
-Every script you run is also an `npm run` target, which is the only reason
-`package.json` exists. It declares no dependencies. `scripts/legacy.sh` has no
-target, because it is never run on its own: `link.sh` and `--doctor` load it.
+Every script you run while working here is also an `npm run` target, which is
+the only reason `package.json` exists. It declares no dependencies.
+`scripts/legacy.sh` has none, because `link.sh` and `--doctor` load it, and
+neither do the setup scripts under `tests/` and `evals/`, which build scratch
+repos for one check each.
 
 ## Optional extras
 

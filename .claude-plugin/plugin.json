@@ -1,6 +1,6 @@
 {
   "name": "eng",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Engineering skills for Claude Code: commits and PRs only when asked, TypeScript and API practice, debugging, review, and plain writing.",
   "author": {
     "name": "MewanAkoon",

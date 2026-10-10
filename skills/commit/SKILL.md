@@ -87,6 +87,10 @@ group by name, tracked and untracked alike, then ask about anything that fits
 neither test. Stage by name so the list shows in the transcript, and reach for
 `git add -A` or `git add .` only after the user says to.
 
+Leave out untracked working files other skills write under `.claude/plans/`
+and `.claude/handoffs/`, unless the user names them, and say which were left
+out.
+
 Check each path that will be committed, whether you staged it or the user
 did. Stop and name the file when its name starts
 with `.env` and is neither `.env.example` nor `.env.sample`, or when it

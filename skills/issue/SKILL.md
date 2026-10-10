@@ -7,10 +7,10 @@ description: Use when the user's latest message asks to draft, file, edit, label
 
 ## What this does
 
-It turns a problem, a plan, or a deferred review item into an issue written
-from the repo's own template and labels. The draft goes to a file with the
-command that would file it. Nothing on GitHub changes until the user's latest
-message asks for it.
+It turns a problem, a plan, or a deferred review item into an issue written from
+the repo's own template and labels. The body goes to a file, and the reply gives
+the command that would file it. Nothing on GitHub changes until the user's
+latest message asks for it.
 
 ## When it runs
 
@@ -34,12 +34,13 @@ a draft file and the command that would file it. Say "file it" to create it.
 ## Step 1: Find the target
 
 ```bash
-gh repo view --json nameWithOwner,hasIssuesEnabled
+gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled
 ```
 
-Use the repo the user names, or this one. For Fibery, Jira, Linear, or any
-tracker other than GitHub, write copy-paste text only and never call its
-tools: the user files it.
+Pass the repo the user names, or nothing for this one. For Fibery, Jira,
+Linear, or any tracker other than GitHub, never call its tools: skip steps 2,
+3, and 6, and in step 5 write copy-paste text with no command. The user files
+it.
 
 **Done when:** the target is named, or the run has stopped because issues are
 off for the repo or `gh` is not signed in, or the target is another tracker
@@ -87,14 +88,16 @@ wait for approval. [references/github.md](references/github.md) covers
 sub-issues, blockers, and the order to file them in.
 
 **Done when:** every section the template asks for holds content, and every
-acceptance criterion can be checked by someone who did not write it.
+acceptance criterion can be checked by someone who did not write it, or a
+breakdown is proposed and the run is waiting for the user's approval.
 
 ## Step 5: Draft, then stop
 
-Write the draft to `issue-<slug>.md` in the scratchpad directory your system
-prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none. Under the
-title and body, put the exact command that would file it. Always pass a title
-and a body file, so `gh` never prompts:
+Write the body alone to `issue-<slug>.md` in the scratchpad directory your
+system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, so the
+file can be passed to `gh` as it stands. In the reply, give the title, the
+labels, the file's path, and the exact command that would file it. Always pass
+a title and a body file, so `gh` never prompts:
 
 ```bash
 gh issue create --repo <owner/repo> --title "<title>" --body-file <path> --label <name>
@@ -102,8 +105,9 @@ gh issue create --repo <owner/repo> --title "<title>" --body-file <path> --label
 
 Stop there unless the user's latest message asked to file it.
 
-**Done when:** the draft file's path and the command are in the reply, or the
-latest message asked to file it and the run goes on to step 6.
+**Done when:** the body file's path, the title, and the command are in the
+reply, or for another tracker the copy-paste text is, or the latest message
+asked to file it and the run goes on to step 6.
 
 ## Step 6: File, edit, or close, when asked
 

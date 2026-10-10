@@ -11,8 +11,9 @@ File in dependency order, so every number a later command needs exists:
 2. Each issue that blocks another.
 3. The rest, each naming its parent and its blockers as it is created.
 
-Draft all of them first, in one file with one command per issue, and file
-only after the user approves the breakdown and asks to file.
+Draft all of them first, one body file per issue (`issue-<slug>-1.md` and on),
+with every command listed in the reply, and file only after the user approves
+the breakdown and asks to file.
 
 ## With gh 2.94 or later
 

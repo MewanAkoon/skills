@@ -120,7 +120,9 @@ probe reports every unmerged path, including the `AA` and `DD` cases that
 carry no `U` in the status output.
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
-be in the PR. Continue? (yes / no)". Stop on no.
+be in the PR. Continue? (yes / no)". Stop on no. Untracked working files under
+`.claude/plans/` and `.claude/handoffs/` do not count, because `eng:commit`
+leaves them out on purpose.
 
 When `gh` is missing, unauthenticated, or the remote is not GitHub, skip the
 rest of this step, work through steps 3 to 5, print the title and body for the

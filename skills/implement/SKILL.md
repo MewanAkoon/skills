@@ -38,12 +38,12 @@ named directory.
 ## Step 2: Make the change
 
 Take one change at a time. Where it alters behaviour, work test-first as
-[references/tdd.md](references/tdd.md) sets out, before any code.
-Match the nearest existing example of the same kind in this repo, and prefer
-the clean solution the codebase would want over the smallest diff. A change
-the plan does not cover waits for the user, unless an approved item needs it
-to work, and the report names it. When the plan sketched an interface, fill
-one body at a time against the sketch and run the typecheck after each.
+[references/tdd.md](references/tdd.md) sets out, before any code. Match the
+nearest example of the same kind in this repo, and prefer the clean solution the
+codebase would want over the smallest diff. A change the plan does not cover
+waits for the user, unless an approved item needs it to work, and the report
+names it. When the plan sketched an interface, fill one body at a time against
+the sketch and run the typecheck after each.
 
 A rename, retype, or move that breaks callers goes expand, migrate, contract,
 as the plan's items or, with no plan, in that order, and one that touches
@@ -63,14 +63,14 @@ Parts that touch disjoint files can run in parallel subagents, as
 
 **Done when:** every approved item is in the code, or the run has stopped
 with the plan's flaw named, the reason `eng:why` found for keeping code, a
-change the plan does not cover, or a parallel part's failure.
+change the plan does not cover, a parallel part's failure, or a
+`tdd.md` stop: a seam to agree, a suite that will not run, or a test that
+never reaches the code.
 
 ## Step 3: Test the behaviour that changed
 
-Test at the level a caller sees, following
-[references/tdd.md](references/tdd.md) for every change in behaviour. Run
-targeted tests as you go, and the repo's full check command (lint, typecheck,
-tests) at the end.
+Test at the level a caller sees. Run targeted tests as you go, and the repo's
+full check command (lint, typecheck, tests) at the end.
 
 A bug fix's test comes from the reproduction, at the seam the call site hit,
 named after what broke. Say in one sentence why the fix makes it pass. When no
@@ -79,12 +79,12 @@ seam reproduces the bug honestly, say so in the report.
 **Done when:** each change in behaviour has a test seen failing first and now
 passing, or one that passed on the old code is reported with what that means,
 or a bug's missing seam is on the record, and the full check passes. Or a
-failure is reported with its output, or the run is waiting on the user to
-name the seam, or the repo has no tests and the report says so.
+failure is reported with its output, or the repo has no tests and the report
+says so.
 
 ## Step 4: Correct what the change made false
 
-Search for every place that describes the changed behaviour: docs, READMEs,
+Find every place that describes the changed behaviour: docs, READMEs,
 comments, help text, the strings a script prints, `AGENTS.md`. Re-derive each
 from the new behaviour.
 Code comments follow `eng:plain-writing`'s code comments reference.
@@ -99,7 +99,8 @@ snapshots the tree, then calls the Skill tool with `code-review` and the
 arguments `medium <parent>..<snapshot>`, with an intent check beside it. Never
 a bare level, and never `ultra`, `--comment`, or `--fix`.
 
-**Done when:** its report says ready, or not ready with each blocker named.
+**Done when:** its report says ready, or not ready with each blocker named, or
+the review still runs in the background and the reply says so.
 
 ## Report
 

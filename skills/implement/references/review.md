@@ -30,19 +30,23 @@ call the Skill tool with `code-review` and the arguments
 In the first round, always and at the same time, brief a general-purpose
 subagent with the intent check: each plan item done, missing, extra, or wrong,
 quoting the plan line; each bug fix's test seen failing on the old code,
-extracted with `mkdir "$R/old" && git archive <parent> | tar -x -C "$R/old"`;
-every changed sentence of prose backed by a `file:line`. Name the files
-implement's step 1 found already changed, so it does not call them extra. It
-edits, commits, and posts nothing, writes nothing outside this machine, starts
-no subagents, and writes only under `R`.
+extracted with `mkdir "$R/old" && git archive <parent> | tar -x -C "$R/old"`, or
+reported as unproven when the extract lacks the dependencies, env, or fixtures
+to run it; every changed sentence of prose backed by a `file:line`. Name the
+files implement's step 1 found already changed, so it does not call them extra.
+It edits, commits, and posts nothing, writes nothing outside this machine,
+starts no subagents, and writes only under `R`.
 
-**Done when:** both results are in. In the terminal `code-review` runs in the
-background: if the turn must end first, say the review is still running.
+**Done when:** the review's result is in, and in the first round the intent
+check's too. In the terminal `code-review` runs in the background: if the turn
+must end first, say the review is still running, and carry on from section 3
+when it reports.
 
 ## 3. Triage
 
 Open the code at every finding. Mark it valid, invalid with the reason, or a
-judgement call, and blocking, should-fix, or nit.
+judgement call, and blocking, should-fix, or nit. Judgement calls go to the
+user in the report, not into the code.
 
 **Done when:** every finding has both marks.
 
@@ -64,6 +68,8 @@ beside its evidence (a check, a test, a `file:line`), and what was not checked.
 Name `/security-review` when the diff touches authentication, payments, secrets,
 or cryptography, and `/verify`, or `/run-skill-generator` first, when the change
 has a runtime surface.
+
+**Done when:** the report says ready or not ready, and why.
 
 ## Without code-review
 

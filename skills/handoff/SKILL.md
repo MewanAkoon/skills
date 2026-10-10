@@ -26,8 +26,10 @@ carry what a reader needs.
 Type `/eng:handoff`. Optionally say what the next session is for, which narrows
 what gets included. The agent saves the document at
 `<repo>/.claude/handoffs/<slug>.md`, or at a path you name, and gives you the
-path. Paste the document as the first message of the next session, on this
-machine or any other.
+path, saying when `git check-ignore` shows the repo does not ignore it, so it
+stays out of commits. Paste
+the document as the first message of the next session, on this machine or any
+other.
 
 ---
 
@@ -92,7 +94,8 @@ it.
 elsewhere in the document as a real path or a real name, each section above
 holds content or one line saying it is empty, and every key, token, password,
 connection string, and piece of personal data reads `<REDACTED>`, and the file
-is saved where "How to use it" says, with its path given.
+is saved where "How to use it" says, with its path given and, when the repo
+does not ignore it, a note saying so.
 
 ---
 

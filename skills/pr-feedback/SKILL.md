@@ -71,8 +71,8 @@ too unclear to judge and the run asks the user about it before fixing any.
 ## Step 3: Present the verdicts
 
 A table: comment (author, `file:line`, the point in a few words), class,
-evidence, and the proposed action. Then wait, unless the user's message
-already asked you to address or fix them.
+evidence, and the proposed action with its test's level. Then wait, unless
+the user's message already asked you to address or fix them.
 
 **Done when:** the table is presented and the turn has ended, or the user's
 message had already approved the fixes.
@@ -96,8 +96,8 @@ worktrees, or tools.
 Write all of them to one file, `pr-<n>-replies.md`, in the scratchpad directory
 your system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none.
 Under each reply, put the command that would post it after the user copies the
-text. A reply in a review thread, where `<databaseId>` is the thread's first
-comment, because GitHub takes no reply to a reply:
+text, with `pbpaste` on macOS and `wl-paste` or `xclip -o` elsewhere. A reply
+in a review thread, where `<databaseId>` is the thread's first comment:
 
 ```bash
 pbpaste | gh api repos/<owner>/<repo>/pulls/<n>/comments/<databaseId>/replies -F body=@-

@@ -1,10 +1,11 @@
 # Test-first changes
 
-Read this in step 3 for any change in behaviour. It runs a red-green-refactor
-loop and holds the rules that decide whether the tests you end up with are
-worth keeping. [tdd-good-tests.md](tdd-good-tests.md) shows what a good test
-asserts, and [tdd-mocking.md](tdd-mocking.md) says when to run the real thing
-and when to stub. Open each when its question comes up, not before.
+Read this before writing code for any change in behaviour, at implement's step
+2. It runs a red-green-refactor loop and holds the rules that decide whether the
+tests you end up with are worth keeping. [tdd-good-tests.md](tdd-good-tests.md)
+shows what a good test asserts, and [tdd-mocking.md](tdd-mocking.md) says when
+to run the real thing and when to stub. Open each when its question comes up,
+not before.
 
 ## Use the repo's own setup
 
@@ -27,8 +28,9 @@ without reaching inside the implementation.
 | Data layer | The repository or query code against a real local store, such as the Firestore emulator or a throwaway Postgres for Prisma | Query shape, indexes, transactions, what comes back |
 | User flow | The repo's end-to-end runner, such as Playwright | A path through the UI that a user would notice breaking |
 
-When the approved plan's **Tests** section, or the request itself, gives the
-level a test runs at, that level is the seam: write it down and go on.
+When the approved plan's **Tests** section, a `pr-feedback` verdict table, or
+the request itself gives the level a test runs at, that level is the seam:
+write it down and go on.
 Otherwise ask the user which seam the test belongs at, and wait.
 
 Run the package's test command once before the first test, and write down

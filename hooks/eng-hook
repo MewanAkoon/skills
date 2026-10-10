@@ -38,9 +38,7 @@ session_start() {
     return 0
   fi
 
-  text="The user's standing workflow, from the eng plugin:
-
-$(cat "$contract")"
+  text="$(cat "$contract")"
 
   if [ -r "$writing" ]; then
     # From the Punctuation heading to the heading after Word choice.

@@ -151,10 +151,12 @@ make for Cursor.
 
 ### Keeping working repos clean
 
-The plugin installs under `~/.claude/plugins`, so nothing lands in a project.
-Some skills write working files, such as `wayfinder` under `.claude/plans/`.
-As an optional safety net you can ignore those globally. Check what you
-already have first, because setting `core.excludesfile` replaces it:
+The plugin itself installs under `~/.claude/plugins`, outside every project.
+Some skills write working files: `investigate` and `wayfinder` under
+`.claude/plans/`, and `handoff` under `.claude/handoffs/`. `eng:commit` leaves
+them out unless you name them. As an optional safety net you can ignore them
+globally. Check what you already have first, because setting `core.excludesfile`
+replaces it:
 
 ```bash
 git config --global core.excludesfile

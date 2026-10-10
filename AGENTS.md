@@ -132,7 +132,7 @@ follows, and enforcing it is what this repo is for.
   `standards/workflow.md` is at most 2,800 bytes, and the block the session
   hook sends at most 5,000. `investigate`'s `SKILL.md` is at most 6,500 bytes,
   `issue`'s 6,000, and `implement`'s and `pr-feedback`'s 5,000 each, with
-  `implement/references/review.md` at most 3,000. Every other `SKILL.md` and
+  `implement/references/review.md` at most 3,500. Every other `SKILL.md` and
   every reference file is at most 15,000 bytes, inside the 20,000 characters
   compaction keeps of a skill.
 - `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and

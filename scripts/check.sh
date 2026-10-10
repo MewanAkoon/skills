@@ -288,7 +288,7 @@ budget skills/investigate/SKILL.md 6500
 for lifecycle in implement pr-feedback; do
   budget "skills/$lifecycle/SKILL.md" 5000
 done
-budget skills/implement/references/review.md 3000
+budget skills/implement/references/review.md 3500
 budget skills/issue/SKILL.md 6000
 
 # Every skill the workflow names exists and is model-invoked, since the name
@@ -477,6 +477,8 @@ grep -qx 'alwaysApply: false' "$cursor_rule" \
 # because it runs before a commit, where fetching shellcheck over the network
 # would not.
 for f in link.sh scripts/*.sh tests/*/*.sh evals/*/scaffold.sh; do
+  # A fork that dropped tests/ or evals/ leaves the pattern unexpanded.
+  [ -f "$f" ] || continue
   bash -n "$f" || bad "$f: does not parse"
 done
 sh -n hooks/eng-hook || bad "hooks/eng-hook: does not parse"

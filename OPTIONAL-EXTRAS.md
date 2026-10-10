@@ -50,7 +50,8 @@ applies to you depends on your set and your account.
   is categorical: [AGENTS.md](AGENTS.md) under "What an agent here never does"
   rules it out whatever else it offers. The `/code-review` that ships inside
   Claude Code is a different thing, and the review step relies on it: it posts
-  only when given `--comment`, which the workflow never passes.
+  only with `--comment`, or with `--post` on an `ultra` run, and the workflow
+  passes neither.
 - **`superpowers`.** Its descriptions ride every turn to re-cover skills that
   exist here already. Count the overlap against your own set, because a fork
   that dropped half of these overlaps differently.

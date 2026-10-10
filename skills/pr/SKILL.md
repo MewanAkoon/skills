@@ -305,21 +305,16 @@ When the push fails, for a reason such as no permission to push, a pre-push
 hook that exits non-zero, or a branch of the same name that has moved on the
 remote, print what `git push` said and stop.
 
-Then create it. The single-quoted heredoc keeps backticks and special
-characters literal, and process substitution avoids a temp file. Every `EOF`
-terminator sits at column 0, with no leading spaces or tabs. Add `--draft` on
-`/eng:pr draft`:
+Then write the title alone to `pr-title.txt` and the body alone to
+`pr-body.md`, replacing any earlier ones. Put both in the scratchpad directory
+your system prompt names, or when it names none, in one directory per run
+from `mktemp -d`. The files keep quotes, backticks, and `$` literal in every
+shell. macOS's bash 3.2 rejects or garbles a heredoc inside `$( )` or `<( )`
+when the text holds an unmatched quote or bracket, such as a single
+apostrophe. Add `--draft` on `/eng:pr draft`:
 
 ```bash
-gh pr create \
-  --title "$(cat <<'EOF'
-<title>
-EOF
-)" \
-  --body-file <(cat <<'EOF'
-<body>
-EOF
-) \
+gh pr create --title "$(cat "<title path>")" --body-file "<body path>" \
   --base $BASE
 ```
 
@@ -348,18 +343,10 @@ Proposed summary: <new summary>
 
 Ask "Apply these updates to the PR? (yes / no)" and stop on no.
 
-On yes:
+On yes, write the title and body files as step 6 says, then:
 
 ```bash
-gh pr edit \
-  --title "$(cat <<'EOF'
-<title>
-EOF
-)" \
-  --body-file <(cat <<'EOF'
-<body>
-EOF
-)
+gh pr edit --title "$(cat "<title path>")" --body-file "<body path>"
 ```
 
 When `gh pr edit` exits non-zero, read

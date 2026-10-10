@@ -3,7 +3,7 @@
 ## Layout
 
 ```
-.scratch/<slug>/
+.claude/plans/<slug>/
   map.md
   tickets/
     01-name-the-storage-shape.md
@@ -95,7 +95,7 @@ Assets: [retry prototype](../assets/02-retry-prototype.ts)
 
 ## Finding the takeable tickets
 
-Run from `.scratch/<slug>/tickets`:
+Run from `.claude/plans/<slug>/tickets`:
 
 ```bash
 find . -maxdepth 1 -name '*.md' | sort | while read -r f; do

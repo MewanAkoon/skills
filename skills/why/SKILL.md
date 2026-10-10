@@ -92,7 +92,7 @@ or its PR, states the reason and the run has stopped with that reason cited.
 ## Step 3: Search outside git
 
 List the sources this repo can reach before searching any of them: an issue
-tracker, ADRs and specs under `docs/` or `.scratch/`, a Notion or Slack
+tracker, ADRs and specs under `docs/` or `.claude/plans/`, a Notion or Slack
 workspace where a connector is available.
 
 When the target is one of the shapes named in "When to use it", add two more:

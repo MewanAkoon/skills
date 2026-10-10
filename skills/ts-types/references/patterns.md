@@ -158,8 +158,8 @@ if ("chargeId" in payment) {
 A type guard, when the check is real work:
 
 ```ts
-function isMongoDuplicateKeyError(err: unknown): err is { code: 11000 } {
-  return typeof err === "object" && err !== null && "code" in err && err.code === 11000;
+function isUniqueViolation(err: unknown): err is { code: "P2002" } {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "P2002";
 }
 ```
 
@@ -168,12 +168,12 @@ function isMongoDuplicateKeyError(err: unknown): err is { code: 11000 } {
 The guard above checks everything it claims. This one does not:
 
 ```ts
-function isMongoError(err: unknown): err is MongoError {
+function isDbError(err: unknown): err is DbError {
   return typeof err === "object" && err !== null;
 }
 ```
 
-Every caller now treats any object as a `MongoError`, and the lie is invisible
+Every caller now treats any object as a `DbError`, and the lie is invisible
 at the call site, because the name says it is safe. Prefer discriminant
 narrowing wherever a discriminant exists, since a guard adds a layer the
 reader has to follow.

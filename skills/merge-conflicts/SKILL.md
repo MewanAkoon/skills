@@ -1,6 +1,6 @@
 ---
 name: merge-conflicts
-description: Use when git reports unmerged paths, prints CONFLICT or "Automatic merge failed", or leaves conflict markers in a file, after a merge, rebase, cherry-pick, revert, stash pop, pull, or applied patch. Resolves hunk by hunk by tracing each side to what it was trying to do, then finishes the operation.
+description: Use when git reports unmerged paths or conflict markers after a merge, rebase, cherry-pick, revert, stash pop, pull, or applied patch, and the user's latest message asks to resolve them, reports them, or asks for that operation. Resolves hunk by hunk by tracing each side's intent, then finishes it.
 ---
 
 # Merge conflicts
@@ -207,9 +207,9 @@ git has no way to flag:
 - One side renamed a field or a type, the other side added code that reads
   the old name in a file that never conflicted.
 - One side changed a function signature, the other side added callers.
-- One side added a required field to a Mongoose schema, the other side added
-  a path that creates documents without it, so writes throw `ValidationError`
-  at runtime and nothing fails at compile time.
+- One side added a required field to a schema or a model, the other side
+  added a path that writes records without it, so the writes fail at runtime
+  and nothing fails at compile time.
 - One side changed an index or a unique constraint, the other side added
   writes the new constraint rejects.
 - Both sides added a route, a queue consumer, or an event handler under the

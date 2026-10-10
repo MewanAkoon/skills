@@ -38,7 +38,7 @@ A typical Node service has five:
 
 1. **HTTP in.** Request body, query string, route params, headers.
 2. **Config in.** Environment variables, config files, secrets.
-3. **Storage out.** Documents read back from MongoDB, rows from Postgres.
+3. **Storage out.** Documents read back from Firestore, rows from Postgres.
 4. **Messages in.** Queue payloads, webhooks, event consumers.
 5. **Third party in.** Response bodies from any API you do not own.
 
@@ -107,13 +107,13 @@ commit that added it before you remove it. Run that first and this test
 second, because a guard put there for a real incident answers "only a bug
 could make it fire" wrongly.
 
-## Mongo specifically
+## Stored data
 
-Documents coming back from the database are a boundary. Mongoose types
-describe the schema you declared, not what is actually stored, and old
-documents written before a migration will not match. Parse on read for any
-collection where the shape has changed, or where documents predate the
-current schema.
+Data coming back from the database is a boundary. The types an ORM or an SDK
+gives you describe the schema you declared, not what is stored. A Firestore
+document written before a field existed lacks it, and a Prisma `Json` column
+holds whatever was written into it. Parse on read for any collection or
+column whose shape has changed, or whose records predate the current schema.
 
 ---
 

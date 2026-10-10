@@ -1,6 +1,6 @@
 ---
 name: plain-writing
-description: Use before sending any reply longer than two sentences, and before writing or editing any prose a human will read. Also commit messages, PR descriptions, docs in a repo, code comments, changelogs, issues, and message drafts. Removes AI tells and makes writing read like a person wrote it.
+description: Use before writing prose a person will read outside this chat, such as a doc, README, commit message, PR or issue body, code comment, changelog, or message draft, and before a reply longer than three paragraphs. Removes AI tells and makes writing read like a person wrote it.
 ---
 
 # Plain writing
@@ -13,13 +13,14 @@ sentence shape, and structure.
 
 ## When it runs
 
-Whenever prose is being written or edited. Your own replies in the
-conversation count, and they are the case that gets missed, because answering
-does not feel like a writing task. Any answer longer than two sentences is
-prose someone reads.
+Whenever prose is being written or edited. With the `eng` plugin installed,
+the Punctuation and Word choice sections below already reach every session,
+so every reply follows them. Load the whole skill for prose that outlives the
+chat, and for a reply longer than three paragraphs, where sentence shape,
+structure, and the self-audit matter too.
 
-Commit messages, PR descriptions, and code comments count too, and people
-forget those are prose as well.
+Commit messages, PR descriptions, issue bodies, and code comments count, and
+people forget those are prose as well.
 
 Skip text a program reads, such as JSON, a config value, or a log line a
 parser matches, and text quoted word for word, such as an error message or a

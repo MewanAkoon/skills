@@ -32,7 +32,7 @@ Two modes.
 
 - `/eng:wayfinder <the loose idea>` charts a new map. It questions you first,
   then writes the map and the first tickets, and stops.
-- `/eng:wayfinder .scratch/<slug>` works the map: it picks the next ticket,
+- `/eng:wayfinder .claude/plans/<slug>` works the map: it picks the next ticket,
   resolves it with you, records the answer, and stops.
 
 One decision per session, so the answer gets a whole context window. Research
@@ -55,8 +55,8 @@ this section does not apply to it.
 
 ## The map
 
-The map is one file, `.scratch/<slug>/map.md`, built from the template in the
-reference.
+The map is one file, `.claude/plans/<slug>/map.md`, built from the template in
+the reference.
 
 It is an index. A decision lives in its own ticket file, and the map carries
 one line of gist and a link to it. Open tickets are not listed on the map at

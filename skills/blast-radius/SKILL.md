@@ -14,13 +14,14 @@ confident writeup.
 ## When to use it
 
 When planning a change that looks small but touches something shared: a
-Mongoose schema field, a utility every service imports, a middleware mounted
-on every route, a shared type, an env var, a database index. Also when someone
-asks what a change breaks elsewhere, and nothing more.
+field in a database schema or in stored documents, a utility every service
+imports, a middleware mounted on every route, a shared type, an env var, a
+database index. Also when someone asks what a change breaks elsewhere, and
+nothing more.
 
 Skip it for a change that nothing outside its own file reads. A review of a
-branch or a PR, someone else's diff included, goes to `eng:review-diff`, which
-checks for regressions as one of its passes.
+branch or a PR, someone else's diff included, goes to `/code-review`, whose
+finders trace the callers a change affects.
 
 ## How to use it
 

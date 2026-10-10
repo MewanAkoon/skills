@@ -17,6 +17,7 @@ that waits for approval.
 At the start of any task that will change code, config, or docs, and for a
 question about how or where something works. A request that names the exact
 change, or points to an approved plan, skips this and goes to `eng:implement`.
+A request to review a PR or a diff goes to `/code-review`.
 
 ## How to use it
 
@@ -66,7 +67,7 @@ that need `gh`, git, or an MCP tool. Each brief carries:
 - Pointers: paths, URLs, and commit SHAs, never pasted summaries.
 - The return shape: claims, each with `file:line` and whether it was seen or
   inferred.
-- The limits: read-only, no subagents, no commits.
+- The limits: read-only, no subagents, no commits, nothing posted.
 
 **Done when:** every hop has a `file:line` and a sentence on what runs there,
 the changed lines have their history read, and each subagent question has an
@@ -75,10 +76,10 @@ answer or is listed as open.
 ## Step 4: Get real signal for a bug
 
 The user's account of a bug is a hypothesis until the error, the log, or a
-failing request backs it. Before running anything for a flaky test, a bug
-that reproduces only sometimes, one that survived a fix, or a performance
-regression, read [references/debugging.md](references/debugging.md) and work
-its phases.
+failing request backs it. Before running anything for a failing CI check, a
+flaky test, a bug that reproduces only sometimes, one that survived a fix, or
+a performance regression, read
+[references/debugging.md](references/debugging.md) and work its phases.
 
 **Done when:** the cause rests on output from a run you observed, or the plan
 names the signal that is missing and asks for it, or the run has stopped to
@@ -87,13 +88,11 @@ bug.
 
 ## Step 5: Check the findings a second time
 
-Give the findings to a `eng:reviewer` subagent with the claims lens, the paths
-it needs, and a directory from `mktemp -d` under the scratchpad your system
-prompt names, or under `${TMPDIR:-/tmp}` when it names none, for any probe it
-runs. When no agent named `eng:reviewer` is installed, brief a general-purpose
-agent with the same lens and tell it to edit nothing. Drop a finding it refutes,
-or mark it disputed with both sides. When every finding cites one short file,
-re-open each cited line yourself instead.
+Brief a general-purpose subagent with the claims check in
+[references/checks.md](references/checks.md), which carries its rules and the
+scratch directory for probes. Drop a finding it refutes, or mark it disputed
+with both sides. When every finding cites one short file, re-open each cited
+line yourself instead.
 
 **Done when:** every finding is confirmed, dropped, or marked disputed.
 
@@ -113,8 +112,8 @@ Read the plan against the code, the findings, the request, and the patterns
 the repo already uses. Each change names the file it lands in, each change in
 behaviour names its test, each doc the change makes false is listed, and
 nothing the request asked for is missing. For a plan that spans more than one
-area, a `eng:reviewer` with the plan lens makes this pass. Revise and read
-again.
+area, a subagent with the plan check in `references/checks.md` makes this
+pass. Revise and read again.
 
 **Done when:** a pass turns up nothing new, or what remains is listed under
 open questions.

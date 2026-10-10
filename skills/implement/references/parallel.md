@@ -44,10 +44,12 @@ whole counts.
 - For a worktree, the starting commit.
 - What to return: the files changed, every check run with its result, and any
   test skipped.
-- The limits: no subagents, no commits.
+- The limits: no subagents, no commits, and nothing posted or written outside
+  this machine. No `eng:implement` and no review either: the part makes its
+  change and stops.
 
-Integrate every part in the main session, then run `eng:implement`'s step 3 on
-the whole.
+Integrate every part in the main session, then run `eng:implement`'s steps 3
+to 5 on the whole, so the review sees the parts together.
 
 **Done when:** every part has come back and is integrated, or a part failed
 and its output is in the report.

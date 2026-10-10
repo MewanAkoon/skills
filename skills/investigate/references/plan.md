@@ -39,3 +39,21 @@ it runs at. For a bug, the reproduction that becomes the regression test.
 
 **Open questions.** Decisions the user has to make, each with the options and
 a recommendation.
+
+## Before presenting it
+
+Read the plan once more as the person who has to approve it:
+
+- Coverage: every requirement in the request has an item, and every item
+  traces back to one.
+- Names: a type, function, or file is called the same thing in every item that
+  mentions it.
+- Proportion: the plan is no bigger than the change. A one-file fix gets a few
+  lines, not every section padded out.
+
+Fix what this turns up before step 7's cross-check.
+
+---
+
+The pass above is adapted from the `writing-plans` skill in obra/superpowers
+(MIT).

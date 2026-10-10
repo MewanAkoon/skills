@@ -281,7 +281,7 @@ Tick the boxes that apply under Type of change, and replace the comment under
 with every box empty is worse than no template.
 
 Evidence comes from a run this session made: the test `eng:implement` saw fail
-and then pass, `eng:review-diff`'s checks, or output the change altered. A green
+and then pass, the checks its review ran, or output the change altered. A green
 run on its own is a claim, and the before and after together are the
 evidence. When this session ran nothing, run the repo's tests now for the
 After line, and write that the before was not observed.

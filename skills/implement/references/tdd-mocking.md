@@ -5,27 +5,18 @@ you genuinely cannot run.
 
 ## Run it for real
 
-**MongoDB.** Use `mongodb-memory-server` or a throwaway container. Both start
-in a couple of seconds and give you real query behaviour, real indexes, real
-aggregation. Stubbing the Mongoose model teaches you nothing about whether
-the query is correct, and query correctness is usually the thing you are
-worried about.
+**The data layer.** Run the store the code really talks to, the way the repo
+already does: the Firestore emulator for Firestore, a throwaway Postgres
+container for Prisma, an in-memory server where the driver has one. Each
+starts in seconds and gives real queries, real indexes, real transactions.
+Stubbing the client or the model teaches nothing about whether the query is
+right, and that is usually the thing in doubt. Clear the data between tests,
+the way the nearest existing test does:
 
 ```ts
-let mongo: MongoMemoryServer;
-
-beforeAll(async () => {
-  mongo = await MongoMemoryServer.create();
-  await mongoose.connect(mongo.getUri());
-});
-
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongo.stop();
-});
-
 afterEach(async () => {
-  await Promise.all(Object.values(mongoose.connection.collections).map((c) => c.deleteMany({})));
+  // Prisma against a throwaway Postgres; truncate what the test wrote
+  await prisma.$executeRawUnsafe('TRUNCATE "Order", "OrderLine" CASCADE');
 });
 ```
 
@@ -34,9 +25,9 @@ codebase, call the real one. Mocking an internal collaborator couples the
 test to the current call structure, which is exactly what you want to be free
 to change.
 
-**The HTTP layer.** Supertest runs the real Express or Nest app in process.
-No mocking needed, and you get real middleware, real serialization, real
-status codes.
+**The HTTP layer.** An in-process client, such as supertest against the app,
+runs the real routes. No mocking needed, and you get real middleware, real
+serialization, real status codes.
 
 ## Stub it
 

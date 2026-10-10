@@ -45,10 +45,12 @@ set and your own install before taking any of these as decided.
 Not adopted here, and why. The reason is the transferable part; whether it
 applies to you depends on your set and your account.
 
-- **`code-review`.** Its last step posts the result to a pull request, and its
-  frontmatter pre-approves the command that does it. That one is categorical:
-  [AGENTS.md](AGENTS.md) under "What an agent here never does" rules it out
-  whatever else it offers.
+- **The `code-review` plugin.** Its last step posts the result to a pull
+  request, and its frontmatter pre-approves the command that does it. That one
+  is categorical: [AGENTS.md](AGENTS.md) under "What an agent here never does"
+  rules it out whatever else it offers. The `/code-review` that ships inside
+  Claude Code is a different thing, and the review step relies on it: it posts
+  only when given `--comment`, which the workflow never passes.
 - **`superpowers`.** Its descriptions ride every turn to re-cover skills that
   exist here already. Count the overlap against your own set, because a fork
   that dropped half of these overlaps differently.

@@ -1,7 +1,8 @@
 # Debugging a bug that resisted the obvious fix
 
-Read this when a bug survived one fix, reproduces only sometimes, has no cause
-in the stack trace, or is a performance regression with no obvious source.
+Read this when a CI check fails, or a bug survived one fix, reproduces only
+sometimes, has no cause in the stack trace, or is a performance regression
+with no obvious source.
 
 The gates exist because the default failure is guessing a fix from a stack
 trace and declaring victory when the error stops appearing. Phases 1 to 4 run
@@ -16,6 +17,19 @@ it names none, never in a bare `/tmp` path. A reproduction that has to sit in
 the repo, and logging added to the repo's code, are edits: ask before making
 them. Remove the logging before presenting the plan, and name the
 reproduction's path in it.
+
+## A failing CI check
+
+Read the failure before reproducing anything. For a GitHub Actions check:
+
+```bash
+gh pr checks <n>
+gh run view <run-id> --log-failed
+```
+
+For another CI, use the command or page the repo's docs name. Then work out
+whether it fails on the base branch too, because a check that was already red
+is not this change's bug.
 
 ## Phase 1: Get it red
 

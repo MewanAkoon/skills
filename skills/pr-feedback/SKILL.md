@@ -15,7 +15,7 @@ for you to post.
 
 When the user shares a PR comment link or a review, or asks to address,
 triage, or verify feedback, from a person or a bot. A request to review the
-PR itself, rather than its comments, goes to `eng:review-diff`.
+PR itself, rather than its comments, goes to `/code-review`.
 
 ## How to use it
 
@@ -60,12 +60,13 @@ head commit, or the run has stopped and asked the user to switch to it.
 ## Step 2: Judge each comment
 
 Open the code at the line as it is now, not as the comment saw it. Put each
-comment in one class: valid, partly valid, not valid, already addressed, or a
-question. Give the evidence: a `file:line`, a test run, or the command output.
-Let the evidence decide, whoever wrote the comment. Look at nearby code for
-the same problem.
+comment in one class: valid, partly valid, not valid, already addressed, a
+question, or defer, for a valid point that belongs in its own change. Give the
+evidence: a `file:line`, a test run, or the command output. Let the evidence
+decide, whoever wrote the comment. Look at nearby code for the same problem.
 
-**Done when:** every comment has a class and its evidence.
+**Done when:** every comment has a class and its evidence, or one comment is
+too unclear to judge and the run asks the user about it before fixing any.
 
 ## Step 3: Present the verdicts
 
@@ -78,10 +79,10 @@ message had already approved the fixes.
 
 ## Step 4: Fix
 
-Call the Skill tool with `eng:implement` for the approved fixes. It ends by
-running `eng:review-diff`.
+Call the Skill tool with `eng:implement` for the approved fixes. Its last step
+reviews them.
 
-**Done when:** `eng:review-diff` reports ready, or reports what remains, or
+**Done when:** that review reports ready, or not ready with each blocker, or
 `eng:implement` stopped and named why, or no fix was approved.
 
 ## Step 5: Draft the replies
@@ -115,7 +116,9 @@ reply and the report says so.
 ## Step 6: Report
 
 The verdict per comment, what was fixed, the checks run, the drafts file's
-path, and whether it is ready to commit or to update the PR. The user posts
-the replies, and a commit waits for their request.
+path, and whether it is ready to commit or to update the PR. For each
+deferred comment, offer an issue draft through `eng:issue`, or ticket text for
+another tracker. The user posts the replies, and a commit or an issue waits
+for their request.
 
 **Done when:** each of those is in the report.

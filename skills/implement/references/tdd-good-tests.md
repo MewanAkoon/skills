@@ -60,7 +60,7 @@ it("decrements stock for each line item", ...)
 ```ts
 function anOrder(overrides: Partial<CreateOrderInput> = {}): CreateOrderInput {
   return {
-    customerId: toCustomerId("507f1f77bcf86cd799439011"),
+    customerId: toCustomerId("cus_42"),
     items: [{ sku: "SKU-1", price: 1500, qty: 1 }],
     currency: "USD",
     ...overrides,
@@ -91,8 +91,8 @@ on both. Do not assert on internal logging or which service function ran.
 
 ## What not to test
 
-- Framework behaviour. Express routing and Mongoose validation are already
-  tested by their authors.
+- Framework behaviour. The router, the ORM's validation, and the database's
+  own constraints are already tested by their authors.
 - Getters, setters, and pass-through wrappers with no logic.
 - Exact error message strings, unless a client parses them. Assert the error
   type or code instead, so a wording change does not break the suite.

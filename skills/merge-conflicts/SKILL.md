@@ -184,12 +184,14 @@ Then check the paths step 1 listed for leftover markers:
 ```bash
 git diff --check -- <unmerged paths> | grep 'leftover conflict marker'
 git diff --cached --check -- <unmerged paths> | grep 'leftover conflict marker'
-grep -n '^<<<<<<<\|^|||||||\|^>>>>>>>' <unmerged paths>
+grep -n '^<<<<<<<\|^|||||||\|^>>>>>>>' <unmerged paths that still exist>
 ```
 
 The checks name those paths and keep only the marker lines, because in a merge
 the staged diff also carries everything the other branch brings, and trailing
-whitespace there would fail an unfiltered check.
+whitespace there would fail an unfiltered check. The `grep` leaves out a path
+resolved by deleting it, because it prints an error for a missing file, and
+when every path was deleted it has nothing to read and is skipped.
 
 **Done when:** all three commands print nothing, every contradicting hunk has
 its trade-off line on the record, and every generated path has been

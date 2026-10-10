@@ -49,8 +49,10 @@ and the draft will be text only.
 
 ## Step 2: Look for a duplicate
 
-Search open and closed issues for the same problem, with the key words from
-the title and the error text:
+Search open and closed issues for the same problem, with key words from the
+title and the error text. Keep them to letters, digits, spaces, `_`, and `.`,
+because the shell expands a `$` or a backtick inside double quotes, and the
+search reads a `:` or a leading `-` as syntax:
 
 ```bash
 gh search issues --repo <owner/repo> "<key words>" --json number,title,state,url

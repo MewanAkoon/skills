@@ -192,8 +192,9 @@ one. Put it in the scratchpad directory your system prompt names, or when it
 names none, in one directory per run from `mktemp -d`. The file keeps quotes,
 backticks, and `$` literal in every shell. macOS's bash 3.2 rejects or garbles
 a heredoc inside `<( )` when the text holds an unmatched quote or bracket,
-such as a single apostrophe. Writing the file first puts it in the snapshot,
-so step 7 never takes it for a hook's output.
+such as a single apostrophe. Writing the file before the snapshot means that,
+should that directory sit inside the repo, step 7 does not take the file for a
+hook's output.
 
 Then record a snapshot for step 7: the output of `git status --porcelain
 -uall`, plus a hash of the held-back lines of every partly staged path. Its
@@ -237,8 +238,9 @@ one of its endings.
 
 Only on `/eng:commit push` or a direct request to push. Read
 [references/push.md](references/push.md) and follow it. It resolves the remote
-and the default branch, stops on a detached `HEAD`, and asks before pushing to
-the default branch or past a rejection.
+and the default branch, stops on a detached `HEAD` or a repo with no remote,
+and asks before a push from the default branch, with the default unknown, or
+from a branch that tracks another one, and after a rejection.
 
 End condition: the reference's push step reached one of its endings, or no
 push was asked for.

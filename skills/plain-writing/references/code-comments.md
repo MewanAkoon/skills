@@ -19,8 +19,7 @@ The line above restates the call, so delete it. This one carries something
 the code does not:
 
 ```ts
-// The upstream rate limiter returns 429 for about a second after a burst,
-// so two retries clears it and a third only adds latency.
+// Upstream returns 429 for about a second after a burst; two retries clear it.
 await retry(fetchUser, 2);
 ```
 
@@ -64,6 +63,12 @@ carries more. Plain glue code carries none.
 Keep the comment next to the line it explains. A block at the top of the file
 explaining something 200 lines down will not be updated when that code moves.
 
+Length follows the position. A doc comment on an exported symbol runs as long
+as its content earns, because a contract, an invariant, or where each field
+comes from is what the caller cannot see. A comment inside a body stays at one
+line. Anything longer is a paragraph the reader holds in their head while
+parsing the code under it.
+
 ## 5. Sweep before finishing
 
 Grep the files you changed and read every hit. The pattern over-matches on
@@ -74,15 +79,16 @@ leave the line alone.
 
 ```bash
 git diff -z --name-only --diff-filter=d HEAD \
-  | xargs -0 -r grep -nIiE \
+  | xargs -0 -r grep -HnIiE \
     "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}"
 ```
 
 `git diff HEAD` covers both halves of a change: tracked files you edited, and
 new files you have already staged. `--diff-filter=d` drops the ones you
 deleted so grep is never handed a path that no longer exists. The `-z` and
-`-0` pair carries filenames with spaces through intact, `-I` skips binaries,
-and `-r` stays quiet when there is nothing to grep.
+`-0` pair carries filenames with spaces through intact, `-H` prints the file
+name even when xargs hands grep a single path, `-I` skips binaries, and `-r`
+stays quiet when there is nothing to grep.
 
 Stage the change before sweeping, or name the new paths yourself. An unstaged
 new file is indistinguishable from someone's unrelated scratch file, so

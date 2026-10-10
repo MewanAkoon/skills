@@ -16,24 +16,26 @@ carries its version; `.claude-plugin/marketplace.json` names the marketplace,
 the skills by its default scan of `skills/`. Inside the plugin each skill is
 `eng:<name>`, and that full name is how skills refer to each other.
 
-Three scripts, all bash, no build step. The commands they carry:
+Four scripts, all bash, no build step. The commands they carry:
 
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
+| `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs from `tests/hooks/` and checks what it sends. `check.sh` runs it. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 
 None of them needs a package installed beyond `jq`, which macOS 15 and the CI
-runners ship, and `claude` for the validator and `--doctor`. All three resolve
-their own path with `readlink -f`, and `check.sh` takes its file list from
+runners ship, and `claude` for the validator and `--doctor`. Each resolves
+its own path with `readlink -f`, and `check.sh` takes its file list from
 `git`. `scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
 source it for the old skill names and for resolving where a link points.
 
-`package.json` carries those as `npm run check`, `doctor`, `validate`, and
-`unlink`, plus `npm run lint`, which runs shellcheck over every script.
+`package.json` carries those as `npm run check`, `doctor`, `validate`,
+`test:hooks`, and `unlink`, plus `npm run lint`, which runs shellcheck over
+every script and the hook.
 It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
 the wrapper in `package.json` and the binary it downloads with
 `SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.
@@ -43,10 +45,17 @@ moves on its own and disagreed with a local one about `A && B || C`.
 ## What belongs here
 
 The plugin is Claude Code packaging, and Claude Code is the harness this repo
-serves first. The skill is still the unit that travels: plain markdown under
-`skills/`, readable by any harness, carrying no machinery of its own. The
-manifests sit beside the skills rather than inside them, so a skill read
-outside the plugin still reads the same.
+serves first. Two kinds of file travel, both plain markdown readable by any
+harness, and neither carrying machinery of its own:
+
+- Skills under `skills/`, the unit most of the repo is made of.
+- `standards/workflow.md`, the standing workflow every session follows. It
+  names the skill for each step that has a procedure, so every skill it names
+  has to exist and be model-invoked.
+
+The manifests and `hooks/` are the Claude Code packaging around them. The hook
+reads `standards/workflow.md` and `plain-writing` at run time and adds
+nothing of its own, so a file read outside the plugin still reads the same.
 
 Other plugins stay out, even when useful on the machine you are sitting at.
 Recommendations of that kind live in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md),
@@ -58,18 +67,18 @@ says what happens where the built-in is missing. Without that fallback, the
 skill's step does nothing in another harness, and nothing says so.
 
 Two exceptions, both narrow. A skill may carry a harness-specific frontmatter
-field when it is a second lock over a body that is already right without it,
-which is why `review-diff` sets `disallowed-tools` that Cursor does not read.
-[WRITING-RULES.md](WRITING-RULES.md) under "Tool access" holds that trade and
-the condition on it. And the Cursor rules file carries a `description`, which
-lets Cursor pull it in by relevance where the Claude rule has no equivalent;
-that one adds a way in rather than changing what either file says, so both
-harnesses still get the same body on `skills/**`.
+field when it is a second lock over a body that is already right without it. No
+skill takes that trade today. [WRITING-RULES.md](WRITING-RULES.md) under "Tool
+access" holds the trade and the condition on it. And the Cursor rules file
+carries a `description`, which lets Cursor pull it in by relevance where the
+Claude rule has no equivalent; that one adds a way in rather than changing what
+either file says, so both harnesses still get the same body on `skills/**`.
 
 Maintenance scripts run on one machine rather than in a session, so they may
 read a harness's own files: `link.sh --unlink` removes links under
 `~/.claude/skills` and the other directories an older install wrote to, and
-`--doctor` reads Claude Code's plugin list and settings. Both say so where they do it.
+`--doctor` reads Claude Code's plugin list, its settings, and the hook's log.
+Both say so where they do it.
 
 ## What an agent here never does
 
@@ -107,16 +116,34 @@ follows, and enforcing it is what this repo is for.
 - Both rules files still scope themselves to `skills/**`, and the Cursor one
   still sets `alwaysApply: false`. That scoping is what decides when either
   rule loads.
-- A skill other than `review-diff` carrying `allowed-tools` or
-  `disallowed-tools` warns rather than fails, because whether the body holds
-  without the field is not something a script can read.
-- `link.sh` and every `scripts/*.sh` parse under `bash -n`, because nothing
-  else in the checker runs them.
+- A skill carrying `allowed-tools` or `disallowed-tools` warns rather than
+  fails, because whether the body holds without the field is not something a
+  script can read. No skill carries one today.
+- Every description is one line of YAML. Unquoted, it
+  is not a `>` or `|` block, holds no `: `, space or tab before `#`, colon
+  before a tab, or trailing colon, and starts with no character YAML reserves.
+  Quoted, it ends on its closing quote with nothing after it, and holds no
+  quote or backslash inside that would end or garble it. Claude Code drops the
+  whole frontmatter of a file whose YAML fails to parse.
+- `standards/workflow.md` names at least one skill as "the X skill", and
+  every skill named that way exists and is model-invoked.
+- Size budgets, because each of these loads into someone's context. A
+  model-invoked description is at most 300 bytes, and the set at most 3,900.
+  `standards/workflow.md` is at most 2,800 bytes, and the block the session
+  hook sends at most 5,000. `investigate`'s `SKILL.md` is at most 6,500 bytes,
+  `issue`'s 6,000, and `implement`'s and `pr-feedback`'s 5,000 each, with
+  `implement/references/review.md` at most 3,500. Every other `SKILL.md` and
+  every reference file is at most 15,000 bytes, inside the 20,000 characters
+  compaction keeps of a skill.
+- `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and `evals/*/scaffold.sh`
+  parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
+  parses under `sh -n`, which names a syntax error plainly, and its fixtures
+  pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
   a `MAJOR.MINOR.PATCH` version.
 - When anything the plugin loads changed since the branch left `origin/main`
-  (`skills/` and `plugin.json` today; `hooks/`, `standards/`, `agents/`,
+  (`skills/`, `standards/`, `hooks/` and `plugin.json` today; `agents/`,
   `commands/`, `output-styles/`, `themes/`, `monitors/`, `workflows/`, `bin/`,
   `.mcp.json` and `.lsp.json` once they exist),
   the version is newer than the one at that point, compared field by field.
@@ -136,7 +163,7 @@ follows, and enforcing it is what this repo is for.
 - Every command block whose fence reads `bash checked`, in a staged or
   committed markdown file, runs from the repo root with stdin closed and exits
   zero. The checker executes these, so an untracked file is left alone.
-- No markdown file contains an em dash, an en dash, or a minus sign.
+- No file the repo owns contains an em dash, an en dash, or a minus sign.
 
 What limits the model-invoked set is conflict, not count. Before adding one,
 work through the test in [WRITING-RULES.md](WRITING-RULES.md) under
@@ -151,10 +178,11 @@ the description stops riding every turn and the file stays.
 runner has no Claude Code install to inspect: that Claude Code is 2.1.293 or
 later; that `eng@mewanakoon` is installed at user scope, enabled and at this
 clone's version; that no old link or personal copy of one of these skills sits
-in `~/.claude/skills`; and that `~/.claude/settings.json` is valid JSON and
-sets `skillOverrides` for `commit` and `pr` to `"off"`. `CLAUDE_CONFIG_DIR`
-moves where it looks, as it does for Claude Code. Anything to fix fails the
-run, so a hook can gate on it.
+in `~/.claude/skills`; that `~/.claude/settings.json` is valid JSON and sets
+`skillOverrides` for `commit` and `pr` to `"off"`; and that the session hook has
+logged no error under `~/.claude/plugins/data/eng-mewanakoon/`.
+`CLAUDE_CONFIG_DIR` moves where it looks, as it does for Claude Code. Anything
+to fix fails the run, so a hook can gate on it.
 
 ## When a change makes a claim false
 
@@ -190,6 +218,7 @@ repo's own files too.
 | `.cursor/rules/*.mdc` | Cursor |
 | `.claude/rules/*.md` | Claude Code |
 | `skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is unverified. |
+| `standards/workflow.md` | Claude Code, through the `eng` plugin's SessionStart hook, with `plain-writing`'s Punctuation and Word choice sections |
 
 Anything true for both harnesses belongs in this file. The two rules
 directories carry one body in each harness's own format. Both fire on

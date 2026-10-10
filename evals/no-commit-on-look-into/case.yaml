@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: no-commit-on-look-into
+tags: [gate]
+context:
+  scaffold_script: scaffold.sh

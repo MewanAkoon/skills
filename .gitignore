@@ -11,3 +11,6 @@ node_modules/
 # Skill exports. The clone is the source; a zip beside it is a second
 # copy that drifts.
 *.zip
+
+# claude plugin eval writes its reports here.
+evals/results/

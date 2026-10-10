@@ -1,7 +1,6 @@
 ---
 name: blast-radius
-description: Find what a small change could break somewhere else, and prove the key safety fact by running code.
-disable-model-invocation: true
+description: Use when planning a change to something shared, such as a schema field, a utility many modules import, middleware on every route, a shared type, an env var, or an index, and when asked what a change breaks elsewhere. Finds breakage that grep misses and proves the key safety fact by running code.
 ---
 
 # Blast radius
@@ -14,17 +13,22 @@ confident writeup.
 
 ## When to use it
 
-Before shipping a change that looks small but touches something shared: a
-Mongoose schema field, a utility every service imports, a middleware mounted
-on every route, a shared type, an env var, a database index.
+When planning a change that looks small but touches something shared: a
+field in a database schema or in stored documents, a utility every service
+imports, a middleware mounted on every route, a shared type, an env var, a
+database index. Also when someone asks what a change breaks elsewhere, and
+nothing more.
 
-Also useful on a diff someone else wrote that you do not trust yet.
+Skip it for a change that nothing outside its own file reads. A review of a
+branch or a PR, someone else's diff included, goes to `/code-review`, whose
+finders trace the callers a change affects.
 
 ## How to use it
 
-Type `/eng:blast-radius` with the change described, or point it at a diff or a
-branch. It comes back with a short list of risks and the evidence level for
-each one.
+Nothing to invoke when it fires on its own, and `eng:investigate` calls it when
+a plan touches shared code. To ask directly, type `/eng:blast-radius` with the
+change you are planning. It comes back with a short list of risks and the
+evidence level for each one.
 
 ---
 
@@ -33,7 +37,7 @@ each one.
 A blast-radius writeup reads as convincing whether or not it is true. Listing
 the callers is not the job, grep does that in a second. The job is the
 breakage grep does not show you, and the proof that the one thing holding it
-all together is actually true.
+all together is true.
 
 So do not hand back the writeup. Find the one or two facts the change's
 safety depends on and prove those by running something.
@@ -54,7 +58,15 @@ list as is cheap, then say where it stopped.
 Label every claim with its level. Any safety fact that stopped below level 4
 gets written down as unproven, not as settled. Level 4 is usually one small
 script that imports the same library the app ships and calls the exact
-function you are worried about.
+function you are worried about. Write it under the scratchpad directory your
+system prompt names, or under `${TMPDIR:-/tmp}` when it names none, and run it
+against local or test data. A Node script there resolves imports from its own
+directory, so load the app's packages with
+`createRequire("<repo>/package.json")` from `node:module`.
+
+A script that has to sit in the repo to run, a query against a shared or
+production database, or a call to a live service waits for the user's
+go-ahead, and until then the fact stays below level 4.
 
 ## Where to look
 
@@ -87,7 +99,7 @@ what you checked it with. Without this a reader cannot tell a risk you cleared
 from one you never looked at.
 
 Then **Before you merge**: the cheapest test or repro that would catch the
-real bug, including the script you wrote.
+real bug.
 
 Then one line at the end: the single fact this change's safety rests on, and
 whether it is proven.
@@ -96,7 +108,7 @@ whether it is proven.
 appears under either Risks or Cleared, Before you merge names a test or repro
 that would fail if the safety fact were false, and that fact is either
 labelled proven by a level 4 run, or labelled unproven with the run that was
-attempted and what stopped it.
+attempted and what stopped it, or with a run waiting on the user's go-ahead.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: why
-description: Use before deleting or rewriting a guard, a retry, a timeout, an early return, a special case, or a constant with an oddly specific value. Use it when code looks wrong, redundant, or paranoid and you are about to simplify it away. Traces the rationale through git history and keeps what a source actually says apart from what you are inferring.
+description: Use before removing or rewriting a guard, retry, timeout, early return, special case, odd constant, or code that looks redundant, and when asked why code is shaped the way it is. Traces the rationale through git history, keeping what a source says apart from inference.
 ---
 
 # Why
@@ -11,8 +11,8 @@ It works out why a piece of code has the shape it has, from the record:
 commits, pull requests, the issues they close, the tests that shipped with
 them, and whatever else this repo can reach.
 
-It keeps two things apart in the answer: what a source actually says, and
-what you are inferring from a pattern. That separation is the product.
+It keeps two things apart in the answer: what a source says, and what you are
+inferring from a pattern. That separation is the product.
 
 ## When to use it
 
@@ -28,15 +28,15 @@ runs first.
 
 Skip it for code written this week that you already understand, and for code
 you are adding rather than removing. Skip it when the question is what the
-code does, which is `/eng:how`. Skip the full report when the commit that added
-the line already explains it: say what that commit says and stop.
+code does, which is `eng:investigate`.
 
 ## How to use it
 
 Nothing to invoke when it fires on its own. To ask directly, type `/eng:why`
 with a file, a line range, or a symbol name. Either way you get a short report
 with a citation on every claim, and a list of everywhere that was searched and
-came back empty.
+came back empty. When the commit that added the code, or its PR, already says
+why, you get that reason with its citation instead.
 
 ---
 
@@ -67,21 +67,32 @@ authors, and a PR number or a recorded "no PR found" for each one.
 
 ```bash
 gh pr view <n> --json title,body,createdAt,mergedAt,closingIssuesReferences,comments,reviews
+gh api --paginate repos/{owner}/{repo}/pulls/<n>/comments
 gh issue view <n> --comments
 ```
 
-Read the PR body, the review threads, and the linked issue. Read the tests
-that landed in the same commit: a test name is often the only written record
-of the case that forced the code. Read the comments the commit added, and
-check whether a comment nearby was written at the same time or years later.
+Read the PR body, the review threads, and the linked issue. `gh pr view`
+returns the conversation and each review's summary but not the comments left
+on lines of the diff, which is often where a guard was argued over. The
+`gh api` call returns those.
+
+Read the tests that landed in the same commit: a test name is often the only
+written record of the case that forced the code. Read the comments the commit
+added, and check whether a comment nearby was written at the same time or
+years later.
+
+When the commit that added the target, or its PR, states the reason, that is
+the answer. Report the reason with its citation and stop, because steps 3 to
+5 are for a record that does not say.
 
 **Done when:** every commit from step 1 has either a source read or a note
-saying its message is the whole record.
+saying its message is the whole record, or the commit that added the target,
+or its PR, states the reason and the run has stopped with that reason cited.
 
 ## Step 3: Search outside git
 
 List the sources this repo can reach before searching any of them: an issue
-tracker, ADRs and specs under `docs/` or `.scratch/`, a Notion or Slack
+tracker, ADRs and specs under `docs/` or `.claude/plans/`, a Notion or Slack
 workspace where a connector is available.
 
 When the target is one of the shapes named in "When to use it", add two more:

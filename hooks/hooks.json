@@ -1,0 +1,17 @@
+{
+  "description": "Sends the eng workflow contract and the core writing rules at session start and after each compaction.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/eng-hook session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -3,7 +3,7 @@
 ## Layout
 
 ```
-.scratch/<slug>/
+.claude/plans/<slug>/
   map.md
   tickets/
     01-name-the-storage-shape.md
@@ -69,6 +69,9 @@ in person. A task ticket adds `**Driver:** hitl` or `**Driver:** afk`,
 because it is the one type that goes either way.
 
 `**Blocked by:**` holds ticket numbers separated by commas, or `none`.
+`**Waits on:**` appears only on a ticket waiting for something no session can
+get, such as an API key, written in exactly that form under `**Claimed:**`.
+The takeable loop skips the ticket until the user deletes the line.
 `**Claimed:**` holds `none` until a session takes it, then the date and who
 is driving, such as `2026-08-26 mewan`.
 
@@ -92,18 +95,19 @@ Assets: [retry prototype](../assets/02-retry-prototype.ts)
 
 ## Finding the takeable tickets
 
-Run from `.scratch/<slug>/tickets`:
+Run from `.claude/plans/<slug>/tickets`:
 
 ```bash
-for f in *.md; do
+find . -maxdepth 1 -name '*.md' | sort | while read -r f; do
   grep -q '^\*\*Status:\*\* open' "$f" || continue
   grep -q '^\*\*Claimed:\*\* none' "$f" || continue
+  grep -q '^\*\*Waits on:\*\*' "$f" && continue
   takeable=yes
   for b in $(sed -n 's/^\*\*Blocked by:\*\* //p' "$f" | tr ',' ' '); do
     [ "$b" = "none" ] && continue
     blocker=$(find . -maxdepth 1 -name "$b-*.md" -print -quit)
     if [ -z "$blocker" ]; then
-      echo "$f: blocked by ticket $b, which does not exist"
+      echo "$f: blocked by ticket $b, which does not exist" >&2
       takeable=no
       continue
     fi
@@ -113,12 +117,13 @@ for f in *.md; do
 done
 ```
 
-It prints the title line of every takeable ticket, and a line for any ticket
-pointing at a blocker that was deleted. `find` does the existence test rather
-than a bare glob, because zsh fails an unmatched glob before the command runs
-and prints its own error that a redirect cannot swallow. An empty result with open tickets
-left means all of them are blocked or claimed, so the next move is to finish
-a blocker.
+It prints the title line of every takeable ticket on stdout, lowest number
+first. A ticket pointing at a blocker that was deleted gets a warning on
+stderr instead. `find` lists the tickets and tests each blocker rather than a
+bare glob, because zsh fails an unmatched glob before the command runs, which
+stops the loop with `no matches found` in an empty `tickets/`. An empty result
+with open tickets left means all of them are blocked, claimed, or waiting, so
+the next move is to finish a blocker or get what a ticket waits on.
 
 ## Concurrency
 

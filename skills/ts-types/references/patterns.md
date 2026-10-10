@@ -158,8 +158,8 @@ if ("chargeId" in payment) {
 A type guard, when the check is real work:
 
 ```ts
-function isMongoDuplicateKeyError(err: unknown): err is { code: 11000 } {
-  return typeof err === "object" && err !== null && "code" in err && err.code === 11000;
+function isUniqueViolation(err: unknown): err is { code: "P2002" } {
+  return typeof err === "object" && err !== null && "code" in err && err.code === "P2002";
 }
 ```
 
@@ -168,12 +168,12 @@ function isMongoDuplicateKeyError(err: unknown): err is { code: 11000 } {
 The guard above checks everything it claims. This one does not:
 
 ```ts
-function isMongoError(err: unknown): err is MongoError {
+function isDbError(err: unknown): err is DbError {
   return typeof err === "object" && err !== null;
 }
 ```
 
-Every caller now treats any object as a `MongoError`, and the lie is invisible
+Every caller now treats any object as a `DbError`, and the lie is invisible
 at the call site, because the name says it is safe. Prefer discriminant
 narrowing wherever a discriminant exists, since a guard adds a layer the
 reader has to follow.
@@ -203,16 +203,24 @@ the point. Without the `never` line, the new variant silently falls through.
 ## satisfies over as
 
 ```ts
+type RouteDef = { method: "GET" | "POST"; path: string };
+
 const routes = {
   health: { method: "GET", path: "/health" },
   createUser: { method: "POST", path: "/users" },
 } satisfies Record<string, RouteDef>;
 
 routes.health.method; // "GET", the literal, still narrow
+routes.helth;         // compile error, no such route
 ```
 
-With `as Record<string, RouteDef>` the literal widens to `string` and you
-lose the narrowing. `satisfies` checks the shape and keeps the literals.
+With `as Record<string, RouteDef>`, `routes.health.method` is `"GET" | "POST"`
+and `routes.helth` compiles as a `RouteDef` that is not there. The cast swaps
+the value's own type for the declared one. `satisfies` checks the shape and
+keeps the type inferred from the value.
+
+The literal survives because `method` is declared as a union of literals.
+Declared as `string`, it widens to `string` under both.
 
 ## Parse at the boundary
 

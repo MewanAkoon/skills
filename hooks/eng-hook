@@ -1,0 +1,86 @@
+#!/bin/sh
+# Hook entry point for the eng plugin. hooks/hooks.json runs it as
+#
+#   eng-hook session-start
+#
+# on SessionStart. It sends the workflow contract and the Punctuation and Word
+# choice sections of plain-writing as context, read from the plugin's own
+# files at run time, so there is no generated file to keep in step. On a
+# compaction it also asks Claude Code to load the skill listing again, which
+# compaction drops.
+#
+# Every failure exits 0, so a broken hook never stops a session. A failure is
+# written to eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor
+# reads. Needs jq for the JSON. Without it the block goes out as plain text,
+# which Claude Code also takes as context, and the listing reload is skipped.
+
+set -u
+
+mode="${1:-}"
+root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+log() {
+  printf 'eng-hook: %s\n' "$1" >&2
+  [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || return 0
+  mkdir -p "$CLAUDE_PLUGIN_DATA" 2>/dev/null || return 0
+  printf '%s %s error: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mode" "$1" \
+    >> "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
+  return 0
+}
+
+session_start() {
+  input="$(cat)"
+  contract="$root/standards/workflow.md"
+  writing="$root/skills/plain-writing/SKILL.md"
+
+  if [ ! -r "$contract" ]; then
+    log "cannot read $contract, so no contract was sent"
+    return 0
+  fi
+
+  text="The user's standing workflow, from the eng plugin:
+
+$(cat "$contract")"
+
+  if [ -r "$writing" ]; then
+    # From the Punctuation heading to the heading after Word choice.
+    rules="$(awk '
+      /^## / { keep = ($0 == "## Punctuation" || $0 == "## Word choice") }
+      keep
+    ' "$writing")"
+    if [ -n "$rules" ]; then
+      text="$text
+
+The writing rules every reply follows, from the eng:plain-writing skill:
+
+$rules"
+    else
+      log "found no Punctuation or Word choice section in $writing"
+    fi
+  else
+    log "cannot read $writing, so the writing rules were not sent"
+  fi
+
+  if ! command -v jq >/dev/null 2>&1; then
+    log "jq not found, so the block went out as plain text and the skill listing was not reloaded"
+    printf '%s\n' "$text"
+    return 0
+  fi
+
+  source="$(printf '%s' "$input" | jq -r '.source // empty' 2>/dev/null)"
+  reload=false
+  [ "$source" = compact ] && reload=true
+
+  jq -n --arg ctx "$text" --argjson reload "$reload" '{
+    hookSpecificOutput: (
+      {hookEventName: "SessionStart", additionalContext: $ctx}
+      + (if $reload then {reloadSkills: true} else {} end)
+    )
+  }' || log "jq could not build the output"
+}
+
+case "$mode" in
+  session-start) session_start ;;
+  *) log "unknown mode '$mode'" ;;
+esac
+exit 0

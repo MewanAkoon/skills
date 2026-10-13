@@ -297,7 +297,8 @@ The checker covers the mechanical half of that standard, and
 and on every push to `main`, on Linux and on macOS, without `--doctor`, since
 a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the session hook its inputs and checks
-what it sends. CI also runs the validator on a pinned Claude Code.
+what it sends, and, where Node is installed, the fixtures for
+`scripts/stats.mjs`. CI also runs the validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
@@ -338,6 +339,22 @@ briefs the intent check beside it, and commits nothing.
 A skill stays whether or not it fires. To see how often each one has fired,
 run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
 when it last ran, and what its description costs on every turn.
+
+To see whether the workflow holds, run `npm run stats`. It reads this
+machine's Claude Code transcripts and the hook's log, and prints per week the
+remote writes nobody asked for, those made from subagents, commits and PRs
+made without their skill, posts, requests for another review pass, drafts,
+compactions, and what code-review cost. The counts are heuristics, and the
+script's `DEFINITIONS` say how each one is made. It saves a baseline, and
+sets its headline numbers beside a later run:
+
+```bash
+npm run stats -- --since 2026-07-01 --until 2026-10-08 --save <baseline.json>
+npm run stats -- --since <date> --compare <baseline.json>
+```
+
+It holds counts only, never message text, but keep a baseline out of the
+repo all the same: it describes one person's work.
 
 Every script you run while working here is also an `npm run` target, which is
 the only reason `package.json` exists. It declares no dependencies.

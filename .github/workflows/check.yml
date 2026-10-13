@@ -36,6 +36,10 @@ jobs:
           fetch-depth: 0
       - run: bash --version | head -1
       - run: jq --version
+      # check.sh runs the stats fixtures only where Node is installed, and
+      # warns otherwise. Printing the version makes a runner without it fail
+      # here rather than skip them.
+      - run: node --version
       # On a pull request the version rule compares with origin/main. On a
       # push to main it compares with main as it was before the push, so two
       # pull requests that each bumped to the same version fail here once the

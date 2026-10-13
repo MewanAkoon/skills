@@ -16,7 +16,8 @@ carries its version; `.claude-plugin/marketplace.json` names the marketplace,
 the skills by its default scan of `skills/`. Inside the plugin each skill is
 `eng:<name>`, and that full name is how skills refer to each other.
 
-Four scripts, all bash, no build step. The commands they carry:
+Five scripts and no build step: four in bash, and `scripts/stats.mjs` in
+Node. The commands they carry:
 
 | Command | What it does |
 |---|---|
@@ -24,18 +25,22 @@ Four scripts, all bash, no build step. The commands they carry:
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
 | `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs from `tests/hooks/` and checks what it sends. `check.sh` runs it. |
+| `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node is installed. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 
 None of them needs a package installed beyond `jq`, which macOS 15 and the CI
-runners ship, and `claude` for the validator and `--doctor`. Each resolves
-its own path with `readlink -f`, and `check.sh` takes its file list from
-`git`. `scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
-source it for the old skill names and for resolving where a link points.
+runners ship, `claude` for the validator and `--doctor`, and Node for
+`stats.mjs`. Where Node is missing, `check.sh` warns and skips the stats
+fixtures. Each bash script resolves its own path with `readlink -f`, and
+`check.sh` takes its file list from `git`. `scripts/legacy.sh` is not run on
+its own: `link.sh` and `--doctor` both source it for the old skill names and
+for resolving where a link points.
 
 `package.json` carries those as `npm run check`, `doctor`, `validate`,
-`test:hooks`, and `unlink`, plus `npm run lint`, which runs shellcheck over
-every script and the hook.
+`test:hooks`, `stats`, and `unlink`, plus `npm run test:stats`, which runs
+the stats fixtures, and `npm run lint`, which runs shellcheck over every
+shell script and the hook.
 It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
 the wrapper in `package.json` and the binary it downloads with
 `SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.
@@ -76,9 +81,10 @@ either file says, so both harnesses still get the same body on `skills/**`.
 
 Maintenance scripts run on one machine rather than in a session, so they may
 read a harness's own files: `link.sh --unlink` removes links under
-`~/.claude/skills` and the other directories an older install wrote to, and
-`--doctor` reads Claude Code's plugin list, its settings, and the hook's log.
-Both say so where they do it.
+`~/.claude/skills` and the other directories an older install wrote to,
+`--doctor` reads Claude Code's plugin list, its settings, and the hook's log,
+and `stats.mjs` reads Claude Code's transcripts and the hook's log. Each says
+so where it does it.
 
 ## What an agent here never does
 
@@ -138,7 +144,8 @@ follows, and enforcing it is what this repo is for.
 - `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and `evals/*/scaffold.sh`
   parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
   parses under `sh -n`, which names a syntax error plainly, and its fixtures
-  pass.
+  pass. Where Node is installed, `scripts/stats.mjs` parses under
+  `node --check` and its fixtures pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
   a `MAJOR.MINOR.PATCH` version.

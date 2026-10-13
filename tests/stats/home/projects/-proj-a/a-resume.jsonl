@@ -1,0 +1,1 @@
+{"type":"user","uuid":"u1","sessionId":"s1","timestamp":"2026-07-07T10:00:00Z","promptId":"p1","isSidechain":false,"origin":{"kind":"human"},"message":{"role":"user","content":"Fix the bug, then commit and push it"}}

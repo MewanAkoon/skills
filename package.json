@@ -9,6 +9,8 @@
     "doctor": "./scripts/check.sh --doctor",
     "validate": "./scripts/validate-plugin.sh",
     "test:hooks": "./scripts/test-hooks.sh",
+    "stats": "node scripts/stats.mjs",
+    "test:stats": "node --test tests/stats/*.test.mjs",
     "unlink": "./link.sh --unlink",
     "lint": "SHELLCHECKJS_RELEASE=v0.11.0 npx --yes shellcheck@4.1.0 link.sh scripts/*.sh tests/*/*.sh evals/*/scaffold.sh hooks/eng-hook"
   }

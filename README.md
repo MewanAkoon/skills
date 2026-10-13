@@ -345,8 +345,9 @@ machine's Claude Code transcripts and the hook's log, and prints per week the
 remote writes nobody asked for, those made from subagents, commits and PRs
 made without their skill, posts, requests for another review pass, drafts,
 compactions, and what code-review cost. The counts are heuristics, and the
-script's `DEFINITIONS` say how each one is made. It saves a baseline, and
-sets its headline numbers beside a later run:
+script's `DEFINITIONS` say how each one is made. It saves a baseline, with
+those definitions, and sets its headline numbers beside a later run, saying
+when a definition has changed since:
 
 ```bash
 npm run stats -- --since 2026-07-01 --until 2026-10-08 --save <baseline.json>

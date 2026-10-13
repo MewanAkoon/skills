@@ -120,11 +120,28 @@ test('reads shell the way the shell does', () => {
   // with no space before it, a cd inside a subshell, a mktemp repo, an
   // exported variable, a -C inside a message, gh api flags inside quoted
   // values, a commit's own -C run from /tmp into a real repo, and sudo tee.
-  const { totals } = json(['--project', 'proj-c']);
-  assert.deepEqual(totals.writes, { push: 2, commit: 3, api: 1, post: 1 });
+  const out = json(['--project', 'proj-c']);
+  const { totals } = out;
+  // agent-y.jsonl carries no turn id, so its commit and push are reported,
+  // not counted: two writes from one call, since the count is per write. Its
+  // git status is no write.
+  assert.equal(out.totals.unplacedSubagentWrites, 2);
+  // Outside the window it is not reported at all.
+  assert.equal(json(['--project', 'proj-c', '--until', '2026-08-10']).totals.unplacedSubagentWrites, 0);
+  // agent-z.jsonl names its turn only after its first call, which still
+  // counts in that turn. The malformed lines in s6.jsonl add nothing.
+  assert.deepEqual(totals.writes, { push: 3, commit: 3, api: 1, post: 1 });
   assert.equal(totals.scratchWrites, 2);
   assert.equal(totals.draftRequests, 1);
   assert.equal(totals.draftsWithFile, 1);
+});
+
+test('skips malformed transcript lines without stopping', () => {
+  // s6.jsonl holds a null content block, an unnamed tool call, and a user
+  // line with only a null block and an empty text block, which is no typed
+  // message. agent-y.jsonl holds a line that is only null.
+  const { totals } = json(['--project', 'proj-c']);
+  assert.equal(totals.typed, 2);
 });
 
 test('reads the harder shell cases', () => {
@@ -189,6 +206,22 @@ test('--save writes the JSON and --compare reads it back', () => {
     const text = run([...july, '--compare', file]);
     // proj-b alone: 1 of 2 write turns unasked. Everything: 2 of 7.
     assert.match(text, /Unasked write turns\s+50%\s+29%/);
+    assert.doesNotMatch(text, /counted differently/);
+    // A baseline that counted differently says so, in text and in JSON.
+    saved.definitions.typed = 'something else';
+    delete saved.definitions.posts;
+    saved.definitions.retired = 'gone now';
+    saved.version = 1;
+    fs.writeFileSync(file, JSON.stringify(saved));
+    const drift = run([...july, '--compare', file]);
+    assert.match(drift, /version 1 there and 2 here/);
+    assert.match(drift, /definitions changed: typed;/);
+    assert.match(drift, /counts are new: posts;/);
+    assert.match(drift, /counts are gone: retired\./);
+    assert.match(json([...july, '--compare', file]).baseline.drift, /typed/);
+    // A file with no saved totals is refused.
+    fs.writeFileSync(file, '{}');
+    assert.throws(() => run([...july, '--compare', file]), /holds no saved totals/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -287,7 +320,8 @@ const CASES = [
   ['(S=/tmp/x); cd $S && git push', '/repo', 'push'],
   ['GIT_DIR=/tmp/x/.git; export GIT_DIR; git push', '/repo', 'push*'],
   ['typeset -x GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
-  ['local -x GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['f() { local -x GIT_DIR=/tmp/x/.git; git push; }; f', '/repo', 'push*'],
+  ['f() { local D=/tmp/x; cd $D && git push; }; f', '/repo', 'push*'],
   ['export -- GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
   ['set -a; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
   ['export GIT_DIR=/tmp/x/.git; export -n GIT_DIR; git push', '/repo', 'push'],
@@ -301,6 +335,127 @@ const CASES = [
   ['X="a b" git push', '', 'push'],
   ['time for d in a; do git init /r/$d; git -C /r/$d commit -m y; done', '/repo', 'commit*'],
   ['case $1 in *) d=/tmp/x;; esac; cd $d && git push', '/repo', 'push*'],
+  ['OUT="$(git push origin HEAD 2>&1)"', '/repo', 'push'],
+  ['echo "$(git commit -m x)" "`git push`"', '/repo', 'commit push'],
+  ['echo "$(cd /tmp/x && git push)"; git commit -m y', '/repo', 'push* commit'],
+  ['cd && git push', '/tmp/x', 'push'],
+  ['gh -R o/r pr create --title x', '', 'pr'],
+  ['gh --repo=o/r issue comment 3 --body-file b', '', 'post'],
+  ['gh -R o/r api repos/o/r/issues/1/comments -f body=x', '', ''],
+  ['git push --dry-run', '/repo', ''],
+  ['git push -n origin main', '/repo', ''],
+  ['git commit -n -m x', '/repo', 'commit'],
+  ['gh pr create --dry-run --title x', '', ''],
+  ['pushd /tmp/x && git commit -m a; popd; git push', '/repo', 'commit* push'],
+  ['git commit -m fix -- -h', '/repo', 'commit'],
+  ['git push -h', '/repo', ''],
+  ['gh pr create --help', '', ''],
+  ['while IFS= read -r d; do git init /r/$d; git -C /r/$d commit -m y; done', '/repo', 'commit*'],
+  ['read -p "dir? " d; git init /r/$d; git -C /r/$d commit -m y', '/repo', 'commit*'],
+  ['read -p d x; git init /r/$d; git -C /r/$d commit -m y', '/repo', 'commit'],
+  ['set -e -a; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['set -o allexport; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['set  -a; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['set -a; set +o allexport; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push'],
+  ['time -p git push', '/repo', 'push'],
+  ['for d; do git init /r/$d; git -C /r/$d commit -m y; done', '/repo', 'commit*'],
+  ['export GIT_DIR A=1; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['D="/tmp/a\\" b"; cd "$D" && git push', '/repo', 'push*'],
+  ['read -r -a arr; git init /r/$arr; git -C /r/$arr commit -m y', '/repo', 'commit*'],
+  ['read -ra arr; git init /r/$arr; git -C /r/$arr commit -m y', '/repo', 'commit*'],
+  ['read -rp d x; git init /r/$d; git -C /r/$d commit -m y', '/repo', 'commit'],
+  ['git commit -m --dry-run', '/repo', 'commit'],
+  ['git push -nf', '/repo', ''],
+  ['git push -fn origin', '/repo', ''],
+  ['git push -o --dry-run origin', '/repo', 'push'],
+  ['gh pr create --title x --body --dry-run', '', 'pr'],
+  ['gh pr comment 1 --body-file -h', '', 'post'],
+  ['git commit --author -h -m x', '/repo', 'commit'],
+  ['gh issue create --label -h --title t', '', 'issue'],
+  ['set -- -a; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push'],
+  ['(cd /tmp/y; pushd /repo2); popd; git push', '/repo', 'push'],
+  ['cd -P /tmp/x && git push', '/repo', 'push*'],
+  ['cd -- /tmp/x && git push', '/repo', 'push*'],
+  ['pushd +1; git push', '/repo', 'push'],
+  ['cd /tmp/x; pushd /repo; pushd +1; git push', '/r', 'push*'],
+  ['cd /tmp/x; pushd /repo; pushd /repo2; pushd -0; git push', '/r', 'push*'],
+  ['cd /tmp/x; pushd /repo; pushd /repo2; pushd -1; git push', '/r', 'push'],
+  ['gh pr create --reviewer -h --title t', '', 'pr'],
+  ['pushd /repo; pushd; git push', '/tmp/x', 'push*'],
+  ['pushd; git push', '/tmp/x', 'push*'],
+  ['git commit -m --help', '/repo', 'commit'],
+  ['git push -o -h origin', '/repo', 'push'],
+  ['echo "$(case $x in a) git push;; esac)"', '/repo', 'push'],
+  ['for d do git init /r/$d; git -C /r/$d commit -m y; done', '/repo', 'commit*'],
+  ['echo "$(echo case)"; git push', '/repo', 'push'],
+  ['echo "$(grep --ignore-case x f)"; git push', '/repo', 'push'],
+  ['echo "$(case $x in (a) echo y;; esac)"; git push', '/repo', 'push'],
+  ['echo "$(case $x in a) y=$(pwd);; esac)"; git push', '/repo', 'push'],
+  ['git commit -a --dry-run', '/repo', ''],
+  ['git commit -p --dry-run', '/repo', ''],
+  ['git commit -a -h', '/repo', ''],
+  ['f() { local D=/tmp/x; }; f; cd ${D:-/repo2} && git push', '/repo', 'push'],
+  ['local D=/tmp/x; cd $D && git push', '/repo', 'push'],
+  ['read -pd x; git init /r/$x; git -C /r/$x commit -m z', '/repo', 'commit*'],
+  ['pushd -n /tmp/x; git push', '/repo', 'push'],
+  ['pushd -n /tmp/x; pushd; git push', '/repo', 'push*'],
+  ['set -euo allexport; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['f() {\n  local D=/tmp/x\n  cd $D && git push\n}', '/repo', 'push*'],
+  ['function f() { local D=/tmp/x; cd $D && git push; }', '/repo', 'push*'],
+  ['f() ( local D=/tmp/x; cd $D && git push )', '/repo', 'push*'],
+  ['f() { local D=/tmp/x; { true; }; cd $D && git push; }', '/repo', 'push*'],
+  ['f() { { true; }; local D=/tmp/x; cd $D && git push; }', '/repo', 'push*'],
+  ['D=/repo; f() { local D=/tmp/x; }; cd $D && git push', '/r', 'push'],
+  ['pushd /tmp/x; pushd -n +1; git push', '/repo', 'push*'],
+  ['echo "$(echo if case)"; git push', '/repo', 'push'],
+  ['git commit -m "$(echo use case)"; git push', '/repo', 'commit push'],
+  ['X="$(cat src/case/a)"; git push', '/repo', 'push'],
+  ['echo "$(test-case)"; git push', '/repo', 'push'],
+  ['echo "$(case $x in (a) git push;; esac)"; git commit -m y', '/repo', 'push commit'],
+  ['echo "$(case $x in a) echo $(pwd);; esac)"; git commit -m y', '/repo', 'commit'],
+  ['echo "$(case $x in a) case $y in b) z;; esac;; esac)"; git push', '/repo', 'push'],
+  ['gh release create v1 -n --dry-run', '', 'release'],
+  ['gh api repos/o/r/issues/1/comments -f -h', '', 'post'],
+  ['git push --receive-pack --dry-run origin', '/repo', 'push'],
+  ['git commit -o --dry-run f', '/repo', ''],
+  ['set -eo pipefail -a; GIT_DIR=/tmp/x/.git; git push', '/repo', 'push*'],
+  ['read < f d; git init /r/$d; git -C /r/$d commit -m y', '/repo', 'commit*'],
+  ['{ git status; } > /tmp/out.txt; git push', '/repo', 'push'],
+  ['f() { local D=/tmp/x; if { true; }; then cd $D && git push; fi; }', '/repo', 'push*'],
+  ['f() { local D=/tmp/x; time { true; }; cd $D && git push; }', '/repo', 'push*'],
+  ['( local D=/tmp/x; cd $D && git push )', '/repo', 'push'],
+  ['f() ( true ); local D=/tmp/x; cd $D && git push', '/repo', 'push'],
+  ['(cd /tmp/x; echo "$(echo `a)`)"; git push); git push', '/repo', 'push* push'],
+  ['echo `echo \\`git push\\``; git commit -m x', '/repo', 'push commit'],
+  ['echo `cd /tmp/x`; git push', '/repo', 'push'],
+  ['gh pr -R o/r create -t -h', '', 'pr'],
+  ['gh pr reopen 1 -c -h', '', 'pr'],
+  ['gh pr create --recover f --dry-run', '', ''],
+  ['if true; then f() { local D=/tmp/x; cd $D && git push; }; fi', '/repo', 'push*'],
+  ['for i in 1; do f() { local D=/tmp/x; cd $D && git push; }; done', '/repo', 'push*'],
+  ['my.f() { local D=/tmp/x; cd $D && git push; }', '/repo', 'push*'],
+  ['f() { if { true; }; then :; fi; local D=/tmp/x; cd $D; git push; }', '/repo', 'push*'],
+  ['function f { local D=/tmp/x; cd $D && git push; }', '/repo', 'push*'],
+  ['pushd /tmp/x; pushd -n +1; popd; git push', '/repo', 'push*'],
+  ['pushd /tmp/x; pushd +1 -n; git push', '/repo', 'push*'],
+  ['git commit -m push -o --dry-run', '/repo', ''],
+  ['if true; then function f { local D=/tmp/x; cd $D && git push; }; fi', '/repo', 'push*'],
+  ['pushd /tmp/x; popd +1; git push', '/repo', 'push*'],
+  ['pushd /tmp/x; popd -n; git push', '/repo', 'push*'],
+  ['pushd /tmp/x; popd +0; cd -; git push', '/repo', 'push*'],
+  ['pushd /tmp/x; cd /r; popd; cd -; git push', '/r', 'push'],
+  ['pushd /tmp/x; popd -n +0; popd; git push', '/repo', 'push*'],
+  ['pushd /tmp/x; popd -n -1; popd; git push', '/repo', 'push*'],
+  ['f() { declare D=/tmp/x; }; cd $D && git push', '/repo', 'push'],
+  ['f() { declare -g D=/tmp/x; }; cd $D && git push', '/repo', 'push*'],
+  ['gh pr create -f --dry-run', '', ''],
+  ['gh label create bug -f -h', '', ''],
+  ['gh pr merge -m -h', '', ''],
+  ['gh pr create -m v1 --dry-run', '', ''],
+  ['echo ) ; local D=/tmp/x; cd $D && git push', '/repo', 'push'],
+  ['echo "$(echo `a)`)"; git push', '/repo', 'push'],
+  ['echo "`echo \\`git push\\``"; git commit -m x', '/repo', 'push commit'],
+  ['read d < file; git init /r/$file; git -C /r/$file commit -m y', '/repo', 'commit'],
   ['GIT_DIR="/tmp/my dir/.git" git push', '/repo', 'push*'],
   ['sudo -u git GIT_DIR=/tmp/x/.git git push', '/repo', 'push*'],
   ["git commit -m x # it's\nfor d in a; do git init /r/$d; git -C /r/$d commit -m y; done; echo 'z'", '/repo', 'commit commit*'],
@@ -325,4 +480,23 @@ test('importing the script never runs or breaks it', () => {
     { encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: home } },
   );
   assert.equal(out.trim(), 'ok');
+});
+
+// Whether a command writes a file, which decides whether a draft became one.
+const WRITES_FILE = [
+  ['echo hi>reply.md', true],
+  ['{ git status; } > /tmp/out.txt', true],
+  ['echo x | sudo tee f', true],
+  ['git status >/dev/null 2>&1', false],
+  ['echo "a -> b"', false],
+  ['echo $((a>b)); [[ a > b ]]; (( a > b ))', false],
+  ['echo "$(psql -c "select 1 where 2 > 1")"', false],
+  ['echo $((a)) > f.txt $((b))', true],
+];
+
+test('tells a command that writes a file from one that does not', async () => {
+  const { bashCall } = await import(script);
+  for (const [command, expected] of WRITES_FILE) {
+    assert.equal(bashCall(command, '/repo').wroteFile, expected, command);
+  }
 });

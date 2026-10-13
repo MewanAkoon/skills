@@ -1,0 +1,4 @@
+{"type":"assistant","uuid":"cy1","sessionId":"s6","agentId":"y","timestamp":"2026-08-11T09:30:00Z","requestId":"ry1","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"ty1","name":"Bash","input":{"command":"git commit -m a && git push"}}],"usage":{"input_tokens":1,"output_tokens":1}}}
+{"type":"assistant","uuid":"cybad","sessionId":"s6","agentId":"y","timestamp":"2026-08-11T09:31:00Z","requestId":"rybad","isSidechain":true,"message":{"role":"assistant","content":[null,{"type":"tool_use"}],"usage":{"input_tokens":1,"output_tokens":1}}}
+{"type":"assistant","uuid":"cyread","sessionId":"s6","agentId":"y","timestamp":"2026-08-11T09:32:00Z","requestId":"ryread","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"tyr","name":"Bash","input":{"command":"git status"}}],"usage":{"input_tokens":1,"output_tokens":1}}}
+null

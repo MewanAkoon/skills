@@ -5,9 +5,12 @@ For any agent working in this repo.
 ## What this repo is
 
 A source of agent skills, not an application, shipped as one Claude Code
-plugin, `eng`. There is nothing to build and no test suite. Every `SKILL.md`
-loads into some other repo's session, so a change here changes how an agent
-behaves everywhere.
+plugin, `eng`. There is nothing to build. The tests that run are the
+fixtures `check.sh` runs for the hook and for `scripts/stats.mjs`.
+`tests/review-loop/` holds the setup for a check run by hand, and `evals/` the
+cases for `claude plugin eval`, also run by hand. Every
+`SKILL.md` loads into some other repo's session, so a change here changes how
+an agent behaves everywhere.
 
 The repo is both the plugin and the marketplace that lists it, the way
 mattpocock/skills ships. `.claude-plugin/plugin.json` names the plugin and

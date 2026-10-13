@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 const DEFINITIONS = {
   typed: 'Messages you typed: no tool results, task notifications, relays, compaction summaries or command output. A slash command counts.',
   families: 'Sessions joined when one resumes or forks another, which shows as a shared message id or an entry carrying the other session id.',
-  writeTurns: 'Turns with a remote write: git commit or push, a tag push included; gh pr, issue, label or release writes; gh api writes; MCP tools whose name holds a write verb, on servers other than local and project ones.',
+  writeTurns: 'Turns with a remote write: git commit or push, a tag push included; gh pr, issue, label or release writes; gh api writes; MCP tools whose name holds a write verb, on servers other than local and project ones. A dry run or a help request is no write.',
   unaskedWriteTurns: 'Write turns where your latest typed message lacks the word for one of its writes, such as commit, push, PR, merge or post, and is no approval. Push covers commit.',
   approvedWriteTurns: 'Write turns where that message lacks the word but opens with an approval, such as yes or go ahead.',
   subagentWrites: 'Remote writes made from a subagent.',
@@ -44,7 +44,11 @@ const DEFINITIONS = {
   reviewRuns: 'code-review or review loaded through the Skill tool or typed. ultraReviews counts those with ultra.',
   reviewTokens: 'Input, output and cache-write tokens of replies attributed to code-review or review, each reply counted once. reviewCacheReads holds their cache reads.',
   hookErrors: 'Error lines in the eng hook log.',
+  unplacedSubagentWrites: 'Writes in a subagent file that names no turn, which are reported here and counted nowhere else. One number for the whole window, kept in totals and not per week. Zero on a healthy history.',
 };
+
+// Raised when the report's shape changes. 2: unplacedSubagentWrites in totals.
+const REPORT_VERSION = 2;
 
 const USAGE = `usage: npm run stats -- [--since YYYY-MM-DD] [--until YYYY-MM-DD]
                         [--project <substring>] [--json]
@@ -95,8 +99,8 @@ function typedMessage(entry) {
   let text;
   if (typeof content === 'string') text = content;
   else if (Array.isArray(content)) {
-    if (content.some((block) => block.type === 'tool_result')) return null;
-    text = content.filter((block) => block.type === 'text').map((block) => block.text).join('\n');
+    if (content.some((block) => block?.type === 'tool_result')) return null;
+    text = content.filter((block) => block?.type === 'text' && typeof block.text === 'string').map((block) => block.text).join('\n');
   } else return null;
 
   text = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim();
@@ -296,7 +300,9 @@ function dropHeredocs(command) {
 }
 
 // Keywords that may come before a command, as in "then git push".
-const KEYWORDS = String.raw`(?:(?:if|then|elif|else|while|until|do|time|!|\{)\s+)*`;
+const KEYWORD_WORDS = String.raw`(?:if|then|elif|else|while|until|do|time(?:\s+-p)?|!)`;
+const KEYWORDS = String.raw`(?:(?:${KEYWORD_WORDS}|\{)\s+)*`;
+const BEFORE_BRACE = new RegExp(String.raw`^(?:${KEYWORD_WORDS}\s+)*`);
 const AFTER_KEYWORDS = new RegExp(`^${KEYWORDS}`);
 
 // Splits a command line into simple commands at the operators outside
@@ -307,6 +313,22 @@ const AFTER_KEYWORDS = new RegExp(`^${KEYWORDS}`);
 // and esac. Arithmetic, $(( )) or (( )), stays inside its command, and a case
 // pattern's ) closes nothing.
 function splitShell(command) {
+  return scanShell(command, 0, false).segments;
+}
+
+// The commands of the backtick substitution that opens at i, and the index of
+// the backtick that closes it: the next one no backslash escapes. Inside, \`
+// is the backtick of a nested substitution.
+function backticks(command, i) {
+  let stop = i + 1;
+  while (stop < command.length && command[stop] !== '`') stop += command[stop] === '\\' ? 2 : 1;
+  return [splitShell(command.slice(i + 1, stop).replace(/\\([`\\$])/g, '$1')), Math.min(stop, command.length)];
+}
+
+// The splitter itself. From start, it reads to the end of the text, or, when
+// nested is set, to the ) that ends a $( ) begun just before start, and
+// returns the segments with the index where it stopped.
+function scanShell(command, start, nested) {
   const segments = [];
   const open = [];
   let raw = '';
@@ -318,7 +340,8 @@ function splitShell(command) {
   };
   // case and esac open and close a case, after any keyword that may come
   // before a command. Each word is read once, however often this runs. A
-  // case is a scope like a subshell, since a cd in one branch may not run.
+  // case is a scope for the directory, since a cd in one branch may not run;
+  // variables set in it carry on.
   let read = -1;
   const word = () => {
     if (read === bare.trimEnd().length) return;
@@ -340,8 +363,24 @@ function splitShell(command) {
     raw = '';
     bare = '';
   };
-  for (let i = 0; i < command.length; i++) {
+  for (let i = start; i < command.length; i++) {
     const c = command[i];
+    if (quote === '"' && (command.startsWith('$(', i) || c === '`') && !command.startsWith('$((', i)) {
+      // A command substitution inside double quotes still runs. This same
+      // reader reads it, and its commands come back in a subshell's
+      // markers, while the quoted text keeps it whole.
+      let inner;
+      let stop;
+      if (c === '`') [inner, stop] = backticks(command, i);
+      else {
+        const scanned = scanShell(command, i + 2, true);
+        [inner, stop] = [scanned.segments, scanned.end];
+      }
+      segments.push({ marker: 'open' }, ...inner, { marker: 'close' });
+      raw += command.slice(i, stop + 1);
+      i = stop;
+      continue;
+    }
     if (quote) {
       raw += c;
       if (c === '\\' && quote === '"' && i + 1 < command.length) raw += command[++i];
@@ -371,21 +410,25 @@ function splitShell(command) {
       if (!/\s$/.test(bare)) word();
       // A case pattern's ) ends the pattern, and a command follows it.
       if (open.at(-1) === 'case') cut();
-      else {
-        if (open.at(-1) === '(') open.pop();
-        cut('close');
-      }
-    } else if (c === '`') {
-      if (open.at(-1) === '`') {
+      else if (nested && !open.includes('(')) {
+        // The ) that ends the $( ) this read began in.
+        cut();
+        return { segments, end: i };
+      } else if (open.at(-1) === '(') {
         open.pop();
         cut('close');
-      } else {
-        open.push('`');
-        cut('open');
-      }
+      } else cut(); // A ) that closes nothing ends the command and no subshell.
+    } else if (c === '`') {
+      // A backtick substitution runs in a subshell, read like a $( ).
+      const [inner, stop] = backticks(command, i);
+      segments.push({ marker: 'open' }, ...inner, { marker: 'close' });
+      raw += command.slice(i, stop + 1);
+      bare += '``';
+      i = stop;
     } else if (c === ';' && open.at(-1) === 'case' && (command[i + 1] === ';' || command[i + 1] === '&')) {
-      // ;;, ;& and ;;& end a case branch. Each branch starts where the case
-      // did, even one that ;& falls into: which branch ran is unknown.
+      // ;;, ;& and ;;& end a case branch. Each branch starts in the directory
+      // the case started in, even one that ;& falls into: which branch ran
+      // is unknown.
       word();
       if (bare.trim()) segments.push({ raw: raw.trim(), bare: bare.trim() });
       raw = '';
@@ -402,14 +445,84 @@ function splitShell(command) {
     }
   }
   cut();
-  return segments;
+  return { segments, end: command.length };
 }
 
-const LEADING = /^(?:(?:[A-Za-z_]\w*=(?:"(?:[^"\\]|\\.)*"|'[^']*'|\\.|[^\s"'\\])*|if|then|elif|else|while|until|do|!|\{|command|exec|time|env|nohup|sudo(?:\s+-u\s+\S+|\s+-\w+)*|xargs(?:\s+-I\s*\S+|\s+-\w+(?:\s+\d+)?)*|timeout(?:\s+-[sk]\s+\S+|\s+--(?:signal|kill-after)(?:=\S+|\s+\S+)|\s+-\S+)*\s+\S+)\s+)+/;
+// An assignment's value: quoted strings, escaped characters, and the rest
+// up to a space.
+const VALUE = String.raw`(?:"(?:[^"\\]|\\.)*"|'[^']*'|\\.|[^\s"'\\])*`;
+// What may come before the command itself: assignments, keywords, a brace,
+// and wrappers that run the command after them.
+const WRAPPERS = String.raw`command|exec|env|nohup|sudo(?:\s+-u\s+\S+|\s+-\w+)*|xargs(?:\s+-I\s*\S+|\s+-\w+(?:\s+\d+)?)*|timeout(?:\s+-[sk]\s+\S+|\s+--(?:signal|kill-after)(?:=\S+|\s+\S+)|\s+-\S+)*\s+\S+`;
+const LEADING = new RegExp(String.raw`^(?:(?:[A-Za-z_]\w*=${VALUE}|${KEYWORD_WORDS}|for\s+\w+\s+do|\{|${WRAPPERS})\s+)+`);
+// "function f {" with no parentheses, after any keyword.
+const FUNCTION_KEYWORD = new RegExp(String.raw`^((?:${KEYWORD_WORDS}\s+)*)function\s+[^\s(){}]+\s+(?=\{)`);
+const KEYWORD_TOKEN = new RegExp(String.raw`^(?:if|then|elif|else|while|until|do|time|-p|!)$`);
 const DECLARE = new RegExp(`^${KEYWORDS}(?:(?:export|local|declare|readonly|typeset)(?:\\s+(?:--|[-+]\\w+))*\\s+)?`);
 const TMP = /^(?:\/private)?\/(?:tmp|var\/folders)\//;
-const ASSIGNMENT = /([A-Za-z_]\w*)=("[^"]*"|'[^']*'|\S*)/g;
-const ASSIGNMENTS = /^(?:[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*)\s*)+$/;
+const ASSIGNMENT = new RegExp(String.raw`([A-Za-z_]\w*)=(${VALUE})`, 'g');
+const ASSIGNMENTS = new RegExp(String.raw`^(?:[A-Za-z_]\w*=${VALUE}\s*)+$`);
+// The -R or --repo flag that gh's pr, issue and other groups take, before or
+// after the group. gh api has no such flag, and fails on it.
+const GH_REPO = /\s(?:-R|--repo)(?:\s+|=)\S+/g;
+const LOOP = new RegExp(String.raw`^${KEYWORDS}(?:for|select)\s+(\w+)(?=\s*$|\s+in\b|\s+do\b)`);
+const READ = new RegExp(String.raw`^${KEYWORDS}(?:[A-Za-z_]\w*=\S*\s+)*read\b(.*)$`);
+// read's flags whose next word is a value. -a names the array read fills.
+const READ_VALUE_LETTERS = 'dinNptu';
+// Flags whose next word is a value, so a -h, -n or --dry-run after one is
+// that value. The same letter means different things in different commands,
+// as -f is --fill in gh pr create and --field in gh api, so the lists are
+// kept per command. A command missing here only has gh's -R and git's -C
+// and -c.
+const flagSet = (text) => new Set(text.split(/\s+/));
+const COMMON_VALUE_FLAGS = { git: flagSet('-C -c'), gh: flagSet('-R --repo') };
+const VALUE_FLAGS = new Map(Object.entries({
+  'git commit': '-m -F -C -c -t --message --file --author --date --template --fixup --squash --cleanup --trailer --reuse-message --reedit-message --pathspec-from-file',
+  'git push': '-o --push-option --receive-pack --exec --repo',
+  'gh pr create': '-t -b -F -B -H -l -a -r -m -p -T --title --body --body-file --base --head --label --assignee --reviewer --milestone --project --template --recover',
+  'gh pr edit': '-t -b -F -B -m --title --body --body-file --base --milestone --add-label --remove-label --add-assignee --remove-assignee --add-reviewer --remove-reviewer --add-project --remove-project',
+  'gh pr merge': '-t -b -F -A --subject --body --body-file --author-email --match-head-commit',
+  'gh pr comment': '-b -F --body --body-file',
+  'gh pr review': '-b -F --body --body-file',
+  'gh pr close': '-c --comment',
+  'gh pr reopen': '-c --comment',
+  'gh issue create': '-t -b -F -l -a -m -p -T --title --body --body-file --label --assignee --milestone --project --template',
+  'gh issue edit': '-t -b -F -m --title --body --body-file --milestone --add-label --remove-label --add-assignee --remove-assignee --add-project --remove-project',
+  'gh issue comment': '-b -F --body --body-file',
+  'gh issue close': '-c -r --comment --reason',
+  'gh issue reopen': '-c --comment',
+  'gh release create': '-n -F -t --notes --notes-file --title --target --discussion-category --notes-start-tag',
+  'gh release edit': '-n -F -t --notes --notes-file --title --target --tag --discussion-category',
+  'gh label create': '-c -d --color --description',
+  'gh label edit': '-c -d -n --color --description --name',
+}).map(([command, flags]) => [command, flagSet(flags)]));
+// gh api's come from the lists ghApiWrite reads, with its method flag.
+VALUE_FLAGS.set('gh api', new Set([...GH_API_VALUE_FLAGS, ...GH_API_FIELD_FLAGS, '-X', '--method']));
+
+// The command a git or gh call runs, such as "git push" or "gh pr create".
+function commandName(raw) {
+  const list = words(raw.replace(GH_REPO, ''));
+  if (list[0] === 'git') return `git ${gitCommand(raw).sub ?? ''}`.trim();
+  if (list[0] !== 'gh') return '';
+  const rest = list.slice(1).filter((w) => !w.startsWith('-'));
+  return ['gh', ...rest.slice(0, rest[0] === 'api' ? 1 : 2)].join(' ');
+}
+
+// The option words of a git or gh command, before any --, leaving out the
+// values that option flags take.
+function options(raw) {
+  const list = words(raw);
+  const flags = VALUE_FLAGS.get(commandName(raw));
+  const common = COMMON_VALUE_FLAGS[list[0]];
+  const out = [];
+  for (let i = 1; i < list.length && list[i] !== '--'; i++) {
+    if (!list[i].startsWith('-')) continue;
+    out.push(list[i]);
+    if (flags?.has(list[i]) || common?.has(list[i])) i++;
+  }
+  return out;
+}
+
 // Replaces each $(mktemp ...) or `mktemp ...` with a placeholder, and
 // keeps its arguments, so the directory it makes can be read once the
 // directory and variables at that point are known.
@@ -450,8 +563,9 @@ function resolveFrom(from, to) {
 
 // Reads one Bash call: the remote writes it makes, whether each lands in a
 // throwaway repo under a temporary directory, and whether it writes a file.
-// It follows cd, cd -, subshells, git -C, --git-dir and GIT_DIR through the
-// call, with the variables it sets, and places what mktemp makes. A repo git
+// It follows cd, cd -, pushd, popd, subshells, git -C, --git-dir and
+// GIT_DIR through the call, with the variables it sets, and places what
+// mktemp makes. A dry run or a help request writes nothing. A repo git
 // init made under a loop variable or a helper's argument is a scaffold.
 function bashCall(command, cwd) {
   const vars = {};
@@ -499,6 +613,7 @@ function bashCall(command, cwd) {
   let dir = cwd || '';
   let last = dir;
   const dirs = [];
+  const pushed = [];
   const writes = [];
   let wroteFile = false;
   const made = new Set();
@@ -510,26 +625,84 @@ function bashCall(command, cwd) {
   const loops = [];
   for (const { bare } of segments) {
     if (!bare) continue;
-    const loop = new RegExp(`^${KEYWORDS}(?:for|select)\\s+(\\w+)\\s+in\\b`).exec(bare);
-    const read = new RegExp(`^${KEYWORDS}read((?:\\s+-\\w+)*)((?:\\s+\\w+)+)`).exec(bare);
+    const loop = LOOP.exec(bare);
+    const read = READ.exec(bare);
     if (loop) loops.push(loop[1]);
-    if (read) loops.push(...read[2].trim().split(/\s+/));
+    if (read) {
+      const list = words(read[1]);
+      for (let i = 0; i < list.length; i++) {
+        // A redirect may sit anywhere; its target is no name read fills.
+        if (/^\d*[<>]+$/.test(list[i])) {
+          i++;
+          continue;
+        }
+        if (/^\d*[<>]/.test(list[i])) continue;
+        if (/^-[a-zA-Z]+$/.test(list[i])) {
+          // The first letter that takes a value takes the rest of the group,
+          // or the next word when it ends the group.
+          const at = [...list[i].slice(1)].findIndex((letter) => READ_VALUE_LETTERS.includes(letter));
+          if (at !== -1 && at === list[i].length - 2) i++;
+        } else if (/^[A-Za-z_]\w*$/.test(list[i])) loops.push(list[i]);
+      }
+    }
   }
   const unnamed = new RegExp(`\\$\\{?(?:[\\d@*]${loops.map((name) => `|${name}\\b`).join('')})`);
   // Exported names reach git; a plain assignment does not, unless set -a is
   // on. A subshell keeps its own copy of both; a case branch does not.
   let exported = new Set();
   let exportAll = false;
-  for (const segment of segments) {
+  // A function's body is read where it is written, as if it ran there. Each
+  // { pushes a brace, a function's carrying the locals to undo at its }. A
+  // function whose body is a subshell drops its locals with the subshell.
+  // Outside a function, bash rejects local, so it changes nothing.
+  const braces = [];
+  const subshells = []; // for each open subshell, whether it is a function's body
+  // Whether the body at k follows "name()", as in f() { or f() (, after any
+  // keyword such as then or do.
+  const definesFunction = (k) =>
+    segments[k - 1]?.marker === 'close' &&
+    segments[k - 2]?.marker === 'open' &&
+    /^(?:function\s+)?[^\s()<>;&|$`"'{}]+$/.test((segments[k - 3]?.bare ?? '').replace(BEFORE_BRACE, ''));
+  for (let k = 0; k < segments.length; k++) {
+    let segment = segments[k];
+    if (segment.marker === 'open' && segment.scope !== 'case') {
+      // f() ( ... ) is a function whose body is a subshell, where a local
+      // applies.
+      subshells.push(definesFunction(k));
+    }
+    if (segment.marker === 'close' && segment.scope !== 'case') subshells.pop();
+    if (!segment.marker) {
+      // "function f {" with no parentheses: the rest reads like f() {.
+      const declared = FUNCTION_KEYWORD.test(segment.bare);
+      if (declared) segment = { raw: segment.raw.replace(FUNCTION_KEYWORD, '$1'), bare: segment.bare.replace(FUNCTION_KEYWORD, '$1') };
+      // Each { a command starts with, past keywords, as in "{ if { true".
+      let count = 0;
+      for (const token of segment.bare.split(/\s+/)) {
+        if (token === '{') count++;
+        else if (!KEYWORD_TOKEN.test(token)) break;
+      }
+      const named = segment.bare.replace(BEFORE_BRACE, '').startsWith('{') && (declared || definesFunction(k));
+      for (let n = 0; n < count; n++) braces.push(named && n === 0 ? new Map() : null);
+      if (/^\}/.test(segment.bare) && braces.length) {
+        const locals = braces.pop();
+        for (const [name, [value, wasExported]] of locals ?? []) {
+          if (value === undefined) delete vars[name];
+          else vars[name] = value;
+          if (wasExported) exported.add(name);
+          else exported.delete(name);
+        }
+      }
+    }
     if (segment.marker === 'open') {
-      dirs.push([dir, last, { ...vars }, new Set(exported), exportAll]);
+      dirs.push([dir, last, { ...vars }, new Set(exported), exportAll, [...pushed]]);
       continue;
     }
     if (segment.marker === 'close') {
       if (dirs.length) {
-        const [d, l, savedVars, savedExported, savedAll] = dirs.pop();
+        const [d, l, savedVars, savedExported, savedAll, savedPushed] = dirs.pop();
         [dir, last] = [d, l];
         if (segment.scope !== 'case') {
+          pushed.splice(0, pushed.length, ...savedPushed);
           for (const name of Object.keys(vars)) delete vars[name];
           Object.assign(vars, savedVars);
           [exported, exportAll] = [savedExported, savedAll];
@@ -538,8 +711,17 @@ function bashCall(command, cwd) {
       continue;
     }
     const bareCommand = segment.bare.replace(AFTER_KEYWORDS, '');
-    if (/^set\s+[-+]\w*a/.test(bareCommand)) {
-      exportAll = bareCommand.startsWith('set -');
+    if (/^set\s/.test(bareCommand)) {
+      // set -a, or -o allexport, exports every later assignment; + undoes it.
+      // Options end at --, or at the first word that is no option.
+      const list = words(bareCommand).slice(1);
+      for (let i = 0; i < list.length && /^[-+]./.test(list[i]) && list[i] !== '--'; i++) {
+        const w = list[i];
+        const named = /o$/.test(w) ? list[i + 1] : null;
+        if (/^-[a-zA-Z]*a/.test(w) || (/^-[a-zA-Z]*o$/.test(w) && named === 'allexport')) exportAll = true;
+        if (/^\+[a-zA-Z]*a/.test(w) || (/^\+[a-zA-Z]*o$/.test(w) && named === 'allexport')) exportAll = false;
+        if (named !== null) i++;
+      }
       continue;
     }
     // export NAME, export -n NAME, declare -x and +x, and the rest.
@@ -559,8 +741,23 @@ function bashCall(command, cwd) {
       }
       continue;
     }
-    if (declaration && /^[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*$/.test(raw.trim())) {
-      for (const name of raw.trim().split(/\s+/)) {
+    // Inside a function, declare and typeset make a local too, unless -g.
+    const local = declaration && (declaration[1] === 'local' || (/^(?:declare|typeset)$/.test(declaration[1]) && !/\s-\w*g/.test(flags) && braces.some(Boolean)));
+    if (local) {
+      const frame = braces.findLast((brace) => brace);
+      if (!frame && !subshells.includes(true)) continue;
+      // Keep what each name held before, for the function's closing brace.
+      for (const item of words(raw)) {
+        const name = /^([A-Za-z_]\w*)(?:=|$)/.exec(item)?.[1];
+        if (frame && name && !frame.has(name)) frame.set(name, [vars[name], exported.has(name)]);
+      }
+    }
+    if (declaration) {
+      for (const item of words(raw)) {
+        const assignment = /^([A-Za-z_]\w*)=(.*)$/s.exec(item);
+        const name = assignment ? assignment[1] : /^[A-Za-z_]\w*$/.test(item) ? item : null;
+        if (!name) continue;
+        if (assignment) vars[name] = expand(assignment[2]);
         if (exporting) exported.add(name);
         if (unexporting) exported.delete(name);
       }
@@ -578,13 +775,69 @@ function bashCall(command, cwd) {
     const bare = segment.bare.replace(DECLARE, '').replace(LEADING, '');
     const plain = stripArithmetic(bare).replace(/\[\[[\s\S]*?\]\]/g, '');
     if (/(?<![=>])>{1,2}\s*(?!&|\/dev\/null\b)[^\s|&>]/.test(plain) || /^tee\s/.test(bare)) wroteFile = true;
-    const cd = /^cd\s+("[^"]*"|'[^']*'|\S+)/.exec(body);
+    // cd with no directory goes home, and pushd and popd move like cd.
+    // pushd +N and -N turn the stack, counting from its left or right end.
+    const cd = /^(cd|pushd)(?=\s|$)/.exec(body);
     if (cd) {
-      const to = expand(cd[1]);
+      const list = words(body).slice(1);
+      // Options may come before or after the directory; -n keeps pushd
+      // from moving, wherever it sits.
+      const keep = cd[1] === 'pushd' && list.includes('-n');
+      const rest = list.filter((w) => !/^-[LPe@n]+$/.test(w));
+      const argument = rest[0] === '--' ? rest[1] : rest[0];
+      const turn = cd[1] === 'pushd' && /^([+-])(\d+)$/.exec(argument ?? '');
+      // With -n and no directory, pushd does nothing.
+      if (keep && argument === undefined) continue;
+      if (turn) {
+        const stack = [dir, ...[...pushed].reverse()];
+        const n = Number(turn[2]);
+        const at = turn[1] === '+' ? n : stack.length - 1 - n;
+        if (at >= 0 && at < stack.length) {
+          const turned = [...stack.slice(at), ...stack.slice(0, at)];
+          // With -n the stack turns and the directory stays.
+          if (!keep) [dir, last] = [turned[0], dir];
+          pushed.splice(0, pushed.length, ...turned.slice(1).reverse());
+        }
+        continue;
+      }
+      if (cd[1] === 'pushd' && argument === undefined) {
+        // A bare pushd swaps the top two directories, and fails with one.
+        if (pushed.length) [dir, last, pushed[pushed.length - 1]] = [pushed.at(-1), dir, dir];
+        continue;
+      }
+      const to = argument === undefined ? '~' : expand(argument);
+      if (keep) {
+        // pushd -n adds the directory beneath the current one and stays put.
+        pushed.push(resolveFrom(dir, to));
+        continue;
+      }
+      if (cd[1] === 'pushd') pushed.push(dir);
       [dir, last] = [to === '-' ? last : resolveFrom(dir, to), dir];
       continue;
     }
-    if (/\s(?:--help|-h)(?:\s|$)/.test(bare)) continue;
+    if (/^popd\b/.test(body)) {
+      // popd +N or -N removes that entry and stays put unless it is the
+      // top one; popd -n removes the entry beneath the top, and with -n popd
+      // never moves.
+      const list = words(body).slice(1);
+      const at = list.map((w) => /^([+-])(\d+)$/.exec(w)).find(Boolean);
+      const stack = [dir, ...[...pushed].reverse()];
+      const keep = list.includes('-n');
+      // With -n, the top entry is the directory, which stays, so the one
+      // beneath it goes in its place.
+      let index = at ? (at[1] === '+' ? Number(at[2]) : stack.length - 1 - Number(at[2])) : 0;
+      if (keep && index === 0) index = 1;
+      if (stack.length > 1 && index >= 0 && index < stack.length) {
+        stack.splice(index, 1);
+        // Removing the top entry moves to the next one.
+        if (index === 0) [dir, last] = [stack[0], dir];
+        pushed.splice(0, pushed.length, ...stack.slice(1).reverse());
+      }
+      continue;
+    }
+    // The option words, read once: help requests and dry runs write nothing.
+    const optionWords = /^(?:git|gh)\s/.test(bare) ? options(body) : [];
+    if (optionWords.some((w) => w === '--help' || w === '-h')) continue;
     let kind = null;
     let where = dir;
     if (/^git\s/.test(bare)) {
@@ -592,15 +845,22 @@ function bashCall(command, cwd) {
       // GIT_DIR set before git on its line, or exported earlier in the call.
       const before = words(raw.slice(0, raw.length - body.length)).find((w) => w.startsWith('GIT_DIR='));
       const gitDir = named ?? (before ? before.slice(8) : exported.has('GIT_DIR') ? vars.GIT_DIR : undefined);
-      if (sub === 'commit' || sub === 'push') kind = sub;
+      // A dry run sends nothing: --dry-run on both, and -n on a push, alone
+      // or in a group such as -fn.
+      const dry = optionWords.some((w) => w === '--dry-run' || (sub === 'push' && /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w)));
+      if ((sub === 'commit' || sub === 'push') && !dry) kind = sub;
       for (const target of targets) where = resolveFrom(where, expand(target));
       if (gitDir) where = resolveFrom(where, expand(gitDir));
       if (sub === 'init') {
         const arg = initDirectory(body);
         made.add(arg ? resolveFrom(where, expand(arg)) : where);
       }
-    } else if (/^gh\s+api\b/.test(bare)) kind = ghApiWrite(body);
-    else if (/^gh\s/.test(bare)) kind = GH_WRITES.find(([, pattern]) => pattern.test(bare))?.[0] ?? null;
+    } else if (/^gh\s/.test(bare) && !optionWords.includes('--dry-run')) {
+      const ghBare = bare.replace(GH_REPO, '');
+      const ghBody = body.replace(GH_REPO, '');
+      if (/^gh\s+api\b/.test(ghBare)) kind = ghBare === bare ? ghApiWrite(ghBody) : null;
+      else kind = GH_WRITES.find(([, pattern]) => pattern.test(ghBare))?.[0] ?? null;
+    }
     if (!kind) continue;
     // A repo git init made in a directory a helper's argument or a loop
     // variable names, such as $1, is a scaffold.
@@ -688,6 +948,35 @@ class Families {
   }
 }
 
+// The tool a content block calls and its input, or null when the block is no
+// tool call. A malformed block calls nothing.
+function toolCall(block) {
+  if (!block || block.type !== 'tool_use' || typeof block.name !== 'string') return null;
+  return { name: block.name, input: block.input && typeof block.input === 'object' ? block.input : {} };
+}
+
+// The writes one tool call makes, each with whether it lands in a scratch
+// repo, and whether it writes a file. Edits are counted apart.
+function callWrites(name, input, cwd) {
+  if (name === 'Bash' && typeof input.command === 'string') return bashCall(input.command, cwd);
+  const kind = name.startsWith('mcp__') ? mcpWrite(name) : null;
+  return { writes: kind ? [{ kind, scratch: false }] : [], wroteFile: false };
+}
+
+// The turn a subagent file names on its first line that names one.
+function firstPrompt(file) {
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.includes('"promptId"')) continue;
+    try {
+      const promptId = JSON.parse(line).promptId;
+      if (promptId) return promptId;
+    } catch {
+      // A line cut short names nothing.
+    }
+  }
+  return null;
+}
+
 async function collect(files) {
   const seen = new Map(); // uuid to the file session it was first read in
   const families = new Families();
@@ -696,6 +985,7 @@ async function collect(files) {
   const compactions = []; // { ts, session }
   const review = new Map(); // requestId to { ts, session, tokens }
   const reviewRuns = []; // { ts, session, args }
+  const unplaced = []; // times of subagent writes with no turn to count them in
 
   const turnFor = (prompt, session, ts) => {
     let turn = turns.get(prompt);
@@ -709,7 +999,9 @@ async function collect(files) {
 
   for (const { file, session: fileSession, sub } of files) {
     families.find(fileSession);
-    let prompt = null;
+    // A subagent file's calls belong to the turn its file names, even those
+    // read before the line that names it.
+    let prompt = sub ? firstPrompt(file) : null;
     const lines = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
     for await (const line of lines) {
       if (!line) continue;
@@ -719,6 +1011,7 @@ async function collect(files) {
       } catch {
         continue;
       }
+      if (!entry || typeof entry !== 'object') continue;
       if (entry.promptId) prompt = entry.promptId;
       // A resumed or forked session starts with copies of the entries it
       // continues, which keep the sessionId of the session that wrote them.
@@ -737,6 +1030,15 @@ async function collect(files) {
       const ts = entry.timestamp;
       if (!ts) continue;
       const turn = prompt ? turnFor(prompt, session, ts) : null;
+      // A subagent's tool calls count only through the turn its file names.
+      if (sub && !turn && entry.type === 'assistant') {
+        // Each write that would count if its turn were known.
+        const content = entry.message?.content;
+        for (const block of Array.isArray(content) ? content : []) {
+          const call = toolCall(block);
+          if (call) for (const write of callWrites(call.name, call.input, entry.cwd).writes) if (!write.scratch) unplaced.push(ts);
+        }
+      }
       if (entry.attributionSkill && turn) turn.skills.add(skillName(entry.attributionSkill));
 
       if (entry.type === 'system' && entry.subtype === 'compact_boundary') {
@@ -771,32 +1073,29 @@ async function collect(files) {
       const content = entry.message?.content;
       if (!Array.isArray(content) || !turn) continue;
       for (const block of content) {
-        if (block.type !== 'tool_use') continue;
-        const input = block.input || {};
-        if (block.name === 'Skill') {
-          const name = skillName(input.skill);
-          turn.skills.add(name);
-          if (REVIEW_SKILLS.has(name)) reviewRuns.push({ ts, session, args: String(input.args || '') });
-        } else if (block.name === 'Bash') {
-          const command = String(input.command || '');
-          const call = bashCall(command, entry.cwd);
-          for (const { kind, scratch } of call.writes) {
+        const call = toolCall(block);
+        if (!call) continue;
+        const { name, input } = call;
+        if (name === 'Skill') {
+          const skill = skillName(input.skill);
+          turn.skills.add(skill);
+          if (REVIEW_SKILLS.has(skill)) reviewRuns.push({ ts, session, args: String(input.args || '') });
+        } else {
+          const effect = callWrites(name, input, entry.cwd);
+          for (const { kind, scratch } of effect.writes) {
             if (scratch) turn.scratchWrites++;
             else turn.writes.push({ kind, sub, ts });
           }
-          if (call.wroteFile) turn.wroteFile = true;
-        } else if (block.name.startsWith('mcp__')) {
-          const kind = mcpWrite(block.name);
-          if (kind) turn.writes.push({ kind, sub, ts });
+          if (effect.wroteFile) turn.wroteFile = true;
         }
-        if (EDIT_TOOLS.has(block.name)) {
+        if (EDIT_TOOLS.has(name)) {
           turn.edits = true;
-          if (block.name === 'Write') turn.wroteFile = true;
+          if (name === 'Write') turn.wroteFile = true;
         }
       }
     }
   }
-  return { families, typed, turns, compactions, review, reviewRuns };
+  return { families, typed, turns, compactions, review, reviewRuns, unplaced };
 }
 
 function readHookErrors(log) {
@@ -840,12 +1139,16 @@ function finish(bucket) {
 // session's first turns can follow a message the session before it holds.
 function latestTyped(byFamily, family, ts) {
   const list = byFamily.get(family) || [];
-  let found = null;
-  for (const message of list) {
-    if (message.ts > ts) break;
-    found = message;
+  // The list is sorted by time, so a binary search finds the last one at or
+  // before ts.
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (list[mid].ts <= ts) low = mid + 1;
+    else high = mid;
   }
-  return found ? found.text : '';
+  return low ? list[low - 1].text : '';
 }
 
 function count(data, hookErrors, opts) {
@@ -926,6 +1229,9 @@ function count(data, hookErrors, opts) {
   const rows = [...weeks.keys()].sort().map((week) => ({ week, ...finish(weeks.get(week)) }));
   const total = finish(totals);
   total.weeks = spanWeeks(opts, rows);
+  // A count for the whole window only: a week row for it would stretch the
+  // span, and every rate with it.
+  total.unplacedSubagentWrites = data.unplaced.filter(inWindow).length;
   return { rows, total };
 }
 
@@ -986,7 +1292,25 @@ function compare(total, baseline) {
   const before = new Map(headline(baseline.totals));
   const rows = headline(total).map(([label, now]) => [label, before.get(label) ?? 'n/a', now]);
   const span = (t, o) => `${o.since || 'start'} to ${o.until || 'end'}, ${t.weeks} wk`;
-  return table(['', `Baseline (${span(baseline.totals, baseline.window)})`, 'Now'], rows);
+  const out = [table(['', `Baseline (${span(baseline.totals, baseline.window)})`, 'Now'], rows)];
+  const drift = definitionDrift(baseline);
+  if (drift) out.push('', drift);
+  return out.join('\n');
+}
+
+// What differs between how the baseline counted and how this run counts, or
+// '' when nothing does. The keys are DEFINITIONS' own, which the JSON uses.
+function definitionDrift(baseline) {
+  const before = baseline.definitions ?? {};
+  const changed = Object.keys(DEFINITIONS).filter((key) => key in before && before[key] !== DEFINITIONS[key]);
+  const added = Object.keys(DEFINITIONS).filter((key) => !(key in before));
+  const removed = Object.keys(before).filter((key) => !(key in DEFINITIONS));
+  const parts = [];
+  if (baseline.version !== REPORT_VERSION) parts.push(`the report's shape is version ${baseline.version ?? 'unknown'} there and ${REPORT_VERSION} here`);
+  if (changed.length) parts.push(`these definitions changed: ${changed.join(', ')}`);
+  if (added.length) parts.push(`these counts are new: ${added.join(', ')}`);
+  if (removed.length) parts.push(`these counts are gone: ${removed.join(', ')}`);
+  return parts.length ? `Against the baseline, ${parts.join('; ')}. Read the matching rows with care.` : '';
 }
 
 // --- Main ----------------------------------------------------------------
@@ -1006,6 +1330,8 @@ async function main() {
     } catch (error) {
       fail(`cannot read ${opts.compare}: ${error.message}`);
     }
+    if (!baseline?.totals || typeof baseline.totals !== 'object') fail(`${opts.compare} holds no saved totals`);
+    baseline.window ??= {};
   }
 
   const files = transcriptFiles(projects, opts.project);
@@ -1014,7 +1340,7 @@ async function main() {
   const { rows, total } = count(data, hookErrors, opts);
 
   const report = {
-    version: 1,
+    version: REPORT_VERSION,
     generated: new Date().toISOString(),
     window: { since: opts.since || null, until: opts.until || null, project: opts.project || null },
     files: files.length,
@@ -1027,10 +1353,16 @@ async function main() {
     fs.writeFileSync(opts.save, `${JSON.stringify(report, null, 2)}\n`);
   }
   if (opts.json) {
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    // With --compare, the JSON carries the baseline's numbers and any drift.
+    const output = baseline ? { ...report, baseline: { window: baseline.window, totals: baseline.totals, drift: definitionDrift(baseline) } } : report;
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
     return;
   }
   const out = [`${files.length} transcript files under ${projects}`, '', weekly(rows, total), '', table(['', 'All weeks'], headline(total))];
+  if (total.unplacedSubagentWrites) {
+    const writes = total.unplacedSubagentWrites === 1 ? 'write sits' : 'writes sit';
+    out.push('', `${total.unplacedSubagentWrites} subagent ${writes} in files with no turn id, so they are not counted above.`);
+  }
   if (baseline) out.push('', compare(total, baseline));
   if (opts.save) out.push('', `Saved to ${opts.save}`);
   process.stdout.write(`${out.join('\n')}\n`);

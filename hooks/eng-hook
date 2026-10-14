@@ -27,7 +27,7 @@
 # since), start-hash (the uncommitted changes when the session started) and
 # review-hash (the same when a review covering them last ran). It is not read from
 # the transcript, which Claude Code writes asynchronously. Where the state
-# cannot be read, the write gate asks rather than allows.
+# cannot be read, the write gate allows, as every other check fails open.
 #
 # Every failure exits 0, so a broken hook never stops a session or a tool. A
 # failure is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which
@@ -49,8 +49,8 @@ POST_REASON="Posting a comment, review or reply is off limits in this setup, and
 no approval releases it. Write the draft to a file with the command that would \
 post it, give the user the path, and say that is why. Reading stays open."
 
-# The words in a message that name a write, for telling a clause that asks
-# for one from a clause that only qualifies it.
+# The words in a message that name a write. A refusal such as "don't stage,
+# commit or push" may list several before the one it refuses.
 WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)? ?in|prs?|pull[ -]requests?|merge[ -]requests?|mrs?|issues?|tickets?'
 
 # The words in an MCP tool's name that say what it does: it reads, it posts,
@@ -301,7 +301,7 @@ $rules"
 # coordinator quotes yours, so only the bodies a human wrote count there.
 request_text() {
   printf '%s' "$1" | jq -Rrs '
-    if test("^\\s*<wake[ >]") or contains("<coordinator-relay>") then
+    if test("^\\s*<(wake|relay|project_claude_message)[ >]") or contains("<coordinator-relay>") then
       [ scan("<message[^>]*from=\"human\"[^>]*>([\\s\\S]*?)</message>"),
         scan("<cited[^>]*author=\"user\"[^>]*>([\\s\\S]*?)</cited>") ]
       | map(.[0]) | join("\n")
@@ -315,15 +315,16 @@ on_prompt() {
   fi
   text="$(get .prompt)"
   lead="$(printf '%s\n' "$text" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;p;q;}')"
-  # A background task reporting back or another session's message is not
-  # yours, so it keeps the state of the message before it.
+  # A background task or a subagent reporting back, a CI event, or another
+  # session's message is not yours, so it keeps the state of the message
+  # before it.
   case "$lead" in
-    '<task-notification'* | '<cross-session-message'*) return 0 ;;
+    '<task-notification'* | '<cross-session-message'* | '<agent-message'* | '<ci-monitor-event'*) return 0 ;;
   esac
   request="$(request_text "$text")"
   # A project event no human wrote, such as CI reporting back, keeps it too.
   case "$lead" in
-    '<wake '* | '<wake>'*) envelope=yes ;;
+    '<wake '* | '<wake>'* | '<relay '* | '<relay>'* | '<project_claude_message'*) envelope=yes ;;
     *) case "$text" in *'<coordinator-relay>'*) envelope=yes ;; *) envelope=no ;; esac ;;
   esac
   if [ "$envelope" = yes ] && [ -z "$(printf '%s' "$request" | tr -d '[:space:]')" ]; then
@@ -363,21 +364,22 @@ on_expansion() {
   record_skill "$name"
 }
 
-# Sets $verdict to allow, ask or deny, and $reason, for a write the eng skill
-# named by $1 runs: commit, push, pr or issue.
+# Sets $verdict to allow or deny, and $reason, for a write the eng skill named
+# by $1 runs: commit, push, pr or issue. The write runs unless the user's
+# latest message says not to.
 gate() {
   verdict=allow
   reason=""
   case "$1" in
     commit)
       skills=commit label=commit via="the eng:commit skill"
-      words='commit(s|ted|ting)?|check(ed)?( it)?[ -]?in|stage' ;;
+      words='commit(s|ted|ting)?|check(ed)?( it)?[ -]?in' ;;
     push)
       skills="commit pr" label=push via="the eng:commit skill, or eng:pr when it pushes its branch"
-      words='push(ed|es|ing)?|prs?|pull[ -]requests?|merge[ -]requests?|(a|an|the|this|that|my|new|open|create|raise|make|submit|update) mrs?' ;;
+      words='push(ed|es|ing)?' ;;
     pr)
       skills=pr label="pull request change" via="the eng:pr skill"
-      words='prs?|pull[ -]requests?|merge[ -]requests?|(a|an|the|this|that|my|new|open|create|raise|make|submit|update) mrs?' ;;
+      words='prs?|pull[ -]requests?|merge[ -]requests?|mrs?' ;;
     *)
       skills=issue label="issue change" via="the eng:issue skill"
       words='issues?|tickets?' ;;
@@ -387,111 +389,142 @@ gate() {
     reason="A subagent never commits, pushes, changes a pull request or writes an issue. Hand the work back to the main session."
     return 0
   fi
-  if ! find_state || [ ! -f "$state/turn" ]; then
-    verdict=ask
-    reason="The eng plugin could not read what the user's latest message asked for, so confirm this $label."
-    return 0
-  fi
+  # With no state to read, the gate fails open like the rest of the hook.
+  find_state && [ -f "$state/turn" ] || return 0
   loaded=no
   for s in $skills; do
     grep -qx "$s" "$state/skills" 2>/dev/null && loaded=yes
   done
   if [ "$loaded" = no ]; then
     verdict=deny
-    reason="Load $via with the Skill tool first. It runs this $label, and only when the user's latest message asks for one."
+    reason="Load $via with the Skill tool first. It runs this $label, and checks that the user's latest message wants one."
     return 0
   fi
-  # The message is read clause by clause, split at . ; : ! ? and at a comma
-  # before a word that turns the sentence, such as but, then, just or don't; a
-  # comma in a list keeps "don't stage, commit or push" one clause.
-  #
-  # Two word lists, kept apart on purpose. $holding is what holds a write back
-  # inside the clause that names it: a negation, a deferral such as "later",
-  # "when" or "I'll", a drop such as "cancel", or a question. $opening is what
-  # a clause naming no write opens with when it holds back the clause before,
-  # such as ", but not yet", ". Let me review it first" or ". Let's wait for
-  # CI"; such a clause joins the one before and marks it held. Any other
-  # clause naming no write is filler and drops out, and one that starts with
-  # "then" is a next step.
-  #
-  # The last clause that names the write decides. So "commit, but don't push"
-  # asks for the commit and not the push, "commit and push. Don't push." asks
-  # for the commit only, and "why did the push fail?" asks for neither. "Don't
-  # forget to" is a request, and "never mind the push" or "scratch the PR"
-  # holds back what it names. After a takeback ("actually", "scratch that",
-  # "never mind"), only the clauses from it on count, and a write they don't
-  # name is taken back. A word joined to more by a hyphen, as in pr-feedback,
-  # is another word. When unsure, this errs toward asking.
-  #
-  # A takeback is one of these phrases, or a clause that starts with "wait",
-  # "nope" or "no,", as in "commit and push. No, don't push".
-  takeback='(^|[^a-z])(actually|scratch that|on second thought|never ?mind|nvm|forget that|cancel that|ignore that|hold on|take that back|disregard that|change of plan|oh wait|no,? wait|wait,? no)([^a-z]|$)|^ *(nope|wait)([^a-z]|$)|^ *no *(,|$)'
-  holding='zzheld|zzquestion|don[^ ]{0,3}t|dont|wont|cant|didnt|doesnt|isnt|shouldnt|wouldnt|couldnt|havent|hasnt|arent|wasnt|werent|neednt|mustnt|[a-z]+n[^a-z ]{1,3}t|cannot|let me [a-z -]*first|never|not|no|nope|without|avoid|refrain|leave|nothing|my job|myself|hold off|hold for|on hold|hold it|hang on|hang tight|one sec|just a sec|in a sec|give me a (minute|sec|second|moment)|scratch|stop|instead|rather|except|later|yet|until|before|after|once|when|tomorrow|wait|maybe|ideally|in a (bit|minute|while)|i[^a-z ]{1,3}ll|ill|i will|we[^a-z ]{1,3}ll|we will|we can'
-  opening='([+], *)? *(and |but |though |however |while |just |so |hmm,? |well,? |ok,? |okay,? |yes,? |maybe |probably |ideally |please |only )*(not|no|never|don|do not|wait|until|later|yet|hold|without|after|once|when|tomorrow|nope|let.?s (wait|hold)|i.?d (rather|wait|hold)|i want to (review|check|look)|i.?ll|we should wait|better (wait|hold)|first|in a bit|soon|hang on|hang tight|one sec|just a sec|give me|give [a-z]+ a (minute|sec|second|moment)|then again|stop|let me (think|sleep|run|take|double|review|check|look|test|verify|see|wait|try|have|confirm|make sure|fix|finish)|on (second thought|reflection))([^a-z]|$)'
-  said="$(tr '[:upper:]' '[:lower:]' < "$state/turn" |
-    # "Don't forget to commit" asks. "When you're done" ending a clause, and
-    # "let me know when it's up", only time the report, not the write.
-    sed -E "s/(don[^ ]{0,3}t|do not) forget to //g; s/when you[^ ]{0,4} (done|finished|ready) *([.,;!?]|$)/\\2/g; s/(ping|tell|let) me( know)? when (it|that|this)[^ ]{0,3} *(is )?(up|done|merged|open|out|finished) *([.,;!?]|$)/\\6/g" |
-    sed -E "s/(never ?mind|forget|scratch|scrap|ditch|drop|skip|cancel|hold on|hold) (about )?(the )?(($WRITE_WORDS)([^a-z0-9_-]|$))/scratch the \\4/g" |
-    awk '{ gsub(/[?]/, " zzquestion\n"); gsub(/[.;:!]/, "\n");
-      gsub(/, *(but|then|so|and then|while|though|however|just|please|don[^ ]*t|do not|never|no|not|without|i[^a-z ]+ll|we[^a-z ]+ll) /, "\n+&"); print }' |
-    awk -v w="(^|[^a-z0-9_-])($WRITE_WORDS)([^a-z0-9_-]|$)" -v tb="$takeback" -v op="^($opening)" '
-      { if (have && $0 !~ w && $0 !~ /^(\+, *)? *no (rush|worries|problem|hurry)( at all)? *$/ && $0 ~ op) {
-          sub(/^\+/, ""); last = last " " $0 " zzheld"; next }
-        sub(/^\+/, "")
-        # Filler that names no write and takes nothing back, such as "hmm" or
-        # "did the tests pass?", drops out.
-        if ($0 !~ w && $0 !~ tb) next
-        if (have) print last; last = $0; have = 1 }
-      END { if (have) print last }')"
-  word_re() { printf '(^|[^[:alnum:]_-])(%s)([^[:alnum:]_-]|$)' "$1"; }
-  # The clauses that count: from the last takeback on, when one names a word
-  # in $1; none at all, when a takeback names none of them; else every one.
-  counting() {
-    t="$(printf '%s\n' "$said" | grep -Ein "$takeback" | tail -1 | cut -d: -f1)"
-    if [ -n "$t" ]; then
-      # What the takeback's own clause says before it is taken back too.
-      after="$(printf '%s\n' "$said" | sed -n "$t,\$p" |
-        awk -v t="$takeback" 'NR == 1 { while (match($0, t)) $0 = substr($0, RSTART + RLENGTH) } { print }')"
-      if printf '%s\n' "$after" | grep -Eiq "$(word_re "$1")"; then
-        printf '%s\n' "$after"
-      fi
-      return 0
-    fi
-    printf '%s\n' "$said"
-  }
-  # True when a counting clause asks for one of the words $1, and when one
-  # holds back.
-  # The last counting clause that names the word decides, so "commit and
-  # push. Don't push." asks for the commit only, and dropping it ("scratch
-  # the PR", "never mind the push") holds it back too.
-  has_request() {
-    counting "$1" | grep -Ei "$(word_re "$1")" | tail -1 |
-      grep -Eivq "(^|[^a-z])($holding)([^a-z]|\$)"
-  }
-  held_back() {
-    printf '%s\n' "$said" | grep -Ei "$(word_re "$1")" | grep -Eiq "(^|[^a-z])($holding)([^a-z]|\$)"
-  }
-  push_word='push(ed|es|ing)?'
-  # "Push this" asks for the commit that goes with the push, unless the
-  # message mentions a commit, staging or a check-in at all.
-  if [ "$1" = commit ] && ! has_request "$words" && has_request "$push_word" &&
-    ! grep -Eiq '(^|[^a-z])(commit[a-z]*|stag(e|ed|ing)|check(ed)?( it)? ?in)([^a-z]|$)' "$state/turn"; then
-    words="$push_word"
+  if said_no "$words"; then
+    verdict=deny
+    reason="The user's latest message says not to do this $label. Do not run it. Say why you stopped, and go on with the rest."
   fi
-  # A PR request implies a push, but a push the message holds back, and asks
-  # for nowhere else, is not asked for.
-  refused=no
-  push_asked=no
-  if [ "$1" = push ]; then
-    has_request "$push_word" && push_asked=yes
-    [ "$push_asked" = no ] && held_back "$push_word" && refused=yes
-  fi
-  # A push is asked for when the push itself is, whatever happens to the PR.
-  if [ "$refused" = yes ] || { [ "$push_asked" = no ] && ! has_request "$words"; }; then
-    verdict=ask
-    reason="The user's latest message does not ask for this $label. Confirm it."
-  fi
+}
+
+# True when the user's latest message says not to do a write named by the
+# extended regex $1. The hook only catches a plain no, and leaves anything
+# subtler to the skills, which read meaning rather than words.
+#
+# A no is a negation right before the write, with nothing between them but
+# small words or a list of writes, and nothing after it but the end of the
+# clause or a word such as "it", "yet" or "until": "don't push", "no PR",
+# "don't stage, commit or push", "commit without pushing", "hold the push",
+# "never mind the push", "I'll push it myself", "don't push yet, okay?". A
+# deferral right after the write counts too: "push it later", "push once I
+# approve". So "don't commit the .env file" and "don't push to
+# main" narrow the write rather than refuse it.
+#
+# A report is not a no: "it didn't push", "I can't commit", "it won't push",
+# "if you can't push" and a past form such as "not pushed" state a fact, and
+# "no, you push it" answers rather than refuses.
+#
+# The places the message names the write are read from the last one back. One
+# inside a no refuses the write. One that opens a request asks for it: after a
+# stop, a comma, a dash, "please", "can you", "then" or the like,
+# perhaps followed by "you" or a verb such as "open a new" or "retry the", or
+# after "you should" outside a condition. In a sentence after the no, a mention
+# right after a word that asks, such as "go", "let's", "actually", "time to"
+# or "open the", asks too, unless it only names the write ("when to push", "Sam will
+# open the PR"). So "I didn't push it, can you push", "don't push. Actually,
+# push it" and "don't push yet. OK, go push" ask for the push, while "Don't
+# open a PR. The PR template is broken" does not. Any other mention passes to
+# the one before it. A plain list joined by "and" after a negation that tells,
+# as in "don't commit and push", refuses every write in it.
+#
+# A question drops out: the whole sentence when it opens with a question word,
+# so "why don't you push, then?" refuses nothing, and otherwise back to its
+# last comma, so "don't push, why did CI fail?" still refuses. "There's no PR
+# yet" states a fact. A takeback, a wait or a condition, such as "actually,
+# just commit", "commit and push. Not yet" or "let me review first", is left
+# to the skills.
+said_no() {
+  target="($1)"
+  text="$(tr '[:upper:]' '[:lower:]' < "$state/turn" | tr '\n\t' '  ' |
+    sed -E "s/(don[^a-z ]{0,3}t|do not|never) forget( about)? (to |the |a |an )?/\\3/g; s/whether or not /whether /g" |
+    awk '{ n = split($0, part, /[?]/); out = ""
+      for (i = 1; i <= n; i++) {
+        s = part[i]
+        if (i < n) {
+          k = 0; for (j = length(s); j > 0; j--) if (substr(s, j, 1) ~ /[.!;]/) { k = j; break }
+          q = substr(s, k + 1); sub(/^ +/, "", q)
+          if (q !~ /^(why|what|how|where|when|who|which|can|could|would|will|should|shall|is|are|was|were|does|did|any)([^a-z]|$)/)
+            for (j = length(s); j > k; j--) if (substr(s, j, 1) == ",") { k = j; break }
+          s = substr(s, 1, k)
+        }
+        out = out s " " }
+      print out }' |
+    sed -E "s/(there[^a-z ]{0,3}s|there is|there are|there was|we have|we[^a-z ]{0,3}ve got|i have) no (((a|an|the) )?($WRITE_WORDS)[^a-z0-9_-])/\\1 zero \\2/g; s/(^|[^a-z])no,? (you|i|we|it|that|this) /\\1nope \\2 /g; s/(^|[^a-z])(it|that|this|ci|git|the hook|the branch)( won[^a-z ]{0,3}t| wont| did not| does not| will not| is not|[^a-z ]{1,3}s not)( even| really| actually)? +(($WRITE_WORDS)[^a-z0-9_-])/\\1\\2 failed to \\5/g; s/(^|[^a-z])if you (can[^a-z ]{0,3}t|cannot|can not) /\\1if you fail to /g; s/(^|[^a-z])no ((a |an |the )?($WRITE_WORDS)( yet)?( for [a-z]+)?[ ,;.:!-]+(ok,? |so |please |just |now |go |then |let.?s |go ahead and )?(open|make|file|create|raise) (one|it|a new))/\\1zero \\2/g; s/(^|[^a-z])why (don[^a-z ]{0,3}t you|not) /\\1/g")"
+  q='[^a-z ]?[^a-z ]?[^a-z ]?'
+  # Only a negation that tells: "didn't", "wasn't" or "I can't" report a fact,
+  # as in "it didn't push, push again", while "you can't push" tells. A report
+  # about the tool, such as "it won't push" or "it's not pushing", was turned
+  # into "it failed to push" above.
+  neg="(you (can${q}t|cannot|can not|may not|must not)|don${q}t|won${q}t|shouldn${q}t|mustn${q}t|needn${q}t|dont|wont|shouldnt|mustnt|neednt|do not|never|not|no|no need (to|for)|without|refrain from|avoid|wait (before|on|with))"
+  # The negations that also refuse a list joined by "and", as in "don't commit
+  # and push". "No" and "without" do not, so "no PR and push it" asks for the
+  # push.
+  tell="(you (can${q}t|cannot|can not|may not|must not)|don${q}t|won${q}t|shouldn${q}t|mustn${q}t|needn${q}t|dont|wont|shouldnt|mustnt|neednt|do not|never|avoid|refrain from)"
+  # Words that drop the write, or keep it for yourself, reach it only across
+  # small words, so "I'll leave it to you to push" asks for the push.
+  drop="(i${q}ll|i will|hold( off)?( on)?|leave|never ?mind( about)?|forget( about)?|scratch|scrap|cancel|drop|skip) +((the|a|an|my|your|our|any|this|that|these|those|it|do|handle|open|create|file|make|raise|submit|update|edit|close|reopen) +)*"
+  # A list of writes is refused as a whole when it ends in "or" or "nor", as
+  # in "don't stage, commit or push", or, after one of the $tell negations,
+  # when it is joined by "and", as in "don't commit and push". So "skip the PR
+  # and push" or "no PR, push it" still asks for the push.
+  list="(($WRITE_WORDS), +)*($WRITE_WORDS),? (or|nor) +"
+  gap="(((the|a|an|any|my|your|our|this|that|these|those|it|ever|again|even|or|nor|to|want|you|open|create|raise|make|submit|update|edit|close|reopen|file|touch|run|use|git|gh|glab|handle|do|need|you dare|ready to) +)|$list)*"
+  end="( *[^a-z0-9_ -]| *$| +-+ | +(it|this|that|them|yet|now|anything|anymore|either|again|until|unless|before|under|for|at all|or|and|nor|please|myself|yourself|till|today|alone|to me|needed|necessary|(the|your|my|our|any|these|those) (changes?|work|code|branch|prs?|commits?))[^a-z0-9_-])"
+  later="(,? +(it|this|that|them))?,? +(later|tomorrow|not yet|not now|once i|after i|until i|till i|when i say)[^a-z]"
+  # A long dash also opens a request. It is written as bytes, since the repo
+  # holds no dash characters.
+  long="$(printf '\342\200\224')"
+  # An opener, then perhaps a verb that asks, as in ", open a new PR" or
+  # ". You push it". A verb with no opener, as in "Sam will open the PR", asks
+  # for nothing.
+  opener="(^ *|[.;:!,] *|[^a-z]-+ *|$long *|[^a-z](please|can you|could you|go ahead and|now|then|so|just|and|you can|feel free to|need you to|want you to) +)"
+  cue="$opener((you|retry|redo|try|open|create|make|raise|file|edit|update|recommit|re-?push) +((a|an|the|new|this|that|it|to|existing|old|current|same) +)*)?\$"
+  printf ' %s \n' "$text" | awk -v target="$target" \
+    -v r1="[^a-z]($neg +$gap|$drop)$target$end" -v r2="[^a-z0-9_-]$target$later" \
+    -v r3="[^a-z]($neg +$gap|$drop)$list($WRITE_WORDS)$end" \
+    -v r4="[^a-z]$tell +(($WRITE_WORDS) +(and|or|nor) +)+($WRITE_WORDS)$end" -v cue="$cue" '
+    function spans(s, r,   pos, m) {
+      pos = 1
+      while (pos <= length(s) && match(substr(s, pos), r)) {
+        m = pos + RSTART - 1; n++; from[n] = m; to[n] = m + RLENGTH - 1; pos = m + 1 }
+    }
+    {
+      s = $0; n = 0; k = 0
+      # r3 and r4 cover every write in a refused list, the first ones too:
+      # "do not stage, commit or push", "do not commit and push".
+      spans(s, r1); spans(s, r2); spans(s, r3); spans(s, r4)
+      pos = 1; w = "[^a-z0-9_-]" target "[^a-z0-9_-]"
+      while (pos <= length(s) && match(substr(s, pos), w)) { k++; at[k] = pos + RSTART; pos = at[k] }
+      for (j = k; j > 0; j--) {
+        # A past form, such as "pushed", reports rather than asks or refuses.
+        if (substr(s, at[j], 40) ~ /^[a-z-]*ed[^a-z]/) continue
+        for (i = 1; i <= n; i++) if (at[j] > from[i] && at[j] <= to[i]) exit 0
+        # A mention that opens a request asks for the write, and so does one
+        # right after a word that asks in a later sentence than a no, unless
+        # it only names the write, as in "when to push" or "Sam will open the
+        # PR".
+        head = substr(s, 1, at[j] - 1)
+        if (head ~ cue) exit 1
+        if (head ~ /[^a-z]you +(should|could|can|may|might|will|would|need to|have to|must) +$/ &&
+          head !~ /(until|till|when|unless|before|after|once|if) [^.;!,]*$/) exit 1
+        if (head ~ /[^a-z](go|let.?s|time to|ok|okay|do|go ahead and|actually|jk|we can|you can|thought|i want you to|now|open|create|make|raise|file|update|edit|submit|retry|redo)( +(a|an|the|new|this|that|it))* +$/ &&
+          head !~ /(when|whether|how|where|what) +to +([a-z]+ +)?((the|a|an|this|that|new) +)*$/ &&
+          head !~ /(will|would|[^a-z ]ll|could|should|might|may) +([a-z]+ +)?((the|a|an|this|that|new) +)*$/) {
+          # Only in a sentence after the no.
+          for (i = 1; i <= n; i++) if (to[i] < at[j] && substr(s, to[i], at[j] - to[i]) ~ /[.;!]/) exit 1
+        }
+      }
+      exit 1
+    }'
 }
 
 # Prints what an MCP tool writes, in the parser's form, from its name split
@@ -666,10 +699,7 @@ on_pre_tool() {
       post) [ -n "$deny" ] || deny="$POST_REASON" ;;
       gate)
         gate "$what"
-        case "$verdict" in
-          deny) [ -n "$deny" ] || deny="$reason" ;;
-          ask) ask="${ask:+$ask }$reason" ;;
-        esac ;;
+        [ "$verdict" = deny ] && [ -z "$deny" ] && deny="$reason" ;;
       confirm) ask="${ask:+$ask }This can write outside this machine: $what. Confirm it." ;;
     esac
   done <<EOF

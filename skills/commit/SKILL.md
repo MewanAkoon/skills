@@ -107,6 +107,12 @@ file outside the staged group, a file that fits neither test, or staging with
 
 ## 3. Match the repo's convention
 
+First read [references/repo-guidance.md](references/repo-guidance.md) and
+follow it. What it finds about commit messages is the repo's convention.
+The order is a commitlint config first, because a hook or CI checks it, then
+that guidance, then the history below, then the defaults in steps 4 and 5.
+When the config and the guidance disagree, follow the config and say so.
+
 ```bash
 git log --oneline -30
 ls -a "$(git rev-parse --show-toplevel)" | grep -i commitlint || echo "no config file"
@@ -117,9 +123,10 @@ grep -o '"commitlint"[[:space:]]*:' "$(git rev-parse --show-toplevel)/package.js
 Both probes read the repo root, so they find the config from inside a
 monorepo package. The second wants a `commitlint` key, because a repo that
 only installs `@commitlint/cli` has no rules to follow. A config file or that
-key wins, including over a history that disagrees with it.
+key wins, as the order above says.
 
-Otherwise pick the shape most of the last 30 subjects share:
+For whatever shape the guidance and a config leave open, such as a ticket
+prefix, pick the shape most of the last 30 subjects share:
 
 - Most look like `type(scope): text` or `type: text`, so use the template in
   step 5.
@@ -131,15 +138,19 @@ Otherwise pick the shape most of the last 30 subjects share:
 Fewer than five commits, no shape most of them share, or `git log` exiting
 128 on a repo with no commits, all mean the conventional commits shape.
 
-End condition: the subject you draft satisfies the commitlint config when the
-repo has one, and otherwise matches the shape most of the last 30 subjects
-share, or uses the conventional commits shape for one of the reasons above,
-or the run is waiting on the user for the ticket id.
+End condition: every skill, command, and file the reference found that
+covers commit messages has been read, or it found none, and the subject you draft satisfies the
+commitlint config when the repo has one, follows that guidance where it does
+not conflict with the config, and otherwise matches the shape most of the
+last 30 subjects share, or uses the conventional commits shape for one of the
+reasons above, or the run is waiting on the user for the ticket id.
 
 ## 4. Derive the scope
 
-Only for the `type(scope):` shape. Take the common directory prefix of the
-staged paths and drop the leading segments that only group code: `src`,
+Only for the `type(scope):` shape. When the commitlint config or step 3's
+guidance lists the scopes, pick from that list, the config's first. Otherwise
+take the common directory prefix of the staged paths and drop the leading
+segments that only group code: `src`,
 `lib`, `app`, `apps`, `packages`, `modules`, `integrations`, `components`,
 `services`, `features`, `internal`, `pkg`, `cmd`. The first segment left is
 the scope, with any leading dot stripped.
@@ -156,8 +167,8 @@ src/auth/login.ts                   ->  auth
 those files. Omit the scope when nothing is left to name, as for
 `src/lib/utils.ts`, root config files, or a change spanning several units.
 
-End condition: the scope names a directory that exists in the repo, or it is
-`ci`, or there is no scope.
+End condition: the scope is one the config or step 3's guidance lists, or it names a
+directory that exists in the repo, or it is `ci`, or there is no scope.
 
 ## 5. Write the message
 
@@ -165,11 +176,13 @@ End condition: the scope names a directory that exists in the repo, or it is
   It takes its mood and capitalisation from step 3's shape, so a repo writing
   "Add retry to the poller" keeps the capital A.
 - A body is for a reason the subject and the diff do not already carry: one or
-  two bullets, and the message ends at the last one.
-- The message carries no trailer of any kind, `Co-Authored-By` included, even
-  when the harness would add one by default.
-- Wanting a third bullet means the commit covers too much, so go back to
-  step 2 and split it.
+  two bullets, and the message ends at the last one or at the trailers below.
+- The message carries only the trailers step 3's guidance or config
+  requires, such as `Signed-off-by` written from `git config user.name` and
+  `user.email`. A line crediting an AI, `Co-Authored-By` included, stays out
+  even when the harness would add one, as the reference says.
+- Unless step 3's guidance sets the body's shape, wanting a third bullet means
+  the commit covers too much, so go back to step 2 and split it.
 
 For the conventional commits shape, the description is imperative and
 lowercase, and the type is one of `feat`, `fix`, `perf`, `refactor`, `test`,
@@ -183,7 +196,10 @@ type(scope): short description
 
 End condition: the subject fits in roughly 60 characters, carries step 3's
 shape, and has no full stop; the body runs to two bullets at most and stops at
-the last one; or the run has gone back to step 2 to split the commit.
+the last one or at the trailers step 3 requires; where step 3's guidance sets
+another length, body, or trailer, the message follows it, except that a line
+crediting an AI stays out; or the run
+has gone back to step 2 to split the commit.
 
 ## 6. Commit
 

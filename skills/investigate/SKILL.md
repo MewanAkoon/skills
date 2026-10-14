@@ -42,7 +42,8 @@ reason it could not be.
 In this order: the root `AGENTS.md` or `CLAUDE.md`, the docs its pointer table
 names, the nested `AGENTS.md` or `CLAUDE.md` in each directory touched,
 `CONTRIBUTING.md`, ADRs under `docs/adr/`, a glossary, `.claude/rules/` and
-`.cursor/rules/`, and the package README. A missing file is not a finding. A
+`.cursor/rules/`, the repo's skills and commands under `.claude/` that cover
+the task, and the package README. A missing file is not a finding. A
 conflict with an ADR goes in the plan as a risk.
 
 **Done when:** the files read are listed by path, or the repo has none.

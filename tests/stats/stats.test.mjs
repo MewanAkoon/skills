@@ -278,6 +278,38 @@ test('rejects an unknown flag', () => {
   assert.throws(() => run(['--nope']), /unknown flag --nope/);
 });
 
+test('rejects a date that does not exist and a window that ends before it starts', () => {
+  assert.throws(() => run(['--since', '2026-13-01']), /--since takes a date as YYYY-MM-DD/);
+  assert.throws(() => run(['--until', '2026-02-30']), /--until takes a date as YYYY-MM-DD/);
+  assert.throws(() => run(['--since', '2026-10-10', '--until', '2026-10-01']), /--since comes after --until/);
+  assert.throws(() => run(['--since', '2999-01-01']), /--since is after today/);
+});
+
+test('--compare shows n/a where an older baseline lacks a count', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stats-'));
+  const file = path.join(dir, 'old.json');
+  try {
+    fs.writeFileSync(file, JSON.stringify({ version: 1, totals: { typed: 4, writes: { commit: 1 } } }));
+    const text = run([...july, '--compare', file]);
+    assert.doesNotMatch(text, /undefined|NaN/);
+    assert.match(text, /Families compacted\s+n\/a/);
+    // Writes that are not numbers are no saved totals.
+    // A count that is not a number reads n/a too, and so does the remote
+    // writes row when a kind holds no number. Definitions that are no object
+    // are none.
+    fs.writeFileSync(file, JSON.stringify({ definitions: ['a'], totals: { weeks: {}, typed: 'x', commitsWithoutSkill: 1, label: 'x', writes: { commit: 'x', push: null } } }));
+    const odd = run([...july, '--compare', file]);
+    assert.doesNotMatch(odd, /undefined|NaN/);
+    assert.match(odd, /Typed messages per week\s+n\/a/);
+    assert.match(odd, /Remote writes per week\s+n\/a/);
+    assert.match(odd, /Commits without the skill\s+n\/a/);
+    assert.match(odd, /Baseline \(.*, n\/a wk\)/);
+    assert.doesNotMatch(odd, /counts are gone: 0/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // Each command alone, so two mistakes that cancel in a total still show.
 // A write is its kind, with * when it lands in a scratch repo.
 const CASES = [
@@ -590,6 +622,9 @@ const CASES = [
   // A backslash before the first $ leaves the next one to open $'...'.
   ["echo \\$$'a\\'b' && git push", '/repo', 'push'],
   ["echo \\$'a\\' && git push", '/repo', 'push'],
+  // A string that runs itself through bash -c stops at a depth, not at the
+  // stack's end.
+  [`export x='bash -c "$x"'; bash -c "$x"`, '/repo', ''],
   // An escape past the last code point is kept, not thrown on.
   ["cd $'\\UFFFFFFFF' && git push", '/repo', 'push'],
   // $$ is the process id, and the ' after it opens a plain string.
@@ -637,6 +672,27 @@ test('reads long runs of backslashes, quotes and assignments without stalling', 
   bashCall(`X=${"$'a'".repeat(24)}" git push`, '/repo');
   bashCall(`X=${'a=a'.repeat(18)}" git push`, '/repo');
   bashCall(`X=${Array.from({ length: 24 }, (_, n) => `a${n}=1`).join(',')} echo hi`, '/repo');
+  // A string that runs itself several times over branches out at each level.
+  bashCall(`export x='${Array(8).fill('bash -c "$x"').join('; ')}'; bash -c "$x"`, '/repo');
+  // Many inner strings in one call are each still read.
+  const { writes } = bashCall(`${'bash -c "echo hi"; '.repeat(40)}bash -c "git push"`, '/repo');
+  assert.deepEqual(writes.map((w) => w.kind), ['push']);
+  // A string cut off deep inside is still read where it sits shallower.
+  const deep = (n) => (n ? `bash -c ${JSON.stringify(deep(n - 1))}` : 'git push');
+  assert.deepEqual(bashCall(`${deep(9)}; bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
+  assert.deepEqual(bashCall(`${deep(10)}; ${deep(3)}`, '/repo').writes.map((w) => w.kind), ['push']);
+  assert.deepEqual(bashCall(`export x='bash -c "$x"; bash -c "$x"; bash -c "$x"'; bash -c "$x"; bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
+  bashCall(`export x='${'bash -c "$x"; '.repeat(4)}echo ${'a'.repeat(3000)}'; bash -c "$x"`, '/repo');
+  // One that grows at each level never repeats.
+  bashCall(`export x='${'a=$a.1 bash -c "$x"; '.repeat(8)}'; bash -c "$x"`, '/repo');
+  assert.deepEqual(bashCall(`export x='a=$a.1 bash -c "$x"; a=$a.2 bash -c "$x"'; ${'bash -c "$x"; '.repeat(50)}bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
+  assert.deepEqual(bashCall(`${Array.from({ length: 5000 }, (_, i) => `bash -c "echo ${i}"; `).join('')}bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
+  // A string that runs itself is remembered once its own read ends, so
+  // repeats of it cost nothing more.
+  assert.deepEqual(bashCall(`export x='bash -c "$x"; a=$a.1 bash -c "$x"; a=$a.2 bash -c "$x"'; ${'bash -c "$x"; '.repeat(20)}bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
+  assert.deepEqual(bashCall(`export x='a=$a.1 bash -c "$x"; a=$a.2 bash -c "$x"'; bash -c "$x"; bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
+  const many = Array.from({ length: 300 }, (_, i) => `bash -c "echo ${i}"; `).join('');
+  assert.deepEqual(bashCall(`${many}bash -c "git push"`, '/repo').writes.map((w) => w.kind), ['push']);
   assert.ok(Date.now() - start < 1000);
 });
 
@@ -667,6 +723,43 @@ const ASKS_COMMIT = [
   ["don't push yet, just commit", true],
   ["don't commit or push", false],
 ];
+
+// Whether a message asks for a remote MCP write, such as one to Google Drive.
+const ASKS_MCP = [
+  ['upload it to Drive', true],
+  ['create a Notion page for this', true],
+  ['trash the old copy in Drive', true],
+  ['save the sheet', true],
+  ['what does this file say?', false],
+  ['add a test for the parser', false],
+  ['upload it', true],
+  ['update the event handler', false],
+  ['add a page break to the README', false],
+  ['share your thoughts on the docs', false],
+  ['add an event to my calendar', true],
+  ['save this to my Google Drive', true],
+  ['create a Google Doc for the spec', true],
+  ["save this to Mewan's Drive", true],
+  ['add it to the follow-up sheet', true],
+  ['add the meeting to my calendar', true],
+  ['add a b c d Drive', true],
+  ['add a b c d e Drive', false],
+  ['add a test - see the Drive', false],
+  ['update the google analytics snippet', false],
+  ['add it to the Google Sheets tracker', true],
+  ['share it on Google Slides', true],
+  ['save this once-a-week report to Drive', true],
+  ['update the design document', false],
+  ['check the Slack thread and add a test', false],
+  ['fix the database and add a test', false],
+  ['copy that, thanks', false],
+  ['can you share your thoughts?', false],
+];
+
+test('reads which messages ask for an MCP write', async () => {
+  const { asksFor } = await import(script);
+  for (const [text, expected] of ASKS_MCP) assert.equal(asksFor('mcp', text), expected, text);
+});
 
 test('reads which messages ask for a commit', async () => {
   const { asksFor } = await import(script);

@@ -31,7 +31,7 @@ const DEFINITIONS = {
   typed: 'Messages you typed, including those typed while a turn ran: no tool results, task notifications, relays, compaction summaries, command output or interrupt markers. A slash command counts.',
   families: 'Sessions joined when one resumes or forks another, which shows as a shared message id or an entry carrying the other session id.',
   writeTurns: 'Turns with a remote write: git commit or push, a tag push included; gh pr, issue, label or release writes; gh repo, workflow, run, secret, variable or gist writes; gh api writes; MCP tools whose name holds a write verb, on servers other than local and project ones. A git or gh named by a path, or run through bash, sh or zsh -c, counts; one run through find -exec does not. A dry run or a help request is no write.',
-  unaskedWriteTurns: 'Write turns where what you typed in the turn, or else your latest typed message before it, lacks the word for one of its writes, such as commit, push, PR, merge or post, and is no approval. A word counts with its inflections, such as pushed, and not inside a longer word, such as pushback. What follows don\'t, do not, never, no need to or without asks for nothing, up to punctuation, an em dash, an en dash not after a digit, a spaced hyphen or double hyphen, or a word such as and, but, then, before or until. A reminder still asks: a stretch that opens with forget or hesitate, as in don\'t forget to push, or, after any of those words but without, with wait to, keep waiting to, bother waiting to or waste time waiting to, also with for and a check, such as CI, tests, the build, a workflow, review or the linter, with up to two words before it and run, job, pass, to pass or to finish after it, before the to, as in don\'t wait for CI to push. Push covers commit.',
+  unaskedWriteTurns: 'Write turns where what you typed in the turn, or else your latest typed message before it, lacks the word for one of its writes, such as commit, push, PR, merge or post, and for an MCP write also upload or publish, or a word such as create, save, update or delete with a place such as Drive, Notion or a calendar as one of the five words after it, with no punctuation or and, then or but between them, and is no approval. A word counts with its inflections, such as pushed, and not inside a longer word, such as pushback. What follows don\'t, do not, never, no need to or without asks for nothing, up to punctuation, an em dash, an en dash not after a digit, a spaced hyphen or double hyphen, or a word such as and, but, then, before or until. A reminder still asks: a stretch that opens with forget or hesitate, as in don\'t forget to push, or, after any of those words but without, with wait to, keep waiting to, bother waiting to or waste time waiting to, also with for and a check, such as CI, tests, the build, a workflow, review or the linter, with up to two words before it and run, job, pass, to pass or to finish after it, before the to, as in don\'t wait for CI to push. Push covers commit.',
   approvedWriteTurns: 'Write turns where that text lacks the word but opens with an approval, such as yes or go ahead.',
   subagentWrites: 'Remote writes made from a subagent.',
   scratchWrites: 'Writes whose repo sits under a temporary directory, reached through the working directory, cd, git -C, --git-dir, GIT_DIR or a directory mktemp made there, or that git init made under a loop variable or a helper argument. They are left out of every other count.',
@@ -76,10 +76,17 @@ function parseArgs(argv) {
   }
   // A window with no end runs to today, and says so in what it saves, so a
   // baseline's per-week rates do not depend on the day they are read.
+  const untilGiven = opts.until !== undefined;
   opts.until ??= new Date().toISOString().slice(0, 10);
+  // A date must exist: 2026-02-30 matches the pattern but names no day.
+  const real = (date) => {
+    const day = new Date(`${date}T00:00:00Z`);
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(day.getTime()) && day.toISOString().startsWith(date);
+  };
   for (const key of ['since', 'until']) {
-    if (opts[key] !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(opts[key])) fail(`--${key} takes a date as YYYY-MM-DD`);
+    if (opts[key] !== undefined && !real(opts[key])) fail(`--${key} takes a date as YYYY-MM-DD`);
   }
+  if (opts.since && opts.since > opts.until) fail(untilGiven ? '--since comes after --until' : '--since is after today in UTC');
   return opts;
 }
 
@@ -640,7 +647,14 @@ function resolveFrom(from, to) {
 // variables this call filled in or passed on, and git or gh named by a path.
 // A dry run or a help request writes nothing. A repo git init made under a
 // loop variable or a helper's argument is a scaffold.
-function bashCall(command, cwd, inherited = {}) {
+function bashCall(command, cwd, inherited = {}, inner = { seen: new Map(), active: new Map(), calls: 0, top: 0 }) {
+  // Set when an inner string went unread: cut for depth, which a copy read
+  // with no more room may reuse, or lost to a budget, which no copy may
+  // reuse. loop is the shallowest string still being read that this one ran
+  // again; its result is whole once that string's own read ends.
+  let cut = false;
+  let lost = false;
+  let loop = Infinity;
   const vars = { ...inherited };
   const temps = [];
   // mktemp makes its directory under -p DIR or --tmpdir=DIR, under the
@@ -973,9 +987,43 @@ function bashCall(command, cwd, inherited = {}) {
         const inherited = {};
         for (const name of exported) if (Object.hasOwn(vars, name)) inherited[name] = vars[name];
         for (const [name, value] of Object.entries(prefix)) inherited[name] = expand(value);
-        const inner = bashCall(string, dir, inherited);
-        if (inner.wroteFile) wroteFile = true;
-        for (const write of inner.writes) if (!writes.some((w) => w.kind === write.kind && w.scratch === write.scratch)) writes.push(write);
+        // Each string is read once per directory and variables, eight levels
+        // deep at most. A string that runs itself adds nothing the copy
+        // already being read will not, so it is read as empty. One that grows
+        // at each level never repeats, so below each string the command runs
+        // directly at most 1024 strings are read, and below all of them 4096.
+        // A command built to use that up, such as a string that loops back and
+        // branches three or more ways, can hide a write past it; none in the
+        // transcripts comes close.
+        const key = JSON.stringify([string, dir, inherited]);
+        const depth = inner.active.size;
+        const room = 8 - depth;
+        if (!depth) inner.top = 0;
+        const known = inner.seen.get(key);
+        let result = null;
+        if (inner.active.has(key)) result = { writes: [], wroteFile: false, loop: inner.active.get(key) };
+        else if (known && (!known.result.cut || room <= known.room)) result = known.result;
+        else if (room <= 0) result = { writes: [], wroteFile: false, cut: true, loop: Infinity };
+        else if (depth && (inner.calls >= 4096 || inner.top >= 1024)) result = { writes: [], wroteFile: false, cut: true, lost: true, loop: Infinity };
+        else {
+          // Only reads below the strings the command runs directly count
+          // toward the budgets, so many plain ones never use them up.
+          if (depth) {
+            inner.calls++;
+            inner.top++;
+          }
+          inner.active.set(key, depth);
+          result = bashCall(string, dir, inherited, inner);
+          inner.active.delete(key);
+          // A loop back to this string, or deeper, is whole now.
+          if (result.loop >= depth) result = { ...result, loop: Infinity };
+          if (!result.lost && result.loop === Infinity) inner.seen.set(key, { result, room });
+        }
+        if (result.cut) cut = true;
+        if (result.lost) lost = true;
+        if (result.loop < loop) loop = result.loop;
+        if (result.wroteFile) wroteFile = true;
+        for (const write of result.writes) if (!writes.some((w) => w.kind === write.kind && w.scratch === write.scratch)) writes.push(write);
       }
       continue;
     }
@@ -1011,7 +1059,7 @@ function bashCall(command, cwd, inherited = {}) {
     // One call that commits twice, or defines a helper that does, is one write.
     if (!writes.some((w) => w.kind === kind && w.scratch === scratch)) writes.push({ kind, scratch });
   }
-  return { writes, wroteFile };
+  return { writes, wroteFile, cut, lost, loop };
 }
 
 // MCP servers that only talk to this machine or this project's own chat.
@@ -1042,6 +1090,16 @@ const CHECK_IN = [
   String.raw`check(?:s|ed|ing)?\s+(?:it|this|that|them|these|those)\s+in(?!\s+(?:(?:the|a|an|my|your|our)\s+)?(?:browser|logs?|console|terminal|ui|app|readme|docs?|ci|devtools|chrome|safari|firefox|prod\w*|staging|minute|bit|while|second)\b)`,
   String.raw`(?<!\b(?:just|wanted\s+to|let['’]?s|let\s+me|we|i['’]ll|i\s+will|i['’]d|quick)\s+)check\s+in(?=(?:\s+(?:please|now))?[\s.!,]*$)`,
 ].join('|');
+// The words that ask for a write through an MCP tool, such as one to Google
+// Drive or Notion, besides any write's own word.
+// A place one writes to through an MCP tool. Docs alone is left out, since in
+// a repo it means the documentation, and Google alone, since Google Analytics
+// or Google Fonts are code; Google Docs, Slides and Forms count.
+// Words that start a new clause, past which a verb takes no place.
+const CLAUSE_BREAK = String.raw`(?:and|then|but)`;
+const MCP_PLACE = String.raw`(?:drive|notion|sheets?|spreadsheets?|google\s+(?:docs?|slides|forms?)|slack|calendar|linear|jira|confluence|canva|figma|gmail|emails?|database|folders?)`;
+const MCP_VERB_SOURCE = String.raw`\b(?:creat(?:e|es|ed|ing)|sav(?:e|es|ed|ing)|cop(?:y|ies|ied|ying)|delet(?:e|es|ed|ing)|trash(?:es|ed|ing)?|shar(?:e|es|ed|ing)|updat(?:e|es|ed|ing)|add(?:s|ed|ing)?|mov(?:e|es|ed|ing)|writ(?:e|es|ing)|wrote|edit(?:s|ed|ing)?|remov(?:e|es|ed|ing))\b`;
+const MCP_ASK = new RegExp(String.raw`\b(?:upload(?:s|ed|ing)?|publish(?:es|ed|ing)?)\b|${MCP_VERB_SOURCE}(?:\s+(?!${CLAUSE_BREAK}(?![\w'\u2019-]))(?=[\w'\u2019-]*\w)[\w'\u2019-]+){0,4}?\s+${MCP_PLACE}\b`, 'i');
 const APPROVAL = /^\W*(?:yes|yep|yeah|ok(?:ay)?|sure|go ahead|proceed|approved?|do it|sounds good|lgtm|looks good)\b/i;
 const WORDS = {
   commit: String.raw`commit(?:s|ted|ting)?|${CHECK_IN}`,
@@ -1067,7 +1125,11 @@ const REQUEST = {
   release: asks('release'),
   post: asks('post'),
   api: ANY_REQUEST,
-  mcp: ANY_REQUEST,
+  // Upload or publish asks for an MCP write alone. Another verb, such as
+  // create or save, asks only with a place one goes, such as Drive or Notion,
+  // as one of the five words after it, with no punctuation or and, then or
+  // but between them: "add a test" asks for none.
+  mcp: { test: (text) => ANY_REQUEST.test(text) || MCP_ASK.test(text) },
 };
 // What follows one of these asks for nothing, up to punctuation, an em dash,
 // an en dash not after a digit, a spaced hyphen or double hyphen, or a word
@@ -1461,10 +1523,13 @@ function spanWeeks(opts, rows) {
 
 // --- Printing --------------------------------------------------------------
 
-const pct = (part, whole) => (whole ? `${Math.round((100 * part) / whole)}%` : 'n/a');
-const perWeek = (value, weeks) => (weeks ? (value / weeks).toFixed(1) : 'n/a');
+// A count an older baseline lacks shows as n/a.
+const pct = (part, whole) => (whole && part != null ? `${Math.round((100 * part) / whole)}%` : 'n/a');
+const perWeek = (value, weeks) => (weeks && value != null ? (value / weeks).toFixed(1) : 'n/a');
 const thousands = (value) => (value && value < 10000 ? `${(value / 1000).toFixed(1)}k` : `${Math.round(value / 1000)}k`);
-const sum = (writes) => Object.values(writes).reduce((a, b) => a + b, 0);
+// null when a kind holds no number, so the row reads n/a. A kind an older
+// baseline lacks counts as none, since it was not counted then.
+const sum = (writes) => (Object.values(writes).some((v) => !Number.isFinite(v)) ? null : Object.values(writes).reduce((a, b) => a + b, 0));
 
 function table(header, rows) {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => String(r[i]).length)));
@@ -1482,9 +1547,12 @@ function weekly(rows, total) {
   return table(header, [...rows.map(cells), cells({ ...total, week: `All ${total.weeks} wk` })]);
 }
 
-// The numbers --compare sets beside a baseline: rates per week, or shares where a count only
-// means something against its whole.
-function headline(t) {
+// The numbers --compare sets beside a baseline: rates per week, or shares
+// where a count only means something against its whole. A count that is not a
+// number, as in an older or edited baseline, reads n/a.
+function headline(totals) {
+  const num = (v) => (Number.isFinite(v) ? v : null);
+  const t = Object.fromEntries(Object.entries(totals).map(([k, v]) => [k, k === 'writes' ? Object.fromEntries(Object.entries(v).map(([kind, n]) => [kind, num(n)])) : num(v)]));
   return [
     ['Typed messages per week', perWeek(t.typed, t.weeks)],
     ['Write turns per week', perWeek(t.writeTurns, t.weeks)],
@@ -1495,19 +1563,19 @@ function headline(t) {
     ['Commits without the skill', pct(t.commitsWithoutSkill, t.writes.commit || 0)],
     ['PR writes without the skill', pct(t.prWritesWithoutSkill, t.writes.pr || 0)],
     ['Posts per week', perWeek(t.posts, t.weeks)],
-    ['Another-pass per editing family', t.editingFamilies ? (t.anotherPass / t.editingFamilies).toFixed(1) : 'n/a'],
+    ['Another-pass per editing family', t.editingFamilies && t.anotherPass != null ? (t.anotherPass / t.editingFamilies).toFixed(1) : 'n/a'],
     ['Drafts with a file', pct(t.draftsWithFile, t.draftRequests)],
     ['Families compacted', pct(t.familiesCompacted, t.families)],
-    ['Review tokens per reviewed session', t.reviewedSessions ? thousands(t.reviewTokens / t.reviewedSessions) : 'n/a'],
-    ['Ultra reviews', String(t.ultraReviews)],
-    ['Hook errors', t.hookErrors === null ? 'n/a' : String(t.hookErrors)],
+    ['Review tokens per reviewed session', t.reviewedSessions && t.reviewTokens != null ? thousands(t.reviewTokens / t.reviewedSessions) : 'n/a'],
+    ['Ultra reviews', String(t.ultraReviews ?? 'n/a')],
+    ['Hook errors', String(t.hookErrors ?? 'n/a')],
   ];
 }
 
 function compare(total, baseline) {
   const before = new Map(headline(baseline.totals));
   const rows = headline(total).map(([label, now]) => [label, before.get(label) ?? 'n/a', now]);
-  const span = (t, o) => `${o.since || 'start'} to ${o.until || 'end'}, ${t.weeks} wk`;
+  const span = (t, o) => `${o.since || 'start'} to ${o.until || 'end'}, ${Number.isFinite(t.weeks) ? t.weeks : 'n/a'} wk`;
   const out = [table(['', `Baseline (${span(baseline.totals, baseline.window)})`, 'Now'], rows)];
   const drift = definitionDrift(baseline);
   if (drift) out.push('', drift);
@@ -1517,7 +1585,7 @@ function compare(total, baseline) {
 // What differs between how the baseline counted and how this run counts, or
 // '' when nothing does. The keys are DEFINITIONS' own, which the JSON uses.
 function definitionDrift(baseline) {
-  const before = baseline.definitions ?? {};
+  const before = baseline.definitions && typeof baseline.definitions === 'object' && !Array.isArray(baseline.definitions) ? baseline.definitions : {};
   const changed = Object.keys(DEFINITIONS).filter((key) => key in before && before[key] !== DEFINITIONS[key]);
   const added = Object.keys(DEFINITIONS).filter((key) => !(key in before));
   const removed = Object.keys(before).filter((key) => !(key in DEFINITIONS));
@@ -1549,6 +1617,7 @@ async function main() {
     // Every headline row reads totals, and the remote writes row adds up
     // totals.writes.
     const totals = baseline?.totals;
+    // A count that is not a number reads n/a, so only the shape is checked.
     if (!totals || typeof totals !== 'object' || !totals.writes || typeof totals.writes !== 'object') fail(`${opts.compare} holds no saved totals`);
     baseline.window ??= {};
   }

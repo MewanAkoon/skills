@@ -341,8 +341,8 @@ and on every push to `main`, on Linux and on macOS, without `--doctor`, since
 a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
 including every command case under `tests/hooks/pre-tool/`, and checks what
-they send, and, where Node is installed, the fixtures for `scripts/stats.mjs`.
-CI also runs the validator on a pinned Claude Code.
+they send, and, where Node 18.1 or later is installed, the fixtures for
+`scripts/stats.mjs`. CI also runs the validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who

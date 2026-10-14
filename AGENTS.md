@@ -28,15 +28,17 @@ Node. The commands they carry:
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
 | `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
-| `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node is installed. |
+| `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node 18.1 or later is installed. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 
 None of them needs a package installed beyond `jq` and `git`, which macOS 15
 and the CI runners ship, `claude` for the validator and `--doctor`, and Node
-for `stats.mjs`. The hook needs the same two and `awk`. Where Node is missing,
-`check.sh` warns and skips the stats fixtures. Each bash script resolves its
-own path with `readlink -f`, and `check.sh` takes its file list from `git`.
+18.1 or later for `stats.mjs`. The hook needs the same two and `awk`. Without
+that Node, `check.sh` warns and skips the stats fixtures, unless
+`REQUIRE_NODE` is set, as CI sets it, and then it fails. Each bash script
+resolves its own path with `readlink -f`, and `check.sh` takes its file list
+from `git`.
 `scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
 source it for the old skill names and for resolving where a link points.
 
@@ -152,7 +154,7 @@ follows, and enforcing it is what this repo is for.
   parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
   parses under `sh -n`, which names a syntax error plainly,
   `hooks/classify-command.awk` loads in `awk`, and the hook's fixtures
-  pass. Where Node is installed, `scripts/stats.mjs` parses under
+  pass. Where Node 18.1 or later is installed, `scripts/stats.mjs` parses under
   `node --check` and its fixtures pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries

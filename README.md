@@ -69,7 +69,9 @@ skills it keeps switched off for now and can switch on. Add this to
 
 `skillOverrides` hides a skill by name from you and the model alike, for this
 machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
-stay, and a team repo's own `commit` and `pr` stay for everyone else.
+stay, and a team repo's own `commit` and `pr` stay for everyone else. On your
+machine `eng:commit` and `eng:pr` still read those files, and follow what they
+say about how a commit message or a PR should look.
 
 To confirm it worked from a clone of this repo:
 
@@ -226,6 +228,13 @@ that has a procedure, so a change of phase is the cue to load it:
 The other skills hold knowledge a phase reaches for, or are modes you start
 yourself.
 
+Step 1 also reads the repo's own guidance: its skills and commands under
+`.claude/`, `AGENTS.md`, and `CONTRIBUTING`. Where that guidance says how a
+result should look, such as a commit message or a PR body, it beats an eng
+skill's defaults. The eng skill still runs the job, with its checks and the
+rules on writes and posting. A repo with no such guidance gets the eng
+defaults unchanged.
+
 ### What the hooks enforce
 
 The skills say what to do. The plugin's hooks stop what must not happen, in
@@ -234,7 +243,7 @@ every session and inside subagents. They run in Claude Code only.
 | Action | What happens |
 |---|---|
 | A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post` | Denied, with a note to write the draft to a file |
-| A `git commit` or push, a PR create, edit or ready, an issue or label write, and a GitHub MCP tool that writes files or pushes | Denied in a subagent, and when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message. When the skill loaded but your message did not ask, you confirm it in a prompt. `gh issue create --web`, which you submit yourself, passes |
+| A `git commit` or push, a PR create, edit or ready, an issue or label write, and a GitHub MCP tool that writes files or pushes | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes |
 | A PR merge, close or reopen, a release, a workflow run or rerun, a repo, gist, project, secret or variable write, a push that forces, deletes or sends tags, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and any other MCP tool whose name says it writes, such as create, update, delete, send or publish | You confirm it in a prompt, auto mode included |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
@@ -247,14 +256,25 @@ asks like a merge. Three hints are best effort: a review comment link
 names `eng:pr-feedback`, a pull request link with no request gets a note to
 ask what you want, and a git conflict names `eng:merge-conflicts`.
 
-Your message asks for a write when the last clause that names it does so
-without holding back: no negation, no deferral such as "later" or "I'll", and
-no question. So "commit, but don't push" asks for the commit and not the push,
-and so does "commit and push. Don't push."
-After a takeback such as "actually" or "scratch that", only what comes next
-counts, and a write it does not name again is taken back.
-The rule errs toward a prompt, but it reads words rather than meaning, so the
-skill lock and the skills' own rules stay the main guard.
+A write runs unless your latest message plainly says not to, including a
+write the message never names. A plain no is a negation tied to the write:
+"don't commit", "no PR", "don't stage, commit or push", "commit without
+pushing", "hold the push", "never mind the push", "I'll push it myself", or a
+deferral right after it, such as "push it later" or "push once I approve".
+Reading back from the last place the message names the write, the first that
+refuses or asks for it decides. So "commit, but don't push" lets the commit
+run and denies the push, and "I didn't push it, can you push" or "don't push.
+Actually, push it" asks for the push. A refusal that only narrows the write,
+such as "don't commit the .env file" or "don't push to main", is not a no, and
+neither is a fact such as "there's no PR yet" or "it wasn't pushed". A
+question that opens with a question word is not read, so "why don't you push,
+then?" refuses nothing, while "don't push yet, okay?" still refuses. Anything subtler, such as a
+takeback ("actually, just commit"), a wait ("wait for CI before you push") or a
+condition ("let me review first"), the hook lets run, and the skills hold it
+back: `eng:commit`, `eng:pr` and `eng:issue` read what you meant and act only
+on what you asked for. A subagent's report, a background task or a CI event is
+not your message, so it changes none of this. When the hook cannot read its
+state at all, it lets the write run, as every check here fails open.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
 a shell splits them, so a quoted
@@ -264,8 +284,7 @@ by its bare name, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name hides what it does, or a browser posting through a web
 page. A hook that breaks fails open: it logs an error, which
-`./scripts/check.sh --doctor` reports, and the session carries on. The write
-gate is the exception by design: when it cannot read its state, it asks.
+`./scripts/check.sh --doctor` reports, and the session carries on.
 
 ## Skills
 
@@ -292,8 +311,8 @@ above leaves out the ones you do not want.
 | [implement](skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change test-first in the repo's patterns, corrects docs it makes false, reviews it through `/code-review` |
 | [pr-feedback](skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
 | [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
-| [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's message convention, survives hooks |
-| [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff, creates or updates |
+| [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
+| [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
 | [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, or close an issue | Drafts from the repo's template and labels to files, files only when asked |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |

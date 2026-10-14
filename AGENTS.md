@@ -5,9 +5,12 @@ For any agent working in this repo.
 ## What this repo is
 
 A source of agent skills, not an application, shipped as one Claude Code
-plugin, `eng`. There is nothing to build and no test suite. Every `SKILL.md`
-loads into some other repo's session, so a change here changes how an agent
-behaves everywhere.
+plugin, `eng`. There is nothing to build. The tests that run are the
+fixtures `check.sh` runs for the hook and for `scripts/stats.mjs`.
+`tests/review-loop/` holds the setup for a check run by hand, and `evals/` the
+cases for `claude plugin eval`, also run by hand. Every
+`SKILL.md` loads into some other repo's session, so a change here changes how
+an agent behaves everywhere.
 
 The repo is both the plugin and the marketplace that lists it, the way
 mattpocock/skills ships. `.claude-plugin/plugin.json` names the plugin and
@@ -16,7 +19,8 @@ carries its version; `.claude-plugin/marketplace.json` names the marketplace,
 the skills by its default scan of `skills/`. Inside the plugin each skill is
 `eng:<name>`, and that full name is how skills refer to each other.
 
-Four scripts, all bash, no build step. The commands they carry:
+Five scripts and no build step: four in bash, and `scripts/stats.mjs` in
+Node. The commands they carry:
 
 | Command | What it does |
 |---|---|
@@ -24,19 +28,24 @@ Four scripts, all bash, no build step. The commands they carry:
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
 | `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
+| `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node 18.1 or later is installed. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 
 None of them needs a package installed beyond `jq` and `git`, which macOS 15
-and the CI runners ship, and `claude` for the validator and `--doctor`. The
-hook needs the same two and `awk`. Each resolves
-its own path with `readlink -f`, and `check.sh` takes its file list from
-`git`. `scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
+and the CI runners ship, `claude` for the validator and `--doctor`, and Node
+18.1 or later for `stats.mjs`. The hook needs the same two and `awk`. Without
+that Node, `check.sh` warns and skips the stats fixtures, unless
+`REQUIRE_NODE` is set, as CI sets it, and then it fails. Each bash script
+resolves its own path with `readlink -f`, and `check.sh` takes its file list
+from `git`.
+`scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
 source it for the old skill names and for resolving where a link points.
 
 `package.json` carries those as `npm run check`, `doctor`, `validate`,
-`test:hooks`, and `unlink`, plus `npm run lint`, which runs shellcheck over
-every script and the hook.
+`test:hooks`, `stats`, and `unlink`, plus `npm run test:stats`, which runs
+the stats fixtures, and `npm run lint`, which runs shellcheck over every
+shell script and the hook.
 It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
 the wrapper in `package.json` and the binary it downloads with
 `SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.
@@ -81,9 +90,10 @@ either file says, so both harnesses still get the same body on `skills/**`.
 
 Maintenance scripts run on one machine rather than in a session, so they may
 read a harness's own files: `link.sh --unlink` removes links under
-`~/.claude/skills` and the other directories an older install wrote to, and
-`--doctor` reads Claude Code's plugin list, its settings, and the hook's log.
-Both say so where they do it.
+`~/.claude/skills` and the other directories an older install wrote to,
+`--doctor` reads Claude Code's plugin list, its settings, and the hook's log,
+and `stats.mjs` reads Claude Code's transcripts and the hook's log. Each says
+so where it does it.
 
 ## What an agent here never does
 
@@ -144,7 +154,8 @@ follows, and enforcing it is what this repo is for.
   parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
   parses under `sh -n`, which names a syntax error plainly,
   `hooks/classify-command.awk` loads in `awk`, and the hook's fixtures
-  pass.
+  pass. Where Node 18.1 or later is installed, `scripts/stats.mjs` parses under
+  `node --check` and its fixtures pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
   a `MAJOR.MINOR.PATCH` version.

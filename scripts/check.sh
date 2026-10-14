@@ -491,6 +491,22 @@ awk -f hooks/classify-command.awk < /dev/null > /dev/null || bad "hooks/classify
 # script holds the 5,000-byte budget for the block the session hook sends.
 ./scripts/test-hooks.sh >/dev/null || bad "scripts/test-hooks.sh failed; run it for the details"
 
+# scripts/stats.mjs reads transcripts that only a machine with a Claude Code
+# history has, so the fixtures under tests/stats stand in for them here and in
+# CI. It needs Node 18.1 or later, which the CI runners carry, for node --test.
+# A machine without it warns rather than fails, as the rest of this script
+# needs only bash and jq. REQUIRE_NODE=1, which CI sets, makes it fail.
+if command -v node >/dev/null 2>&1 \
+  && node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 18 || (a === 18 && b >= 1) ? 0 : 1)'; then
+  node --check scripts/stats.mjs || bad "scripts/stats.mjs: does not parse"
+  node --test tests/stats/*.test.mjs >/dev/null 2>&1 \
+    || bad "tests/stats failed; run npm run test:stats for the details"
+elif [ -n "${REQUIRE_NODE:-}" ]; then
+  bad "node 18.1 or later not found, and REQUIRE_NODE is set"
+else
+  warn "node 18.1 or later not found, so scripts/stats.mjs and its fixtures went unchecked"
+fi
+
 # Every command block marked runnable actually runs. A block opts in with
 # `bash checked` on its fence, because most blocks in this repo are templates
 # carrying <placeholders> or commands with side effects, and running those

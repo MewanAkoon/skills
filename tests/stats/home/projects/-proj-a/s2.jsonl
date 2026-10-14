@@ -1,0 +1,3 @@
+{"type":"user","uuid":"u1","sessionId":"s1","timestamp":"2026-07-07T10:00:00Z","promptId":"p1","isSidechain":false,"origin":{"kind":"human"},"message":{"role":"user","content":"Fix the bug, then commit and push it"}}
+{"type":"user","uuid":"v1","sessionId":"s2","timestamp":"2026-07-14T09:00:00Z","promptId":"q1","isSidechain":false,"origin":{"kind":"human"},"message":{"role":"user","content":"yes"}}
+{"type":"assistant","uuid":"b1","sessionId":"s2","timestamp":"2026-07-14T09:00:05Z","requestId":"rb1","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"tb1","name":"Bash","input":{"command":"git commit -m y"}}],"usage":{"input_tokens":10,"output_tokens":5}}}

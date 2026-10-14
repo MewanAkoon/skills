@@ -1,0 +1,2 @@
+{"type":"user","uuid":"g1","sessionId":"s1","timestamp":"2026-07-14T11:00:00Z","promptId":"g1","isSidechain":false,"origin":{"kind":"human"},"message":{"role":"user","content":"continue"}}
+{"type":"user","uuid":"g2","sessionId":"s5","timestamp":"2026-07-14T12:00:00Z","promptId":"g2","isSidechain":false,"origin":{"kind":"human"},"message":{"role":"user","content":"and keep going"}}

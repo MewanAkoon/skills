@@ -58,8 +58,8 @@ The manifests and `hooks/` are the Claude Code packaging around them. The
 session hook reads `standards/workflow.md` and `plain-writing` at run time and
 adds nothing of its own, so a file read outside the plugin still reads the
 same. The other hooks enforce the workflow's rules on posting, remote writes
-and review, and in places go further. For example, a subagent never commits
-or pushes, and a PR merge, release or deploy always asks, even when your
+and review, and in places go further. For example, a subagent never runs
+`git commit` or pushes, and a PR merge, release or deploy always asks, even when your
 message asked for it.
 
 Other plugins stay out, even when useful on the machine you are sitting at.

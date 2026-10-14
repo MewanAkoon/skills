@@ -186,11 +186,15 @@ worktree_tree() {
   # Built from HEAD rather than a copy of the index, whose cached file stats
   # can hide an edit made in the same second as the copy.
   rm -f "$wt_index"
-  GIT_INDEX_FILE="$wt_index" git -C "$1" read-tree HEAD 2>/dev/null &&
+  # A step that fails leaves a partial index, whose tree is not this one.
+  if GIT_INDEX_FILE="$wt_index" git -C "$1" read-tree HEAD 2>/dev/null &&
     GIT_INDEX_FILE="$wt_index" git -C "$1" add -A 2>/dev/null &&
-    GIT_INDEX_FILE="$wt_index" git -C "$1" reset -q -- ':/.claude/plans' ':/.claude/handoffs' 2>/dev/null
-  GIT_INDEX_FILE="$wt_index" git -C "$1" write-tree 2>/dev/null
-  wt_status=$?
+    GIT_INDEX_FILE="$wt_index" git -C "$1" reset -q -- ':/.claude/plans' ':/.claude/handoffs' 2>/dev/null; then
+    GIT_INDEX_FILE="$wt_index" git -C "$1" write-tree 2>/dev/null
+    wt_status=$?
+  else
+    wt_status=1
+  fi
   rm -f "$wt_index"
   return "$wt_status"
 }
@@ -212,6 +216,9 @@ record_review() {
       low | medium | high | xhigh | max | ultra) ;;
       --max-findings) skip=yes ;;
       -*) ;;
+      # A range with no end, such as HEAD.., stops at HEAD and so reads no
+      # uncommitted change.
+      *..) set +f; return 0 ;;
       *..*) target="${a##*..}" ;;
       # A pull request, a branch or a URL is not the local changes.
       *) set +f; return 0 ;;

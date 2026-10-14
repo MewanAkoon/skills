@@ -604,6 +604,11 @@ reminded || bad "review gate: a review of a pull request silenced it"
 review_post "medium HEAD~0..HEAD"
 stop gate
 reminded || bad "review gate: a review of another range silenced it"
+for open_range in "medium HEAD.." "medium main..." "medium HEAD~0.."; do
+  review_post "$open_range"
+  stop gate
+  reminded || bad "review gate: a review of '$open_range', which stops at HEAD, silenced it"
+done
 for target in "high https://github.com/o/r/pull/12" "medium feature/x" "medium #12"; do
   review_post "$target"
   stop gate
@@ -618,6 +623,16 @@ stop gate
 printf 'three\n' > "$repo/a.txt"
 stop gate
 reminded || bad "review gate: a change after the review got no reminder"
+# A file the snapshot cannot read fails it, so no review of any range counts.
+if [ "$(id -u)" != 0 ]; then
+  printf 'u\n' > "$repo/unreadable.txt"
+  chmod 000 "$repo/unreadable.txt"
+  review_post "medium HEAD~0..HEAD"
+  stop gate
+  reminded || bad "review gate: a snapshot that could not read a file silenced it"
+  chmod 644 "$repo/unreadable.txt"
+  rm -f "$repo/unreadable.txt"
+fi
 # A glob among the arguments is a path, not files to expand into, even where
 # a file's name would turn it into a review level.
 mkdir -p "$scratch/globdir"

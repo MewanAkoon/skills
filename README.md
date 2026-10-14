@@ -260,10 +260,12 @@ The hooks catch a slip, not a determined bypass. They read commands the way
 a shell splits them, so a quoted
 `gh pr comment` in a grep or a heredoc stays allowed, while a command inside
 `$( )`, or a heredoc fed to a shell, is read too. They cannot see git aliases or push settings, a tag pushed
-by its bare name, a command built at run time or hidden in a script,
+by its bare name, a commit made by anything but `git commit`, such as
+`git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name hides what it does, or a browser posting through a web
-page. Every hook fails open. A broken one logs an error, which
-`./scripts/check.sh --doctor` reports, and the session carries on.
+page. A hook that breaks fails open: it logs an error, which
+`./scripts/check.sh --doctor` reports, and the session carries on. The write
+gate is the exception by design: when it cannot read its state, it asks.
 
 ## Skills
 

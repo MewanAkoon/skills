@@ -283,7 +283,7 @@ for reference in skills/*/references/*.md; do
   budget "$reference" 15000
 done
 
-budget standards/workflow.md 2800
+budget standards/workflow.md 3000
 budget skills/investigate/SKILL.md 6500
 for lifecycle in implement pr-feedback; do
   budget "skills/$lifecycle/SKILL.md" 5000

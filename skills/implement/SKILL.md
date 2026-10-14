@@ -96,7 +96,7 @@ search found nothing that described the change.
 
 Read [references/review.md](references/review.md) first and follow it. It
 snapshots the tree, then calls the Skill tool with `code-review` and the
-arguments `medium <parent>..<snapshot>`, with an intent check beside it. Never
+arguments `high <parent>..<snapshot>`, with an intent check beside it. Never
 a bare level, and never `ultra`, `--comment`, or `--fix`.
 
 **Done when:** its report says ready, or not ready with each blocker named, or

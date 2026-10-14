@@ -19,13 +19,20 @@
 #                  confirmation prompt for shell commands and MCP tools, and
 #                  the guard on a code-review the model calls.
 #   post-tool      PostToolUse and PostToolUseFailure. Records a skill that
-#                  loaded, and adds a hint when git reports a conflict.
-#   stop           Stop. The review gate.
+#                  loaded and a push that moved a remote branch to HEAD, and
+#                  adds a hint when git reports a conflict.
+#   stop           Stop. The review gate, and the reminder to review the
+#                  whole pull request after a push.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates: turn (the text of your latest message), skills (those loaded
 # since), start-hash (the uncommitted changes when the session started) and
-# review-hash (the same when a review covering them last ran). It is not read from
+# review-hash (the same when a review covering them last ran), push-pending
+# (a push or pull request command about to run, with where every remote
+# branch stood before it), reviewed-commit (the end of the last range reviewed),
+# pr-head (the commit the last push or new pull request left on a remote
+# branch), pr-review (that commit, once a review reached it) and pr-reminded
+# (that commit, once the stop gate asked for its review). It is not read from
 # the transcript, which Claude Code writes asynchronously. Where the state
 # cannot be read, the write gate allows, as every other check fails open.
 #
@@ -70,6 +77,12 @@ REVIEW_REMINDER="There are uncommitted changes that have not been reviewed since
 they last changed. If this hands back finished work, run the review step in \
 eng:implement first. If you are stopping to ask a question or report a blocker, \
 say so and end the turn."
+
+PR_REMINDER="This branch was pushed, or its PR opened, since the PR was last \
+reviewed as a whole. Before handing back, review the whole PR as step 6 of the \
+workflow says: /code-review high on the range from the merge base with the PR's \
+base branch to HEAD, then judge the findings and fix the valid ones. If you are \
+stopping to ask a question or report a blocker, say so and end the turn."
 
 log() {
   printf 'eng-hook: %s\n' "$1" >&2
@@ -199,15 +212,31 @@ worktree_tree() {
   return "$wt_status"
 }
 
+# Records that the commit $1 was reviewed as the pull request, when it is the
+# one the last push or new pull request left on a remote branch.
+mark_pr_reviewed() {
+  [ -n "$1" ] || return 0
+  [ "$1" = "$(cat "$state/pr-head" 2>/dev/null)" ] || return 0
+  printf '%s\n' "$1" > "$state/pr-review"
+}
+
 # Records that the uncommitted changes were reviewed, when the review's
 # arguments, $1, cover them: no target, which reviews the local changes, or a
 # range ending in a snapshot of this very tree. A pull request or another
-# range reviews something else, so it records nothing.
+# range reviews something else, so neither counts for the local changes.
+#
+# It also records the review of the whole pull request: a pull request by
+# number or link, or any range ending at the pushed commit, because the hook
+# cannot tell the PR or its base. The end of the last range is kept as
+# reviewed-commit, so a review run just before a push counts once the push
+# lands on that same commit. A review loop's snapshot is never the commit
+# that lands, so it does not count.
 record_review() {
   find_state || return 0
   cwd="$f_cwd"
   target=""
   skip=no
+  pr=no
   # The arguments are words to read, not patterns to expand against files.
   set -f
   for a in $1; do
@@ -220,13 +249,26 @@ record_review() {
       # uncommitted change.
       *..) set +f; return 0 ;;
       *..*) target="${a##*..}" ;;
-      # A pull request, a branch or a URL is not the local changes.
-      *) set +f; return 0 ;;
+      # A pull request reads what was pushed to it, not the local changes.
+      '#'[0-9]* | http*/pull/[0-9]*) pr=yes; break ;;
+      # A branch, a commit or another URL is not the local changes.
+      *[!0-9]*) set +f; return 0 ;;
+      # Digits alone are a pull request's number.
+      *) pr=yes; break ;;
     esac
   done
   set +f
+  if [ "$pr" = yes ]; then
+    mark_pr_reviewed "$(cat "$state/pr-head" 2>/dev/null)"
+    return 0
+  fi
   if [ -n "$target" ]; then
     top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
+    end="$(git -C "$top" rev-parse -q --verify "$target^{commit}" 2>/dev/null)"
+    if [ -n "$end" ]; then
+      printf '%s\n' "$end" > "$state/reviewed-commit"
+      mark_pr_reviewed "$end"
+    fi
     reviewed="$(git -C "$top" rev-parse -q --verify "$target^{tree}" 2>/dev/null)" || return 0
     [ "$reviewed" = "$(worktree_tree "$top")" ] || return 0
   fi
@@ -669,7 +711,7 @@ skill_call() {
   if has_word "$args" "$POST_FLAGS"; then
     decision deny "$POST_REASON"
   elif has_word "$args" 'ultra|--fix(=[^[:space:]]*)?'; then
-    decision deny "Run code-review at an explicit level such as medium, without ultra or --fix, and apply its findings yourself."
+    decision deny "Run code-review at an explicit level such as high, without ultra or --fix, and apply its findings yourself."
   fi
 }
 
@@ -688,6 +730,7 @@ on_pre_tool() {
     *) return 0 ;;
   esac
   [ -n "$found" ] || return 0
+  case "$tool" in Bash) note_push ;; esac
 
   # Tiers apply in order: a post is denied outright, and a push the write gate
   # allows still asks when it forces, deletes or pushes tags.
@@ -712,6 +755,80 @@ EOF
   fi
 }
 
+# Prints the remote branches that point at HEAD in the repo at $1, one per
+# line, leaving out each remote's default branch, which no pull request is
+# opened from. Where a remote names no default, main and master stand in.
+pushed_refs() {
+  git -C "$1" for-each-ref --points-at HEAD --format='%(refname)' refs/remotes/ 2>/dev/null |
+    while IFS= read -r ref; do
+      rest="${ref#refs/remotes/}"
+      remote="${rest%%/*}"
+      branch="${rest#*/}"
+      [ "$branch" = HEAD ] && continue
+      default="$(git -C "$1" symbolic-ref -q "refs/remotes/$remote/HEAD" 2>/dev/null)"
+      if [ -n "$default" ]; then
+        [ "$ref" = "$default" ] && continue
+      else
+        case "$branch" in main | master) continue ;; esac
+      fi
+      printf '%s\n' "$ref"
+    done
+}
+
+# Before a push or a pull request command, which the classifier named in
+# $found, keeps the command, its kind and where every remote branch stood,
+# so the post-tool hook can tell what it moved, even when the same command
+# also commits. Opening a pull request needs its branch pushed, not moved.
+note_push() {
+  [ -z "$f_agent" ] || return 0
+  printf '%s\n' "$found" | grep -Eqx 'gate (push|pr)' || return 0
+  kind=push
+  case " $command " in
+    # Neither opens one.
+    *" --web"* | *" --dry-run"*) ;;
+    *" pr create "* | *" pr new "* | *" mr create "* | *" mr new "*) kind=open ;;
+  esac
+  find_state || return 0
+  {
+    printf '%s\n' "$kind"
+    printf '%s' "$command" | git hash-object --stdin 2>/dev/null
+    git -C "$f_cwd" for-each-ref --format='%(objectname) %(refname)' refs/remotes/ 2>/dev/null
+  } > "$state/push-pending"
+}
+
+# After the command note_push kept, records HEAD as the commit to review as a
+# pull request: a push that moved a remote branch to it, or a pull request
+# opened on a branch already there. A push that moved only tags, a deletion
+# or the default branch moves no such branch, and records nothing. The refs
+# decide a push, not the exit status, because a command can fail after its
+# push landed. A pull request that failed to open records nothing.
+record_push() {
+  find_state || return 0
+  [ -f "$state/push-pending" ] || return 0
+  pending="$(cat "$state/push-pending" 2>/dev/null)"
+  ran="$(get .tool_input.command)"
+  [ "$(printf '%s\n' "$pending" | sed -n 2p)" = "$(printf '%s' "$ran" | git hash-object --stdin 2>/dev/null)" ] || return 0
+  rm -f "$state/push-pending"
+  kind="$(printf '%s\n' "$pending" | sed -n 1p)"
+  head="$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" || return 0
+  after="$(pushed_refs "$f_cwd")"
+  [ -n "$after" ] || return 0
+  if [ "$kind" = open ]; then
+    [ "$f_event" = PostToolUseFailure ] && return 0
+  else
+    moved=no
+    for ref in $after; do
+      printf '%s\n' "$pending" | sed '1,2d' | grep -qxF "$head $ref" || moved=yes
+    done
+    [ "$moved" = yes ] || return 0
+  fi
+  printf '%s\n' "$head" > "$state/pr-head"
+  # A review of a range ending here, run before the push, already covers it.
+  [ "$head" = "$(cat "$state/reviewed-commit" 2>/dev/null)" ] &&
+    printf '%s\n' "$head" > "$state/pr-review"
+  return 0
+}
+
 on_post_tool() {
   case "$f_tool" in
     # A skill a subagent loads leaves the main session's gate as it was.
@@ -725,6 +842,8 @@ on_post_tool() {
       # A merge that stops on a conflict exits 1, which fires
       # PostToolUseFailure with the output in error rather than PostToolUse.
       event="$f_event"
+      # A subagent never pushes.
+      [ -z "$f_agent" ] && record_push
       if printf '%s' "$input" | jq -r '(.error // empty), (.tool_response // empty
           | if type == "object" then [.stdout, .stderr] | map(. // "") | join("\n") else tostring end)' 2>/dev/null |
         grep -Eq 'CONFLICT \(|Automatic merge failed|Merge conflict in|could not apply'; then
@@ -745,10 +864,19 @@ on_stop() {
   fi
   find_state || return 0
   now="$(tree_state "$f_cwd")" || return 0
-  [ "$now" = clean ] && return 0
-  [ "$now" = "$(cat "$state/start-hash" 2>/dev/null)" ] && return 0
-  [ "$now" = "$(cat "$state/review-hash" 2>/dev/null)" ] && return 0
-  context Stop "$REVIEW_REMINDER"
+  if [ "$now" != clean ] && [ "$now" != "$(cat "$state/start-hash" 2>/dev/null)" ] &&
+    [ "$now" != "$(cat "$state/review-hash" 2>/dev/null)" ]; then
+    context Stop "$REVIEW_REMINDER"
+    return 0
+  fi
+  # The pushed commit, once, while HEAD is still on it and no review reached it.
+  pushed="$(cat "$state/pr-head" 2>/dev/null)" || return 0
+  [ -n "$pushed" ] || return 0
+  [ "$pushed" = "$(cat "$state/pr-review" 2>/dev/null)" ] && return 0
+  [ "$pushed" = "$(cat "$state/pr-reminded" 2>/dev/null)" ] && return 0
+  [ "$pushed" = "$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" ] || return 0
+  printf '%s\n' "$pushed" > "$state/pr-reminded"
+  context Stop "$PR_REMINDER"
 }
 
 input="$(cat)"

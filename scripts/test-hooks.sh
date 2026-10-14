@@ -809,6 +809,162 @@ stop plain '' "$scratch/plain"
 [ ! -s "$scratch/out" ] || bad "review gate: a directory outside git got a reminder"
 [ "$status" -eq 0 ] || bad "review gate: exited $status outside git"
 
+# The reminder to review the whole pull request after a push, in a repo with
+# a remote whose branches the pushes move. The remote names main as its
+# default, as a clone does.
+pr="$scratch/pr"
+git init -q --bare "$scratch/pr-remote.git"
+git clone -q "$scratch/pr-remote.git" "$pr" 2>/dev/null
+git -C "$pr" symbolic-ref HEAD refs/heads/main
+printf 'one\n' > "$pr/a.txt"
+git -C "$pr" add a.txt
+git -C "$pr" -c user.name=t -c user.email=t@t commit -qm init
+git -C "$pr" push -q -u origin main 2>/dev/null
+git -C "$pr" remote set-head origin main
+git -C "$pr" checkout -q -b feature
+git -C "$pr" push -q -u origin feature 2>/dev/null
+pr_commit() {
+  printf '%s\n' "$1" > "$pr/a.txt"
+  git -C "$pr" -c user.name=t -c user.email=t@t commit -qam "$1"
+}
+# Stubs stand in for gh and glab, so no test reaches a real service. Each
+# exits with the status in $scratch/stub-status.
+mkdir -p "$scratch/stub"
+# The stub reads its status when it runs, so the expansion stays quoted.
+# shellcheck disable=SC2016
+for tool in gh glab; do
+  printf '#!/bin/sh\nexit "$(cat %s/stub-status 2>/dev/null || echo 0)"\n' "$scratch" > "$scratch/stub/$tool"
+  chmod +x "$scratch/stub/$tool"
+done
+# Runs a command through the hook as Claude Code would: pre-tool, the command
+# itself, then post-tool, or PostToolUseFailure when the command fails. $2
+# names a subagent.
+pr_bash() {
+  local agent="${2:-}" event=PostToolUse
+  hook_run pre-tool "$(jq -cn --arg d "$pr" --arg c "$1" --arg a "$agent" \
+    '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}
+      + (if $a == "" then {} else {agent_id: $a} end)')"
+  (cd "$pr" && PATH="$scratch/stub:$PATH" && eval "$1") > /dev/null 2>&1 || event=PostToolUseFailure
+  hook_run post-tool "$(jq -cn --arg d "$pr" --arg c "$1" --arg e "$event" --arg a "$agent" \
+    '{session_id: "pr", cwd: $d, hook_event_name: $e, tool_name: "Bash", tool_input: {command: $c}}
+      + (if $a == "" then {} else {agent_id: $a} end)')"
+}
+pr_review() {
+  hook_run post-tool "$(jq -cn --arg d "$pr" --arg a "$1" '{session_id: "pr", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: $a}}')"
+}
+pr_stop() { stop pr "${1:-}" "$pr"; }
+pr_reminded() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null | grep -q 'review the whole PR'; }
+start pr "$pr"
+pr_stop
+[ ! -s "$scratch/out" ] || bad "pr reminder: a branch nobody pushed this session got a reminder"
+pr_commit two
+pr_bash 'git push -q'
+pr_stop
+pr_reminded || bad "pr reminder: a push got no reminder"
+[ "$(jq -r '.hookSpecificOutput.hookEventName' "$scratch/out")" = Stop ] || bad "pr reminder: the reminder is not Stop context"
+pr_stop
+[ ! -s "$scratch/out" ] || bad "pr reminder: reminded twice for the same push"
+pr_commit three
+pr_bash 'git push -q origin HEAD'
+pr_stop '{"background_tasks": [{"id": "t1", "type": "subagent", "status": "running", "description": "code-review high a..b"}]}'
+[ ! -s "$scratch/out" ] || bad "pr reminder: acted while a code-review ran"
+pr_review "high $(git -C "$pr" rev-parse HEAD~2)..$(git -C "$pr" rev-parse HEAD~1)"
+pr_stop
+pr_reminded || bad "pr reminder: a review ending at another commit cleared it"
+pr_commit four
+pr_bash 'git push -q'
+pr_review "high --max-findings 5 $(git -C "$pr" rev-parse HEAD~1)..HEAD"
+pr_stop
+[ ! -s "$scratch/out" ] || bad "pr reminder: a review ending at the pushed commit did not clear it"
+# A review that ran before the push counts once the push lands on its end.
+pr_commit five
+pr_review "high $(git -C "$pr" rev-parse HEAD~1)..HEAD"
+pr_bash 'git push -q'
+pr_stop
+[ ! -s "$scratch/out" ] || bad "pr reminder: a review run before the push did not count"
+# A pull request opened on the pushed branch asks for the same review, and a
+# review of the pull request by number clears it.
+pr_commit six
+git -C "$pr" push -q 2>/dev/null
+pr_bash 'gh pr create --web'
+pr_stop
+pr_reminded && bad "pr reminder: a pull request left to the browser got a reminder"
+printf '1\n' > "$scratch/stub-status"
+pr_bash 'gh pr create --title x --body-file body.md'
+pr_stop
+pr_reminded && bad "pr reminder: a pull request that failed to open got a reminder"
+rm -f "$scratch/stub-status"
+pr_bash 'gh pr create --title x --body-file body.md'
+pr_stop
+pr_reminded || bad "pr reminder: a new pull request got no reminder"
+pr_commit six-mr
+git -C "$pr" push -q 2>/dev/null
+pr_bash 'glab mr create --title x'
+pr_stop
+pr_reminded || bad "pr reminder: a new merge request got no reminder"
+# A commit and its push in one command count, though the branch's name was
+# already among the remote branches.
+pr_bash 'printf six2 > a.txt && git -c user.name=t -c user.email=t@t commit -qam six2 && git push -q'
+pr_stop
+pr_reminded || bad "pr reminder: a commit and push in one command got no reminder"
+pr_commit seven
+pr_bash 'git push -q'
+pr_review "high 5abc"
+pr_stop
+pr_reminded || bad "pr reminder: a review of a commit read as a pull request cleared it"
+pr_review "high 12"
+pr_stop
+[ ! -s "$scratch/out" ] || bad "pr reminder: a review of the pull request did not clear it"
+# A push to a remote branch the branch does not track, as to a fork, counts.
+git init -q --bare "$scratch/pr-fork.git"
+git -C "$pr" remote add fork "$scratch/pr-fork.git"
+pr_commit eight
+pr_bash 'git push -q fork HEAD:feature'
+pr_stop
+pr_reminded || bad "pr reminder: a push to a fork's branch got no reminder"
+# What a push did not move records nothing.
+pr_commit nine
+pr_bash 'git push -q nowhere HEAD'
+pr_stop
+pr_reminded && bad "pr reminder: a failed push got a reminder"
+pr_bash 'git push -q && false'
+pr_stop
+pr_reminded || bad "pr reminder: a push in a command that then failed got no reminder"
+git -C "$pr" push -q 2>/dev/null
+git -C "$pr" push -q fork HEAD:feature 2>/dev/null
+# The branch is already at HEAD on the remote here, pushed outside the hook,
+# so only a push that moves it again would count.
+pr_commit ten
+git -C "$pr" push -q 2>/dev/null
+git -C "$pr" tag v1
+pr_bash 'git push -q origin v1'
+pr_stop
+pr_reminded && bad "pr reminder: a tag push got a reminder"
+pr_bash 'git push -q origin HEAD:main'
+pr_stop
+pr_reminded && bad "pr reminder: a push to the default branch got a reminder"
+pr_commit ten-agent
+pr_bash 'git push -q' agent-1
+pr_stop
+pr_reminded && bad "pr reminder: a subagent's push got a reminder"
+pr_bash 'git status --short'
+pr_stop
+pr_reminded && bad "pr reminder: a command that is not a push got a reminder"
+# A commit on top of the pushed one leaves the reminder for the next push,
+# and uncommitted changes get their own reminder first.
+pr_commit eleven
+pr_bash 'git push -q'
+pr_commit twelve
+pr_stop
+pr_reminded && bad "pr reminder: reminded about a push HEAD has moved past"
+pr_bash 'git push -q'
+printf 'dirty\n' > "$pr/a.txt"
+pr_stop
+reminded || bad "pr reminder: uncommitted changes lost their reminder to the push"
+git -C "$pr" checkout -q -- a.txt
+pr_stop
+pr_reminded || bad "pr reminder: the push got no reminder once the tree was clean"
+
 # Without jq the gates do nothing, exit 0, and log it.
 run_nojq() {
   printf '%s' "$2" | env PATH="$nojq" CLAUDE_PLUGIN_DATA="$scratch/data-nojq-gates" "$hook" "$1" > "$scratch/out" 2>/dev/null

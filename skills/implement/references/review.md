@@ -27,7 +27,7 @@ git commit-tree "$tree" -p <parent> -m review | tee -a "$R/snapshots"
 
 Run the repo's lint, typecheck, and tests in their report-only modes. Then
 call the Skill tool with `code-review` and the arguments
-`medium <parent>..<snapshot>`, hashes written out.
+`high <parent>..<snapshot>`, hashes written out.
 
 In every round, at the same time, brief a general-purpose subagent with the
 intent check. In the first round it covers the whole change: each plan item

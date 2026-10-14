@@ -212,9 +212,10 @@ and `pr` back.
 
 [standards/workflow.md](standards/workflow.md) is eight standing steps:
 understand first, plan and stop, implement on approval, review until clean,
-commit and open PRs only when asked, handle PR feedback on evidence, never
-post, and report briefly. The plugin's SessionStart hook sends it at the start
-of every session and after each compaction. It names the skill for each step
+commit and open PRs only when asked, handle PR feedback on evidence and
+review the whole PR after each push, never post, and report briefly. The
+plugin's SessionStart hook sends it at the start of every session and after
+each compaction. It names the skill for each step
 that has a procedure, so a change of phase is the cue to load it:
 
 | Step | Skill |
@@ -223,7 +224,7 @@ that has a procedure, so a change of phase is the cue to load it:
 | 3, implement | `eng:implement` |
 | 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
 | 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
-| 6, PR feedback | `eng:pr-feedback` |
+| 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the whole PR |
 
 The other skills hold knowledge a phase reaches for, or are modes you start
 yourself.
@@ -247,6 +248,7 @@ every session and inside subagents. They run in Claude Code only.
 | A PR merge, close or reopen, a release, a workflow run or rerun, a repo, gist, project, secret or variable write, a push that forces, deletes or sends tags, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and any other MCP tool whose name says it writes, such as create, update, delete, send or publish | You confirm it in a prompt, auto mode included |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
+| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`. A review of a PR by number or link counts, and so does a range ending at that commit, run after the push or as the last range before it |
 
 The Claude app's own MCP servers, such as the one a project thread replies
 through, are exempt from every check, because they carry the conversation
@@ -374,7 +376,8 @@ requests that picked the same version fail there.
 `evals/` holds cases for `claude plugin eval`: each workflow skill loads at its
 moment, `eng:issue` stays out of "look into issue 42", the contract is in
 context at the start, looking into a repo commits nothing, a commit waits for
-`eng:commit`, and an unreviewed hand-back gets the review gate's reminder. Every run is a
+`eng:commit`, an unreviewed hand-back gets the review gate's reminder, and a
+push gets the reminder to review the whole PR. Every run is a
 model call on your account, so they stay out of CI. Run them before a release:
 
 ```bash
@@ -395,7 +398,7 @@ claude -p "The plan in PLAN.md is approved. Implement it." \
   --output-format stream-json --verbose
 ```
 
-A good run calls `code-review` with `medium` and a `<hash>..<hash>` range,
+A good run calls `code-review` with `high` and a `<hash>..<hash>` range,
 briefs the intent check beside it, and commits nothing.
 
 ## Usage counts

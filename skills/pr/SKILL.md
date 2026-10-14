@@ -168,35 +168,39 @@ you have deliberately grouped it under a unit you can name, or the run has
 stopped because no commits are ahead of the base and there is nothing to open
 a PR for.
 
-## 4. Pick the template
+## 4. Pick the format
 
-The repo's own template wins whenever one exists:
+First read the `eng:commit` skill's
+[../commit/references/repo-guidance.md](../commit/references/repo-guidance.md) and
+follow it for pull requests. The repo's own template wins whenever one exists,
+and when the guidance's format differs, keep the template's headings and fill
+them as the guidance says:
 
 ```bash
 find "$(git rev-parse --show-toplevel)" -maxdepth 3 -ipath '*pull_request_template*' \
   -not -path '*/.git/*' -not -path '*/node_modules/*'
 ```
 
-The search starts at the repo root so it still finds the template from inside
-a subdirectory.
+Found one, or a body format in the guidance? Fill in its sections and its
+checkboxes, keep any headings exactly as they are, and skip the body template
+in step 5. The title guidance in step 5 still applies. When it has no section for test evidence or for merge risk, add
+step 5's Evidence or Merge danger section at its end, or, when the guidance
+allows no extra sections, put them in its closest section.
 
-Found one? Fill in its sections and its checkboxes, keep its headings exactly
-as they are, and skip the body template in step 5. The title guidance in step
-5 still applies. When the template has no section for test evidence or for
-merge risk, add step 5's Evidence or Merge danger section at its end.
+Found neither? Use the body template in step 5.
 
-Found none? Use the body template in step 5.
-
-End condition: the `find` has run, and either a template path is on the record
-with its headings to be kept as they are, or the search printed nothing and
-step 5's body template applies.
+End condition: the guidance the reference found is read, or it found none, the `find` has run,
+and either a template or the guidance's format is on the record with its
+headings to be kept as they are, or neither exists and step 5's body template
+applies.
 
 ## 5. Draft the title and body
 
 The title and the body both describe what the code does. The ticket and the
 branch name are not evidence of what landed.
 
-For the title, match the convention already in use:
+For the title, follow step 4's guidance when it sets a format, or else match
+the convention already in use:
 
 ```bash
 gh pr list --state merged --limit 20 --json title --jq '.[].title'
@@ -289,7 +293,8 @@ End condition: no angle-bracket placeholder such as `<reason>` or
 apply ticked, Evidence names the commands and what they printed, or says the
 before was not observed, or says why no run applies to a docs-only change or
 a repo with no tests, Merge danger names the door and the blast radius,
-and "How to review locally" holds real commands. Every section
+wherever step 4's format puts them, and "How to review locally" holds real
+commands when the body has it. Every section
 holds real content or is deleted. The `<!-- -->` comments stay, since GitHub
 hides them when it renders the page.
 
@@ -334,29 +339,8 @@ for this branch, or another `gh pr create` error.
 
 ## 7. Update, when a PR is open
 
-Show the user what changes before touching anything:
-
-```
-Existing PR: <url>
-
-Current title:  <existing title>
-Proposed title: <new title>
-
-Current summary:  <first line of existing body, or "(none)">
-Proposed summary: <new summary>
-```
-
-Ask "Apply these updates to the PR? (yes / no)" and stop on no.
-
-On yes, write the title and body files as step 6 says, then:
-
-```bash
-gh pr edit --title "$(cat "<title path>")" --body-file "<body path>"
-```
-
-When `gh pr edit` exits non-zero, read
-[references/rest-fallback.md](references/rest-fallback.md) and send the same
-title and body through the REST API.
+Read [references/update.md](references/update.md) and follow it. It shows the
+user what changes, asks before sending, and sends the update.
 
 End condition: the user answered the prompt, and either they declined and
 nothing was sent, or `gh pr edit` or the REST fallback exited zero, or both

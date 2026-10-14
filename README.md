@@ -69,7 +69,9 @@ skills it keeps switched off for now and can switch on. Add this to
 
 `skillOverrides` hides a skill by name from you and the model alike, for this
 machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
-stay, and a team repo's own `commit` and `pr` stay for everyone else.
+stay, and a team repo's own `commit` and `pr` stay for everyone else. On your
+machine `eng:commit` and `eng:pr` still read those files, and follow what they
+say about how a commit message or a PR should look.
 
 To confirm it worked from a clone of this repo:
 
@@ -226,6 +228,13 @@ that has a procedure, so a change of phase is the cue to load it:
 The other skills hold knowledge a phase reaches for, or are modes you start
 yourself.
 
+Step 1 also reads the repo's own guidance: its skills and commands under
+`.claude/`, `AGENTS.md`, and `CONTRIBUTING`. Where that guidance says how a
+result should look, such as a commit message or a PR body, it beats an eng
+skill's defaults. The eng skill still runs the job, with its checks and the
+rules on writes and posting. A repo with no such guidance gets the eng
+defaults unchanged.
+
 ### What the hooks enforce
 
 The skills say what to do. The plugin's hooks stop what must not happen, in
@@ -302,8 +311,8 @@ above leaves out the ones you do not want.
 | [implement](skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change test-first in the repo's patterns, corrects docs it makes false, reviews it through `/code-review` |
 | [pr-feedback](skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
 | [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
-| [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's message convention, survives hooks |
-| [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff, creates or updates |
+| [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
+| [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
 | [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, or close an issue | Drafts from the repo's template and labels to files, files only when asked |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |

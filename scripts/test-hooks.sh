@@ -254,35 +254,250 @@ expect_bash none allow 'git commit -e --dry-run'
 expect_bash none deny 'git commit -am -h' 'eng:commit'
 expect_bash none deny 'git commit -am --help' 'eng:commit'
 expect_bash none deny 'git push -onotify origin x' 'eng:'
-for said in "Don't stage, commit, or push anything" "Do not, under any circumstances, push"; do
-  set_state listed "$said" commit pr
-  expect_bash listed ask 'git push origin x' 'does not ask for this push'
-done
-for said in "commit now, push after I've reviewed it" "only push once I approve" "commit it and we can push tomorrow" "I didn't ask you to push" "leave the push to me" "commit and push. Actually, don't push" "commit, I won't push" "commit it, push it later" "ill push it" "you shouldnt push this" "commit and push. Actually, don't." "commit and push. No, don't push" "commit and push, no wait, just commit" "commit; tomorrow we push" "I didnt want a push" "commit it, I'll push it myself"; do
-  set_state deferred "$said" commit pr
-  expect_bash deferred ask 'git push origin x' 'does not ask for this push'
-done
-for said in "commit and push. Actually, scratch that" "push, but not yet" "commit it. push it, not now"; do
-  set_state taken "$said" commit pr
-  expect_bash taken ask 'git push origin x' 'does not ask for this push'
-done
-for said in "commit and push. No problem, wait for CI" "Push it. But not until CI passes." "commit and push. Just not yet" "commit and push. Wait, no" "commit and push. Wait wait wait" "commit and push. Wait no, don't push" "commit and push... wait, only commit" "commit and push. nvm, just commit" "commit and push. Cancel that, just commit" "commit and push. Hold on, just commit" "commit and push. I take that back, just commit" "commit and push. Change of plan: just commit" "commit and push. Wait" "you mustnt push this" "push it. Actually no. Actually, just commit" "push it, I'll check first" "commit and push. Not yet." "push the branch. Not until CI passes" "push it, though not yet" "push, scratch that" "commit and push, ignore that" "commit and push. No, wait" "commit and push. Oh wait, no" "push it, not before I approve" "push it, but not until prod is green" "commit and push. Actually, just commit" "push it. Actually, let me look first" "commit and push. Never mind, just commit" "commit and push. On second thought, just commit" "commit and push. Forget that, just commit" "you neednt push" "commit, I wont push" "push it, but not until it's approved" "commit and push, but not to production yet"; do
-  set_state boundary "$said" commit pr
-  expect_bash boundary ask 'git push origin x' 'does not ask for this push'
-done
-for said in "Don't commit yet. Actually, go ahead and commit" "Scratch that last test change, then commit" "Push it. Did the tests pass? Commit too" "commit this, then run the tests without the cache"; do
-  set_state reasked "$said" commit
-  expect_bash reasked allow 'git commit -m x'
-done
-set_state scratched "commit, push, and open a PR. Scratch the PR" commit pr
-expect_bash scratched ask 'gh pr create -t x' 'pull request'
-expect_bash scratched allow 'git push origin x'
-for said in "commit and push. no rush" "commit and push, no rush" "open a PR and push. Then cancel the old PR"; do
-  set_state norush "$said" commit pr
-  expect_bash norush allow 'git push origin x'
-done
-set_state notpr "push and open a PR. Not the PR" pr
-expect_bash notpr ask 'gh pr create -t x' 'pull request'
+# Your latest message. A write runs unless that message says not to, so these
+# all pass, including messages from real sessions that once asked.
+said_allows() { # message, skills, then command pairs: verdict command
+  local msg="$1" skills="$2"; shift 2
+  # shellcheck disable=SC2086
+  set_state said "$msg" $skills
+  while [ "$#" -gt 1 ]; do
+    expect_bash said "$1" "$2"
+    case "$1" in deny) jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'says not to' \
+      || bad "write gate: the deny for '$2' after '$msg' does not say the message said not to" ;; esac
+    shift 2
+  done
+}
+said_allows "commit this" commit allow 'git commit -m x'
+said_allows "tidy up the parser" "commit pr issue" allow 'git commit -m x' allow 'gh pr edit 5 --body-file b.md' allow 'gh label create bug'
+said_allows "Let's review this PR. If anything needs fixing, we'll keep reviewing and fixing until everything is resolved. Then you have my permission to commit, push, and update the PR. After the update, run another code review." "commit pr" \
+  allow 'git commit -m x' allow 'git push origin x' allow 'gh pr edit 5 --body-file b.md'
+said_allows "This PR has conflicts; please resolve them." commit allow 'git commit --no-edit'
+said_allows "Create a dummy env file and retry." commit allow 'git commit -m x'
+said_allows "If everything looks good, commit, open a PR, and run a review on the new PR." "commit pr" allow 'git commit -m x' allow 'gh pr create -t x'
+said_allows "rename the branch and open a PR" pr allow 'git push -u origin feature/x' allow 'gh pr create -t x'
+said_allows "Can you commit this?" commit allow 'git commit -m x'
+said_allows "commit and push when you're done" "commit pr" allow 'git commit -m x' allow 'git push origin x'
+said_allows "Don't forget to push" commit allow 'git push origin x'
+said_allows "commit this, but don't commit the .env file" commit allow 'git commit -m x'
+said_allows "push it, but don't push to main" commit allow 'git push origin x'
+said_allows "the PR is not merged, push the fix" commit allow 'git push origin x'
+said_allows "commit, and don't touch the tests" commit allow 'git commit -m x'
+said_allows "commit. Don't touch the tests" commit allow 'git commit -m x'
+said_allows "Don't stage the lockfile, commit the rest" commit allow 'git commit -m x'
+said_allows "Don't commit yet. Actually, go ahead and commit" commit allow 'git commit -m x'
+said_allows "don't push. Actually, push it" commit allow 'git push origin x'
+said_allows "skip the flaky test, then push" commit allow 'git push origin x'
+said_allows "drop the debug log and push" commit allow 'git push origin x'
+said_allows "commit and push. No rush" commit allow 'git push origin x'
+said_allows "no issues found, commit it" "commit issue" allow 'git commit -m x' allow 'gh issue close 3'
+said_allows "don't merge the PR, just update its description" pr allow 'gh pr edit 5 --body-file b.md'
+said_allows "I'll review it, then push" commit allow 'git push origin x'
+# Said not to: deny, naming that the message said so.
+said_allows "don't commit" commit deny 'git commit -m x'
+said_allows "Don't commit yet" commit deny 'git commit -m x'
+said_allows "please do not commit or push" commit deny 'git commit -m x' deny 'git push origin x'
+said_allows "Don't stage, commit, or push anything" commit deny 'git commit -m x' deny 'git push origin x'
+said_allows "commit, but don't push" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "Don't push yet, just commit" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit and push. Actually, don't push" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit it, push it later" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit it, I'll push it myself" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit, and leave the push to me" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "just commit, hold off on pushing" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit without pushing" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "No need to commit, just push" commit deny 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push, no PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
+said_allows "don't open a PR yet" pr deny 'gh pr create -t x'
+said_allows "commit and push. Never mind the push" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit, push, and open a PR. Scratch the PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
+said_allows "don't close the issue" issue deny 'gh issue close 3'
+said_allows "open the MR, don't push" pr allow 'glab mr create -tfix' deny 'glab mr create --fill' deny 'glab mr create -fy'
+said_allows "open a PR, but don't push" pr deny 'git push origin x' deny 'gh pr create --web'
+# A refusal earlier in the message stands when a later sentence does not name
+# the write again.
+said_allows "Don't push. Actually the CI is green, so commit." commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "Commit but don't push. Actually, also update the README first." commit allow 'git commit -m x' deny 'git push origin x'
+# More ways to refuse, and ways that are not refusals.
+said_allows "Don't ever push" commit deny 'git push origin x'
+said_allows "Do not push under any circumstances" commit deny 'git push origin x'
+said_allows "I don't want you to push" commit deny 'git push origin x'
+said_allows "don't run git push" commit deny 'git push origin x'
+said_allows "Don't push your changes" commit deny 'git push origin x'
+said_allows "don't push before I review" commit deny 'git push origin x'
+said_allows "Hold the push" commit deny 'git push origin x'
+said_allows "Leave that, commit and push." commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "Leave it and push" commit allow 'git push origin x'
+said_allows "Why is it not pushing? Push again." commit allow 'git push origin x'
+said_allows "Can't push? Try again." commit allow 'git push origin x'
+said_allows "no, go ahead and push" commit allow 'git push origin x'
+said_allows "I didn't push it, can you push" commit allow 'git push origin x'
+said_allows "I haven't committed; commit it" commit allow 'git commit -m x'
+said_allows "Don't push. Actually, commit it." commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "Don't commit or push. The bug is actually in the parser, fix it" commit deny 'git commit -m x' deny 'git push origin x'
+said_allows "don't push, I actually want to review it first" commit deny 'git push origin x'
+said_allows "I'm not ready to push yet" commit deny 'git push origin x'
+said_allows "push once I approve" commit deny 'git push origin x'
+said_allows "wait before pushing" commit deny 'git push origin x'
+said_allows "open a PR, but don't you dare push" pr deny 'git push origin x'
+said_allows "I'll open the PR myself, just push" "commit pr" deny 'gh pr create -t x' allow 'git push origin x'
+said_allows "no PR needed" pr deny 'gh pr create -t x'
+said_allows "Don't commit your changes" commit deny 'git commit -m x'
+said_allows "wait for CI, then push" commit allow 'git push origin x'
+said_allows "don't push. Wait for CI, then commit" commit deny 'git push origin x' allow 'git commit -m x'
+said_allows "commit, push and wait." commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "I want you to push" commit allow 'git push origin x'
+said_allows "I want to commit and push" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "I meant push" commit allow 'git push origin x'
+said_allows "commit and push; wait" commit allow 'git push origin x'
+said_allows "no you need to push" commit allow 'git push origin x'
+said_allows "no, I want you to commit" commit allow 'git commit -m x'
+said_allows "push, then let me know what failed first" commit allow 'git push origin x'
+said_allows "don't push the commit" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "Don't push yet, okay?" commit deny 'git push origin x'
+said_allows "Don't push - CI is broken" commit deny 'git push origin x'
+said_allows "Don't push, why did CI fail?" commit deny 'git push origin x'
+said_allows "Don't push yet. I'll tell you when to push." commit deny 'git push origin x'
+said_allows "No need for an issue" issue deny 'gh issue create -t x -F b.md'
+said_allows "refrain from pushing" commit deny 'git push origin x'
+said_allows "I'll handle the push" commit deny 'git push origin x'
+# Asks with a negation or a question in them, and more plain refusals.
+said_allows "Why don't you commit and push, then?" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "Why not push it, then?" commit allow 'git push origin x'
+said_allows "Commit this, but don't push --force" commit allow 'git push origin x'
+said_allows "Don't ask, push" commit allow 'git push origin x'
+said_allows "don't do anything else, push" commit allow 'git push origin x'
+said_allows "There's no PR yet, open one" pr allow 'gh pr create -t x'
+said_allows "Push it and wait, just in case CI is slow" commit allow 'git push origin x'
+said_allows "Don't create or update the PR" pr deny 'gh pr create -t x'
+said_allows "commit and push, then let me see the first CI run" commit allow 'git push origin x'
+said_allows "We shouldnt push yet" commit deny 'git push origin x'
+said_allows "I wont push it" commit deny 'git push origin x'
+said_allows "Do not touch the PR" pr deny 'gh pr edit 5 --body-file b.md'
+said_allows "Can you push this?" commit allow 'git push origin x'
+said_allows "commit and push, no rush" commit allow 'git push origin x'
+# Round 4 of the review: asks that once read as refusals, and plain no's.
+said_allows "don't change anything and push" commit allow 'git push origin x'
+said_allows "don't touch it and commit it" commit allow 'git commit -m x'
+said_allows "don't ask and push" commit allow 'git push origin x'
+said_allows "it didn't push, push again" commit allow 'git push origin x'
+said_allows "You didn't push - push now" commit allow 'git push origin x'
+said_allows "Not committed yet - commit it" commit allow 'git commit -m x'
+said_allows "$(printf 'It is not pushed \342\200\224 push it')" commit allow 'git push origin x'
+said_allows "the hook won't let me push, you push" commit allow 'git push origin x'
+said_allows "there's no need to push" commit deny 'git push origin x'
+said_allows "commit with no push" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "don't push till CI passes" commit deny 'git push origin x'
+said_allows "don't update the PR description" pr allow 'gh pr edit 5 --body-file b.md'
+said_allows "skip the PR and push" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
+said_allows "drop the commit and push" commit allow 'git push origin x'
+said_allows "no PR, push it" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
+said_allows "don't update the pr, push" "commit pr" allow 'git push origin x'
+said_allows "without committing, push" commit allow 'git push origin x' deny 'git commit -m x'
+said_allows "don't push. push it later" commit deny 'git push origin x'
+said_allows "Don't push, push later" commit deny 'git push origin x'
+said_allows "I don't want a PR" pr deny 'gh pr create -t x'
+said_allows "Make sure not to push" commit deny 'git push origin x'
+said_allows "do not create a PR for this" pr deny 'gh pr create -t x'
+said_allows "don't push for now" commit deny 'git push origin x'
+said_allows "commit it. staging is down, so don't use staging" commit allow 'git commit -m x'
+said_allows "don't push these changes" commit deny 'git push origin x'
+# A fact about a write is not a no, and an ask after one counts.
+said_allows "The branch wasn't pushed, I need you to push it" commit allow 'git push origin x'
+said_allows "It's not pushed. I want you to push it." commit allow 'git push origin x'
+said_allows "it didn't push, retry the push" commit allow 'git push origin x'
+said_allows "We never pushed this, please go ahead" commit allow 'git push origin x'
+said_allows "I can't push, you push it" commit allow 'git push origin x'
+said_allows "I didn't push it, can you push?" commit allow 'git push origin x'
+said_allows "Push it if it's not pushed" commit allow 'git push origin x'
+said_allows "commit whatever isn't committed yet" commit allow 'git commit -m x'
+said_allows "We have no PR yet, open one" pr allow 'gh pr create -t x'
+said_allows "Don't edit the PR title, update the PR description" pr allow 'gh pr edit 5 --body-file b.md'
+said_allows "Scrap this PR and open a new PR" pr allow 'gh pr create -t x'
+said_allows "Commit this; I don't need a PR yet" "commit pr" allow 'git commit -m x' deny 'gh pr create -t x'
+said_allows "Push it, but I'll do the PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
+said_allows "Don't file an issue for this" issue deny 'gh issue create -t x -F b.md'
+said_allows "We won't push today" commit deny 'git push origin x'
+said_allows "Don't open a PR; Sam will open the PR" pr deny 'gh pr create -t x'
+said_allows "Don't push; CI will retry the push" commit deny 'git push origin x'
+said_allows "don't push - every time you push CI breaks" commit deny 'git push origin x'
+said_allows "don't commit and push" commit deny 'git commit -m x' deny 'git push origin x'
+said_allows "you can't push this" commit deny 'git push origin x'
+said_allows "still no push, please" commit deny 'git push origin x'
+said_allows "it won't commit. fix the hook and commit" commit allow 'git commit -m x'
+said_allows "it did not push" commit allow 'git push origin x'
+said_allows "why don't you push it then" commit allow 'git push origin x'
+said_allows "I'll leave it to you to push" commit allow 'git push origin x'
+said_allows "whether or not you push it today, commit first. Actually push it too" commit allow 'git push origin x'
+said_allows "I'll need you to push this" commit allow 'git push origin x'
+said_allows "I'll want you to push it after the commit" commit allow 'git push origin x'
+said_allows "it won't push, can you retry" commit allow 'git push origin x'
+said_allows "it's not pushing, try again" commit allow 'git push origin x'
+said_allows "Don't push yet. OK, now try to push" commit allow 'git push origin x'
+said_allows "don't forget the PR" pr allow 'gh pr create -t x'
+said_allows "you can't push this yet" commit deny 'git push origin x'
+said_allows "this is not ready to commit" commit deny 'git commit -m x'
+said_allows "this won't need a PR" pr deny 'gh pr create -t x'
+said_allows "Commit the parser fix, don't stage anything else" commit allow 'git commit -m x'
+said_allows "no PR and push it" "commit pr" allow 'git push origin x'
+said_allows "commit without staging and push" commit allow 'git push origin x'
+said_allows "Push it, and if you can't push, tell me why" commit allow 'git push origin x'
+said_allows "Don't open a PR. Later open the PR" pr allow 'gh pr create -t x'
+said_allows "ok, why not push it" commit allow 'git push origin x'
+said_allows "Still no PR, open it" pr allow 'gh pr create -t x'
+said_allows "Don't push yet. OK, go push" commit allow 'git push origin x'
+said_allows "Don't push. Actually let's push" commit allow 'git push origin x'
+said_allows "don't push until CI passes. It passed, you should push now" commit allow 'git push origin x'
+said_allows "No PR yet - open one" pr allow 'gh pr create -t x'
+said_allows "no issue yet; file it" issue allow 'gh issue create -t x -F b.md'
+said_allows "Don't open a new PR, update the existing PR" pr allow 'gh pr edit 5 --body-file b.md'
+said_allows "leave the PR alone" pr deny 'gh pr edit 5 --body-file b.md'
+said_allows "it did not even push, try again" commit allow 'git push origin x'
+said_allows "Don't open a PR. The PR template is broken." pr deny 'gh pr create -t x'
+said_allows "Don't file an issue. I already filed the issue." issue deny 'gh issue create -t x -F b.md'
+said_allows "Don't push yet. The branch protection blocks pushes." commit deny 'git push origin x'
+said_allows "Thanks. Don't open the PR, the PR title is wrong" pr deny 'gh pr create -t x'
+said_allows "Don't open a PR. I'll tell you when to open the PR" pr deny 'gh pr create -t x'
+said_allows "you can't commit and push yet" commit deny 'git push origin x'
+said_allows "don't push until I say you should push" commit deny 'git push origin x'
+said_allows "No PR, never open one" pr deny 'gh pr create -t x'
+said_allows "Don't push now; later pushes will handle it" commit deny 'git push origin x'
+said_allows "No PR yet. Let's open one" pr allow 'gh pr create -t x'
+said_allows "no issue yet for this, file one" issue allow 'gh issue create -t x -F b.md'
+said_allows "Don't open the PR. I want to review the PR first." pr deny 'gh pr create -t x'
+said_allows "Don't push. We push on Fridays." commit deny 'git push origin x'
+said_allows "don't push. I push after review." commit deny 'git push origin x'
+said_allows "Don't push. The push hook is broken." commit deny 'git push origin x'
+said_allows "don't push yet. ok we can push now" commit allow 'git push origin x'
+said_allows "don't push yet! jk push it" commit allow 'git push origin x'
+said_allows "Don't push. Wait, actually push" commit allow 'git push origin x'
+said_allows "don't push. on second thought push it" commit allow 'git push origin x'
+said_allows "don't commit. Ok actually commit" commit allow 'git commit -m x'
+said_allows "don't push. I want to push it myself" commit deny 'git push origin x'
+# A takeback, a wait or a condition is left to the skills, which read meaning:
+# the hook lets these run, and eng:commit and eng:pr hold back what was taken
+# back.
+said_allows "commit and push. Scratch that" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push. Actually, just commit" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push. Never mind, just commit" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push, no wait, just commit" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push. Wait, only commit" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push. Actually, don't" commit allow 'git commit -m x' allow 'git push origin x'
+said_allows "commit and push, but let me review first" commit allow 'git push origin x'
+said_allows "commit and push. Not yet" commit allow 'git push origin x'
+said_allows "push it, but not until CI passes" commit allow 'git push origin x'
+said_allows "commit and push. Wait, don't" commit allow 'git push origin x' allow 'git commit -m x'
+said_allows "Commit and push. Actually, hold off." commit allow 'git push origin x'
+said_allows "Commit and push. Never mind, I'll do it myself." commit allow 'git push origin x'
+said_allows "Commit and push. Hold on." commit allow 'git push origin x'
+said_allows "Commit and push, but let me take a look first" commit allow 'git push origin x'
+said_allows "commit and push, but let me look at the diff, first" commit allow 'git push origin x'
+said_allows "Commit and push. Wait." commit allow 'git push origin x'
+said_allows "Push it. Hmm, wait." commit allow 'git push origin x'
+said_allows "Wait for CI before you push" commit allow 'git push origin x'
+said_allows "Wait until I review before pushing" commit allow 'git push origin x'
+said_allows "Push? No, just commit." commit allow 'git push origin x' allow 'git commit -m x'
+said_allows "Could you not push yet?" commit allow 'git push origin x'
+said_allows "Can you hold off on the push?" commit allow 'git push origin x'
 set_state all "commit, push, open the PR and file the issue" commit pr issue
 bash_call all 'git push -o tag origin main'
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'push options' \
@@ -295,136 +510,19 @@ jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'f
 bash_call all 'git push -fo ci.skip origin main'
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'forces' \
   || bad "push options: -fo was not read as a forced push"
-for said in "commit and push. Cancel the push" "commit and push. Forget pushing" "commit and push. Never mind the push. Open the PR" "commit and push. Don't push." "commit and push. No push." "commit and push. Hold the push." "commit and push. I'll push." "Push it. Tomorrow though." "Push it. Hmm, not yet." "push it when the tests pass" "push it, nope" "Commit and push. Actually, just push. Actually, just commit" "commit, push. Never mind the push"; do
-  set_state lastword "$said" commit pr
-  expect_bash lastword ask 'git push origin x' 'does not ask for this push'
-done
-for said in "let me know when you're ready to push" "commit and push but let me review first" "commit and push, but let me run the tests first" "push it. Let me think." "commit and push. Stop." "Push it. Give CI a minute first." "commit but hold on pushing" "commit and push but hold on the push" "push when we've reviewed it" "push when approved" "commit, and push when green" "commit and push, but hold for now" "commit, push on hold" "commit, maybe push" "commit, ideally push too" "commit and push. Hang on." "commit and push. One sec." "commit and push. Give me a minute." "push it. Disregard that." "Push it. Then again, maybe not." "push it when the CI is green" "maybe push it" "commit and push. Hold pushing" "commit and push. Cancel pushing." "commit and push. Forget about pushing." "Push it. OK but not yet." "Push it. Let's hold off." "Push it. I'd rather wait." "commit and push. Let me review the diff first." "Push it. Let's wait for CI." "push it in a bit" "commit and push. Scrap the push"; do
-  set_state later2 "$said" commit pr
-  expect_bash later2 ask 'git push origin x' 'does not ask for this push'
-done
-for said in "commit, push and open a PR. Forget about the PR." "commit, push and open a PR. Never mind about the PR." "commit, push and open a PR. Drop the PR."; do
-  set_state droppr "$said" commit pr
-  expect_bash droppr ask 'gh pr create -t x' 'pull request'
-  expect_bash droppr allow 'git push origin x'
-done
-set_state refusedpr "Don't push. Open a PR" pr
-expect_bash refusedpr ask 'git push origin x' 'does not ask for this push'
-# "Ping me when" and "when you're done" time the report, not the write.
-set_state whenup "open a PR and ping me when it is up" pr
-expect_bash whenup allow 'gh pr create -t x'
-for said in "commit the current changes and push" "I want you to commit and push" "commit and push when you're done" "Can you commit and push this when you're done" "drop the debug log and push" "skip the flaky test, then push" "let's push this" "you should push this" "commit and push. Better safe than sorry" "push it. Let me know when it's done" "cancel the previous build and push" "drop the prints and push"; do
-  set_state plain "$said" commit pr
-  expect_bash plain allow 'git push origin x'
-done
-set_state cancelold "open a PR and push. Then cancel the old PR" pr
-expect_bash cancelold allow 'gh pr create -t x'
-set_state remembered "remember to commit" commit
-expect_bash remembered allow 'git commit -m x'
-set_state aswell "commit this as well" commit
-expect_bash aswell allow 'git commit -m x'
 expect_bash none allow 'git commit -h'
 expect_bash none deny 'gh pr new --title x' 'eng:pr'
 expect_bash none deny 'gh issue new --title x' 'eng:issue'
 expect_bash none deny 'gt submit' 'eng:'
 hook_run pre-tool '{"session_id": "none", "tool_name": "mcp__github__create_issue", "tool_input": {}}'
 [ "$(verdict)" = deny ] || bad "write gate: a GitHub MCP issue write without eng:issue was not denied"
-# Loaded, but the message did not ask: ask.
-set_state quiet "tidy up the parser" commit pr issue
-expect_bash quiet ask 'git commit -m x' 'does not ask for this commit'
-expect_bash quiet ask 'gh pr edit 5 --body-file b.md' 'pull request'
-expect_bash quiet ask 'gh label create bug' 'issue'
-# Loaded and asked: allow. A word inside another word does not count.
-set_state asked "Commit this, please" commit
-expect_bash asked allow 'git commit -m x'
-expect_bash asked ask 'git push origin feature/x' 'does not ask for this push'
-set_state approve "approve the plan" pr
-expect_bash approve ask 'gh pr create --title x --body-file b.md'
-set_state negated "Don't push yet, just commit" commit pr
-expect_bash negated allow 'git commit -m x'
-expect_bash negated ask 'git push origin x' 'does not ask for this push'
-set_state stopping "stop committing, and before committing run the tests" commit
-expect_bash stopping ask 'git commit -m x' 'does not ask for this commit'
-set_state nopush "don't push yet, I'm reviewing it" commit
-expect_bash nopush ask 'git commit -m x' 'does not ask for this commit'
-set_state pushthis "push this branch" commit
-expect_bash pushthis allow 'git commit -m x'
 expect_bash none deny 'glab mr create --fill --push' 'eng:'
 expect_bash none deny 'glab label create bug' 'eng:issue'
 expect_bash none deny 'glab -R a/b mr create --fill' 'eng:pr'
 expect_bash none deny 'glab -Ra/b mr create' 'eng:pr'
 expect_bash none deny 'glab mr -R a/b create --fill' 'eng:pr'
 expect_bash none deny 'glab --repo=a/b mr create' 'eng:pr'
-# The last clause that names the push decides, so these ask: a prompt, by
-# design, rather than a guess at which push was meant.
-for said in "commit and push, but run the tests before pushing" "push it, but don't push to main"; do
-  set_state saidpush "$said" commit pr
-  expect_bash saidpush ask 'git push origin x' 'does not ask for this push'
-done
-set_state mr "open the MR" pr
-expect_bash mr allow 'glab mr create'
-expect_bash mr allow 'git push origin x'
-set_state mrquiet "tidy up" pr
-expect_bash mrquiet ask 'glab mr create -f' 'push'
-set_state remind "don't forget to push" commit
-expect_bash remind allow 'git push origin x'
-set_state ordered "before you push, open the pr" pr
-expect_bash ordered ask 'git push origin x' 'does not ask for this push'
-for said in "please don't commit or push" "I'm not ready to push yet" "don't want to push this" "don't run git push" "don't push, I'll push it myself"; do
-  set_state refusing "$said" commit pr
-  expect_bash refusing ask 'git push origin x' 'does not ask for this push'
-done
-set_state stageless "do not stage anything, push" commit
-expect_bash stageless ask 'git commit -m x' 'does not ask for this commit'
-# A clause that holds back in any way, even "I'll need a PR", asks: the rule
-# errs toward a prompt.
-set_state needpr "I'll need a PR for this" pr
-expect_bash needpr ask 'gh pr create -t x' 'pull request'
-for said in "commit, I'll handle the push" "commit, I won't push yet" "just commit, hold off on pushing" "why did the push fail?"; do
-  set_state held "$said" commit pr
-  expect_bash held ask 'git push origin x' 'does not ask for this push'
-done
-set_state mine "I'll open the PR myself, just push" commit pr
-expect_bash mine ask 'gh pr create -t x' 'pull request'
-expect_bash mine allow 'git push origin x'
-for said in "push it; I'm checking CI" "push it, multistage build is fixed"; do
-  set_state checking "$said" commit
-  expect_bash checking allow 'git commit -m x'
-done
-set_state update "push and create MR" pr
-expect_bash update allow 'glab mr create'
-set_state notyet "don't open a pr yet" pr
-expect_bash notyet ask 'gh pr create --title x' 'pull request'
-set_state dare "open a PR, but don't you dare push" pr
-expect_bash dare ask 'git push origin x' 'does not ask for this push'
-set_state raise "raise MR for this" pr
-expect_bash raise allow 'glab mr create'
-set_state titled "open the MR, don't push" pr
-expect_bash titled allow 'glab mr create -tfix'
-expect_bash titled ask 'glab mr create -t "-Rework" --fill' 'does not ask for this push'
-expect_bash titled ask 'glab mr create -fb main' 'does not ask for this push'
-set_state honorific "ask Mr Smith about the bug" pr
-expect_bash honorific ask 'gh pr create --title x' 'pull request'
-set_state pushing "pushing is fine" commit
-expect_bash pushing allow 'git push origin x'
-set_state mronly "open an MR, but don't push" pr
-expect_bash mronly ask 'glab mr create --fill' 'does not ask for this push'
-expect_bash mronly ask 'glab mr create -fy' 'does not ask for this push'
-set_state pushonly "No need to commit, just push" commit pr
-expect_bash pushonly ask 'git commit -m x' 'does not ask for this commit'
-set_state committing "committing is fine" commit
-expect_bash committing allow 'git commit -m x'
 expect_bash none deny 'glab mr create --fill' 'eng:pr'
-set_state reminder "Don't forget to commit" commit
-expect_bash reminder allow 'git commit -m x'
-set_state stophere "stop here and commit what you have" commit
-expect_bash stophere ask 'git commit -m x' 'does not ask for this commit'
-set_state checkin "check it in" commit
-expect_bash checkin allow 'git commit -m x'
-set_state labelled "fix the label alignment" issue
-expect_bash labelled ask 'gh label delete old' 'issue'
-set_state feedback "use eng:pr-feedback on these comments" pr
-expect_bash feedback ask 'gh pr edit 5 --body-file b.md'
 set_state pushed "open a PR for this" pr
 expect_bash pushed allow 'git push -u origin feature/x'
 expect_bash pushed allow 'gh pr create --title x --body-file b.md'
@@ -433,12 +531,12 @@ expect_bash pushed ask 'git push --force-with-lease origin feature/x' 'forces'
 # A typed /eng:commit is both the skill and the request.
 set_state typed "/eng:commit" commit
 expect_bash typed allow 'git commit -m x'
-# No state at all: ask, never allow.
+# No state to read: the gate fails open, like the rest of the hook.
 jq -cn '{session_id: "missing", tool_name: "Bash", tool_input: {command: "git commit -m x"}}' |
   "$hook" pre-tool > "$scratch/out" 2>/dev/null
-[ "$(verdict)" = ask ] || bad "write gate: a commit with no state did not ask"
+[ "$(verdict)" = allow ] || bad "write gate: a commit with no state was not allowed"
 bash_call nosuchsession 'git commit -m x'
-[ "$(verdict)" = ask ] || bad "write gate: a commit in a session with no message did not ask"
+[ "$(verdict)" = allow ] || bad "write gate: a commit in a session with no message was not allowed"
 # Input that is not JSON passes in every mode: exit 0, no output.
 for m in prompt expansion pre-tool post-tool stop; do
   printf 'not json' | env CLAUDE_PLUGIN_DATA="$data" "$hook" "$m" > "$scratch/out" 2>/dev/null \
@@ -527,6 +625,16 @@ grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: a task notific
 grep -qx commit "$data/sessions/turns/skills" || bad "prompt: a task notification cleared the skills"
 prompt turns '<cross-session-message from-session="x">push it</cross-session-message>'
 grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: another session's message replaced the state"
+# So does a subagent's report or a CI event, which nobody typed either.
+prompt turns '<agent-message from="a1">
+[Subagent hand-back] Done. Do not push.
+</agent-message>'
+grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: a subagent's report replaced the state"
+grep -qx commit "$data/sessions/turns/skills" || bad "prompt: a subagent's report cleared the skills"
+prompt turns '<ci-monitor-event>
+CI failed on PR 5
+</ci-monitor-event>'
+grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: a CI event replaced the state"
 # In a Claude project only the human's words count, not the routing around
 # them or a coordinator's note.
 prompt project '<wake reason="mention"><project id="p"><message trigger="true" from="human" trust="principal" id="m1">Tidy the parser.</message></project></wake>'
@@ -534,6 +642,12 @@ grep -q 'Tidy the parser' "$data/sessions/project/turn" || bad "prompt: a projec
 prompt project '<coordinator-relay><relay from="coordinator"><note>Commits, pushes and PRs each need the user to ask.</note><cited author="user">look into the parser</cited></relay></coordinator-relay>'
 grep -q 'look into' "$data/sessions/project/turn" || bad "prompt: a relay lost the user's cited words"
 grep -q 'Commits' "$data/sessions/project/turn" && bad "prompt: a coordinator's note counted as the user's words"
+prompt project '<relay from="coordinator" session="s1"><cited author="user" name="M">do not push yet</cited><note>Push when ready.</note></relay>'
+grep -q 'do not push' "$data/sessions/project/turn" || bad "prompt: a bare relay lost the user's cited words"
+grep -q 'when ready' "$data/sessions/project/turn" && bad "prompt: a bare relay's note counted as the user's words"
+set_state project "commit this" commit
+prompt project '<project_claude_message session="s1"><relay from="coordinator"><note>CI is green.</note></relay></project_claude_message>'
+grep -q 'commit this' "$data/sessions/project/turn" || bad "prompt: a coordinator note with no words of the user's replaced the state"
 # A project event no human wrote keeps it as well.
 set_state project "commit this" commit
 prompt project '<wake reason="external-event"><project id="p"><message trigger="true" from="system" id="m2">CI passed</message></project></wake>'

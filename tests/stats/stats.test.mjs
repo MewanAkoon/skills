@@ -47,7 +47,9 @@ test('counts each week of forks, resumes, a subagent and a compaction', () => {
   // The PR came in a turn a task notification started, after a bare /compact.
   assert.equal(first.unaskedWriteTurns, 1);
   assert.equal(first.subagentWrites, 1);
-  assert.equal(first.commitsWithoutSkill, 2);
+  // p1 loaded eng:commit, which stays in context for the family's later
+  // turns, across the compaction too, so no commit came without it.
+  assert.equal(first.commitsWithoutSkill, 0);
   assert.equal(first.prWritesWithoutSkill, 1);
   assert.equal(first.posts, 2);
   assert.equal(first.anotherPass, 1);
@@ -83,7 +85,8 @@ test('counts each week of forks, resumes, a subagent and a compaction', () => {
   // commit. "push" covers the commit made before it.
   assert.equal(second.unaskedWriteTurns, 1);
   assert.equal(second.approvedWriteTurns, 1);
-  assert.equal(second.commitsWithoutSkill, 2);
+  // s2 resumes s1, whose p1 loaded eng:commit, so only s3's commit lacks it.
+  assert.equal(second.commitsWithoutSkill, 1);
   assert.equal(second.anotherPass, 1);
   assert.equal(second.draftRequests, 1);
   // Its turn only sent output to /dev/null.
@@ -105,7 +108,44 @@ test('totals count sessions and families once across weeks', () => {
 });
 
 test('with no flags it reads every transcript up to today', () => {
-  assert.equal(json([]).totals.typed, 21);
+  assert.equal(json([]).totals.typed, 58);
+});
+
+test('reads what you typed mid-turn, and what a request word means', () => {
+  // proj-e: a commit in the turn that loads eng:commit and one in the next
+  // turn, which has it already. A push asked for in a message typed while its
+  // turn ran, beside a meta wake, a task notification, and an interrupt
+  // marker, none of them typed. Then pushes after "don't push yet" and a
+  // second marker, after "pushback" and "postgres", after "pushed", and after
+  // "don't forget to push" beside a queued message from a peer, not typed.
+  // The next week, gh secret set after a message naming only a description,
+  // with a queued message that carries no origin, typed as a user entry with
+  // none would be. Then a push after "commit it without pushing". The week
+  // after, pushes after "don't wait for CI before you push" and "don't ever
+  // forget to push", and a commit after "don't hesitate to commit", which
+  // all ask for one. Last, pushes after "commit it without forgetting to
+  // push", which asks, and after "don't stop the server or push anything" and
+  // "don't push yet - wait for CI", which do not. The week after, pushes
+  // after "don't wait to push", "don't you forget to push" and a negation
+  // that an em dash ends before "push the fix", which all ask. Then "never
+  // use --force or push to main", which does not, and "don't merge - push
+  // it", which does. The week after, "commit it without waiting to push",
+  // which leaves the push for later, "don't merge -- push it", "no need to
+  // wait to push" and "no need to keep waiting to push", which ask, and "he
+  // never waits to push, so commit only", which reports and does not ask.
+  // Then "don't wait for CI to push", "don't bother waiting to push", "don't
+  // waste time waiting to push", "don't wait for the CI run to push" and
+  // "don't wait for GitHub Actions to push", which ask, and "don't wait for
+  // me to push" and "don't bother to push", which do not. Last, commits after
+  // "check it in" and "check in the changes", which ask, and after "just
+  // checking in, how is it going?", which does not.
+  const { totals, weeks } = json(['--project', 'proj-e']);
+  assert.equal(totals.typed, 37);
+  assert.equal(totals.writeTurns, 35);
+  assert.deepEqual(weeks.map((w) => w.unaskedWriteTurns), [2, 2, 0, 2, 1, 5]);
+  assert.equal(totals.approvedWriteTurns, 0);
+  assert.equal(totals.commitsWithoutSkill, 0);
+  assert.deepEqual(totals.writes, { commit: 7, push: 28, api: 1 });
 });
 
 test('a window with no end runs to today, so quiet weeks still count', () => {
@@ -191,9 +231,13 @@ test('a saved window with no end records the day it ran', () => {
 });
 
 test('--project keeps only matching project folders', () => {
-  const { totals } = json([...july, '--project', 'proj-b']);
+  const { totals, weeks } = json([...july, '--project', 'proj-b']);
   assert.equal(totals.typed, 3);
   assert.deepEqual(totals.writes, { issue: 1, commit: 1, push: 1 });
+  // The hook log names no project, so its errors cannot be kept to one.
+  assert.equal(totals.hookErrors, null);
+  assert.ok(weeks.every((w) => w.hookErrors === null));
+  assert.match(run([...july, '--project', 'proj-b']), /Hook errors\s+n\/a/);
 });
 
 test('--save writes the JSON and --compare reads it back', () => {
@@ -214,13 +258,16 @@ test('--save writes the JSON and --compare reads it back', () => {
     saved.version = 1;
     fs.writeFileSync(file, JSON.stringify(saved));
     const drift = run([...july, '--compare', file]);
-    assert.match(drift, /version 1 there and 2 here/);
+    assert.match(drift, /version 1 there and 3 here/);
     assert.match(drift, /definitions changed: typed;/);
     assert.match(drift, /counts are new: posts;/);
     assert.match(drift, /counts are gone: retired\./);
     assert.match(json([...july, '--compare', file]).baseline.drift, /typed/);
     // A file with no saved totals is refused.
     fs.writeFileSync(file, '{}');
+    assert.throws(() => run([...july, '--compare', file]), /holds no saved totals/);
+    // So is one whose totals lack the writes every headline row reads.
+    fs.writeFileSync(file, JSON.stringify({ totals: { typed: 1 } }));
     assert.throws(() => run([...july, '--compare', file]), /holds no saved totals/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -460,6 +507,116 @@ const CASES = [
   ['sudo -u git GIT_DIR=/tmp/x/.git git push', '/repo', 'push*'],
   ["git commit -m x # it's\nfor d in a; do git init /r/$d; git -C /r/$d commit -m y; done; echo 'z'", '/repo', 'commit commit*'],
   ['case x in a) : ;; esac.d) cd /tmp/x ;; esac; git push', '/repo', 'push'],
+  // The temporary directory itself is scratch, not only what sits under it.
+  ['cd /tmp; git init; git commit -m x', '/repo', 'commit*'],
+  ['git push', '/private/var/folders', 'push*'],
+  ['git push', '/tmpfoo', 'push'],
+  // Only a POST on a comment path is a post. Removing or editing one is not.
+  ['gh api -X DELETE repos/o/r/issues/comments/1', '', 'api'],
+  ['gh api --method PATCH repos/o/r/pulls/comments/1 -f body=x', '', 'api'],
+  ['gh api repos/o/r/issues/1/comments -f body=x', '', 'post'],
+  // git or gh named by a path, or run through a shell's -c.
+  ['/usr/bin/git push', '/repo', 'push'],
+  ['bash -c "git push"', '/repo', 'push'],
+  ["sh -c 'cd /tmp/x && git commit -m y'", '/repo', 'commit*'],
+  ['bash -c "git status"', '/repo', ''],
+  ['bash -c "cd $(mktemp -d) && git init && git commit -m x"', '/repo', 'commit*'],
+  // The outer shell fills in its variables in double quotes, and the inner
+  // one inherits what it exported. A -c after a script's name is the
+  // script's.
+  ['D=$(mktemp -d); bash -c "cd $D && git init && git commit -m x"', '/repo', 'commit*'],
+  ["export GIT_DIR=/tmp/x/.git; bash -c 'git push'", '/repo', 'push*'],
+  ["D=/tmp/x; bash -c 'cd $D && git push'", '/repo', 'push'],
+  ['bash -o pipefail -c "git push"', '/repo', 'push'],
+  ["bash deploy.sh -c 'gh release create v1'", '/repo', ''],
+  ['bash -O extglob -c "git push"', '/repo', 'push'],
+  ["bash --rcfile f -c 'git push'", '/repo', 'push'],
+  ['bash -c -- "git push"', '/repo', 'push'],
+  ["sh -- -c 'git push'", '/repo', ''],
+  ["D=/tmp/x bash -c 'cd $D && git push'", '/repo', 'push*'],
+  ['D=/tmp/x; bash -c "cd ${D:-/r} && git push"', '/repo', 'push*'],
+  ['export D=/tmp/x; bash -c "cd \\$D && git push"', '/repo', 'push*'],
+  ['D=/tmp/x; bash -c "cd \\$D && git push"', '/repo', 'push'],
+  // Options after -c, and a group holding o, which takes the next word.
+  ['bash -euo pipefail -c "git push"', '/repo', 'push'],
+  ['bash -c -e "git push"', '/repo', 'push'],
+  ["bash -ec 'git push'", '/repo', 'push'],
+  ["bash -oc pipefail 'git push'", '/repo', 'push'],
+  ["bash -oO pipefail extglob -c 'git push'", '/repo', 'push'],
+  ["set -ox allexport; D=/tmp/x; bash -c 'cd $D && git push'", '/repo', 'push*'],
+  // In double quotes the outer shell expands before the line's assignments
+  // exist, so $D is empty there; in single quotes the inner shell has it.
+  ['D=/tmp/x bash -c "cd $D && git push"', '/repo', 'push'],
+  ['D=/r; D=/tmp/x bash -c "cd $D && git push"', '/repo', 'push'],
+  // There the outer shell still has its own TMPDIR, and an unset name takes
+  // its fallback.
+  ['TMPDIR=/x bash -c "cd $TMPDIR && git push"', '/repo', 'push*'],
+  ['D=/r bash -c "cd ${D-/tmp/y} && git push"', '/repo', 'push*'],
+  // Single quotes keep $D as written.
+  ["D=/tmp/x; cd '$D' && git push", '/repo', 'push'],
+  // A word is read part by part, and a value filled in is not read again.
+  ['D=/tmp/x; cd \'\'"$D" && git push', '/repo', 'push*'],
+  ["D='$TMPDIR'; cd ${D:-/r} && git push", '/repo', 'push'],
+  ['cd ${toString-/tmp/x} && git push', '/repo', 'push*'],
+  // A fallback is read as a word of its own, quotes and variables too.
+  ['cd ${D:-$TMPDIR/x} && git push', '/repo', 'push*'],
+  ['cd ${D:-"/tmp/x"} && git push', '/repo', 'push*'],
+  ['E=/tmp/q; cd "${D:-$E}" && git push', '/repo', 'push*'],
+  // A backslash before a newline joins the lines, in double quotes too.
+  ['cd "/t\\\nmp/x" && git push', '/repo', 'push*'],
+  ['cd /t\\\nmp/x && git push', '/repo', 'push*'],
+  ['D="/t\\\nmp/x"; cd $D && git push', '/repo', 'push*'],
+  ['bash -c "cd /tmp/x && \\\ngit push"', '/repo', 'push*'],
+  ['cd /tmp/x && \\\n  git init && \\\n  git commit -m x', '/repo', 'commit*'],
+  ['git \\\n  push', '/repo', 'push'],
+  // An escaped space keeps a path whole.
+  ['git -C /tmp/my\\ dir push', '/repo', 'push*'],
+  // Not at the end of a comment. Quotes are followed across lines and into
+  // $( ), so a # inside a string opens none.
+  ['cd /tmp/x && git commit -m "$(echo "it\'s done")" && \\\n git push', '/repo', 'commit* push*'],
+  ['cd /tmp/x && echo a\\\n#b && \\\n git push', '/repo', 'push*'],
+  // Single quotes keep one. A # inside a string over several lines, or after
+  // an escaped space, opens no comment; one after ; does.
+  ["cd '/t\\\nmp/x' && git push", '/repo', 'push'],
+  ['git commit -m "Close\n#12 done" && git \\\n push', '/repo', 'commit push'],
+  ['echo a\\ #x && git \\\n push', '/repo', 'push'],
+  ['git status;# x <<EOF\ngit push\nEOF', '/repo', 'push'],
+  // In $'...' a backslash escapes a quote.
+  ["git commit -m $'It\\'s done' && git push", '/repo', 'commit push'],
+  ["echo $'a #b\\'' && git \\\n push", '/repo', 'push'],
+  ["X=$'a\\'b' git push", '/repo', 'push'],
+  ["cd $'/tm\\x70/x' && git push", '/repo', 'push*'],
+  ["cd $'/tm\\u0070/x' && git push", '/repo', 'push*'],
+  // A backslash before the first $ leaves the next one to open $'...'.
+  ["echo \\$$'a\\'b' && git push", '/repo', 'push'],
+  ["echo \\$'a\\' && git push", '/repo', 'push'],
+  // An escape past the last code point is kept, not thrown on.
+  ["cd $'\\UFFFFFFFF' && git push", '/repo', 'push'],
+  // $$ is the process id, and the ' after it opens a plain string.
+  ["echo $$'a\\' && git push", '/repo', 'push'],
+  ['# tidy up \\\ngit push', '/repo', 'push'],
+  ['git status # \\\ngit commit -m x', '/repo', 'commit'],
+  // An escaped quote is one character of its word, so the idiom that puts a
+  // quote inside single quotes keeps the string whole.
+  ["bash -c 'git commit -m \"it'\\''s done\" && git push'", '/repo', 'commit push'],
+  // A $(mktemp) in a bash -c string runs in the inner shell, from where it
+  // has moved to.
+  ["bash -c 'cd /tmp/a && cd $(mktemp -d -p .) && git init && git commit -m x'", '/repo', 'commit*'],
+  // The string bash -c runs is read part by part as well.
+  ['D=/tmp/x; bash -c \'\'"cd $D && git push"', '/repo', 'push*'],
+  ["set -oo pipefail allexport; D=/tmp/x; bash -c 'cd $D && git push'", '/repo', 'push*'],
+  // A wrapper's --flag=value is no assignment.
+  ["timeout --kill-after=/tmp/y 5 bash -c 'cd $after && git push'", '/repo', 'push'],
+  // An escaped backslash before $ leaves the $ to expand, and the inner
+  // shell drops the backslash left before the path.
+  ['D=/tmp/x; bash -c "cd \\\\$D && git push"', '/repo', 'push*'],
+  // gh groups that write to a repo other than through pr, issue or api.
+  ['gh repo create x --public', '', 'api'],
+  ['gh workflow run ci.yml', '', 'api'],
+  ['gh run rerun 12', '', 'api'],
+  ['gh secret set X', '', 'api'],
+  ['gh repo view x', '', ''],
+  ['gh run list', '', ''],
 ];
 
 test('reads each shell command the way the shell does', async () => {
@@ -469,6 +626,51 @@ test('reads each shell command the way the shell does', async () => {
     const got = writes.map((w) => w.kind + (w.scratch ? '*' : '')).join(' ');
     assert.equal(got, expected, command);
   }
+});
+
+test('reads long runs of backslashes, quotes and assignments without stalling', async () => {
+  // A pattern where the same text can match more than one way backtracks
+  // without end once the whole match fails.
+  const { bashCall } = await import(script);
+  const start = Date.now();
+  bashCall(`X=${'\\'.repeat(40)}" git push`, '/repo');
+  bashCall(`X=${"$'a'".repeat(24)}" git push`, '/repo');
+  bashCall(`X=${'a=a'.repeat(18)}" git push`, '/repo');
+  bashCall(`X=${Array.from({ length: 24 }, (_, n) => `a${n}=1`).join(',')} echo hi`, '/repo');
+  assert.ok(Date.now() - start < 1000);
+});
+
+// Whether a message asks for a commit, for phrases a count turns on.
+const ASKS_COMMIT = [
+  ['check in the changes', true],
+  ['go ahead with checking in the changes', true],
+  ['check in please', true],
+  ['check in the readme changes', true],
+  ['remember to check in the fix', true],
+  ["let's check in the changes", true],
+  ['check it in', true],
+  ['check it in please', true],
+  ['just checking in, how is it going?', false],
+  ['hi, checking in', false],
+  ['I just wanted to check in', false],
+  ['I just wanted to check in\nHow is it?', false],
+  ["let's check in next week", false],
+  ['can we check in?', false],
+  ['I checked in with Bob yesterday', false],
+  ['check in the console', false],
+  ['check this in the browser', false],
+  ['check in everything', true],
+  ["check in, don't push yet", true],
+  ['Let me check in.', false],
+  ['check it in a minute', false],
+  ['checking in on test results', false],
+  ["don't push yet, just commit", true],
+  ["don't commit or push", false],
+];
+
+test('reads which messages ask for a commit', async () => {
+  const { asksFor } = await import(script);
+  for (const [text, expected] of ASKS_COMMIT) assert.equal(asksFor('commit', text), expected, text);
 });
 
 test('importing the script never runs or breaks it', () => {

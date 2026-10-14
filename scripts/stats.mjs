@@ -28,27 +28,28 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const DEFINITIONS = {
-  typed: 'Messages you typed: no tool results, task notifications, relays, compaction summaries or command output. A slash command counts.',
+  typed: 'Messages you typed, including those typed while a turn ran: no tool results, task notifications, relays, compaction summaries, command output or interrupt markers. A slash command counts.',
   families: 'Sessions joined when one resumes or forks another, which shows as a shared message id or an entry carrying the other session id.',
-  writeTurns: 'Turns with a remote write: git commit or push, a tag push included; gh pr, issue, label or release writes; gh api writes; MCP tools whose name holds a write verb, on servers other than local and project ones. A dry run or a help request is no write.',
-  unaskedWriteTurns: 'Write turns where your latest typed message lacks the word for one of its writes, such as commit, push, PR, merge or post, and is no approval. Push covers commit.',
-  approvedWriteTurns: 'Write turns where that message lacks the word but opens with an approval, such as yes or go ahead.',
+  writeTurns: 'Turns with a remote write: git commit or push, a tag push included; gh pr, issue, label or release writes; gh repo, workflow, run, secret, variable or gist writes; gh api writes; MCP tools whose name holds a write verb, on servers other than local and project ones. A git or gh named by a path, or run through bash, sh or zsh -c, counts; one run through find -exec does not. A dry run or a help request is no write.',
+  unaskedWriteTurns: 'Write turns where what you typed in the turn, or else your latest typed message before it, lacks the word for one of its writes, such as commit, push, PR, merge or post, and is no approval. A word counts with its inflections, such as pushed, and not inside a longer word, such as pushback. What follows don\'t, do not, never, no need to or without asks for nothing, up to punctuation, an em dash, an en dash not after a digit, a spaced hyphen or double hyphen, or a word such as and, but, then, before or until. A reminder still asks: a stretch that opens with forget or hesitate, as in don\'t forget to push, or, after any of those words but without, with wait to, keep waiting to, bother waiting to or waste time waiting to, also with for and a check, such as CI, tests, the build, a workflow, review or the linter, with up to two words before it and run, job, pass, to pass or to finish after it, before the to, as in don\'t wait for CI to push. Push covers commit.',
+  approvedWriteTurns: 'Write turns where that text lacks the word but opens with an approval, such as yes or go ahead.',
   subagentWrites: 'Remote writes made from a subagent.',
   scratchWrites: 'Writes whose repo sits under a temporary directory, reached through the working directory, cd, git -C, --git-dir, GIT_DIR or a directory mktemp made there, or that git init made under a loop variable or a helper argument. They are left out of every other count.',
-  commitsWithoutSkill: 'Commits in a turn that loaded no commit skill. prWritesWithoutSkill is the same for gh pr create, edit, ready, close or reopen and the pr skill.',
-  posts: 'gh pr or issue comment, gh pr review, gh api calls that write comments, reviews or replies, and MCP comment, reply, post or send tools.',
+  commitsWithoutSkill: 'Commits in a family that had loaded no commit skill by that turn. prWritesWithoutSkill is the same for gh pr create, edit, ready, close or reopen and the pr skill.',
+  posts: 'gh pr or issue comment, gh pr review, gh api POST calls to comments, reviews or replies, and MCP comment, reply, post or send tools.',
   anotherPass: 'Typed messages asking for another, one more, final, second, third or fresh pass, review, verification, round or look, for something one more time, for a re-review, or to review, verify or check again.',
   editingFamilies: 'Families with an Edit, MultiEdit, Write or NotebookEdit call.',
   draftRequests: 'Typed messages asking for a draft, or to give, write, prepare or compose a comment, reply, message or response. draftsWithFile counts those whose turn wrote a file.',
   compactions: 'compact_boundary entries. typedCompact counts typed /compact.',
   reviewRuns: 'code-review or review loaded through the Skill tool or typed. ultraReviews counts those with ultra.',
   reviewTokens: 'Input, output and cache-write tokens of replies attributed to code-review or review, each reply counted once. reviewCacheReads holds their cache reads.',
-  hookErrors: 'Error lines in the eng hook log.',
+  hookErrors: 'Error lines in the eng hook log. Not counted with --project, because the log names no project.',
   unplacedSubagentWrites: 'Writes in a subagent file that names no turn, which are reported here and counted nowhere else. One number for the whole window, kept in totals and not per week. Zero on a healthy history.',
 };
 
 // Raised when the report's shape changes. 2: unplacedSubagentWrites in totals.
-const REPORT_VERSION = 2;
+// 3: hookErrors is null with --project.
+const REPORT_VERSION = 3;
 
 const USAGE = `usage: npm run stats -- [--since YYYY-MM-DD] [--until YYYY-MM-DD]
                         [--project <substring>] [--json]
@@ -84,7 +85,7 @@ function parseArgs(argv) {
 
 // --- Reading what a message says ---------------------------------------
 
-const NOT_TYPED = /^<(task-notification|local-command-std(out|err)|bash-std(out|err)|relay\b|project_claude_message|cross-session-message|coordinator-relay)/;
+const NOT_TYPED = /^(?:<(?:task-notification|local-command-std(?:out|err)|bash-std(?:out|err)|relay\b|project_claude_message|cross-session-message|coordinator-relay)|\[Request interrupted by user)/;
 
 function unescapeXml(text) {
   return text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
@@ -133,12 +134,34 @@ const GH_WRITES = [
   ['issue', /^gh\s+issue\s+(?:create|edit|close|reopen|delete|transfer|lock|unlock|pin|unpin)\b/],
   ['label', /^gh\s+label\s+(?:create|edit|delete|clone)\b/],
   ['release', /^gh\s+release\s+(?:create|edit|delete|upload)\b/],
+  ['api', /^gh\s+(?:repo\s+(?:create|edit|delete|rename|archive|unarchive|fork|sync)|workflow\s+(?:run|enable|disable)|run\s+(?:rerun|cancel|delete)|(?:secret|variable)\s+(?:set|delete)|gist\s+(?:create|edit|delete))\b/],
 ];
 const POST_PATH = /comments|reviews|replies/;
 const POST_MUTATION = /\b(?:addComment|addPullRequestReview\w*|submitPullRequestReview)\b/;
 
+// One piece of a shell word: a quoted string, $$ (the process id), an
+// escaped character, or a plain one. Each piece can match only one way, so a
+// pattern built on it never backtracks without end.
+const PIECE = String.raw`"(?:[^"\\]|\\[\s\S])*"|\$\$|\$'(?:[^'\\]|\\[\s\S])*'|'[^']*'|\\[\s\S]|(?!\$['$])[^\s"'\\]|\\$`;
 // The words of one simple command, each quoted string kept whole.
-const words = (raw) => raw.match(/(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s"'])+/g) || [];
+const WORD_RE = new RegExp(`(?:${PIECE})+`, 'g');
+
+// The text of a $'...' string, with its escapes read as the shell reads
+// them. An escape it does not know keeps its backslash.
+const ANSI_ESCAPES = { n: '\n', t: '\t', r: '\r', a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', v: '\v', '\\': '\\', "'": "'", '"': '"', '?': '?' };
+const ansiText = (text) =>
+  text.replace(/\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c[\s\S]|[\s\S])/g, (m, e) => {
+    if (/^[xuU]./.test(e)) {
+      // Past the last code point fromCodePoint would throw, so the escape
+      // stays as written.
+      const code = parseInt(e.slice(1), 16);
+      return code <= 0x10ffff ? String.fromCodePoint(code) : m;
+    }
+    if (/^[0-7]+$/.test(e)) return String.fromCharCode(parseInt(e, 8));
+    if (e[0] === 'c' && e.length === 2) return String.fromCharCode(e.charCodeAt(1) & 31);
+    return ANSI_ESCAPES[e] ?? m;
+  });
+const words = (raw) => raw.match(WORD_RE) || [];
 const unquote = (word) => word.replace(/^(['"])(.*)\1$/s, '$2');
 
 // gh api writes when it is told a write method, or when it sends fields
@@ -170,7 +193,9 @@ function ghApiWrite(raw) {
   }
   const verb = method ? method.toUpperCase() : fields ? 'POST' : 'GET';
   if (verb === 'GET') return null;
-  return POST_PATH.test(target || '') ? 'post' : 'api';
+  // Only a POST adds a comment or review. DELETE, PATCH and PUT on the same
+  // paths remove, edit or dismiss one.
+  return verb === 'POST' && POST_PATH.test(target || '') ? 'post' : 'api';
 }
 
 // git's own options come before the subcommand. Returns the subcommand,
@@ -229,17 +254,55 @@ function stripArithmetic(text) {
   return out;
 }
 
+// Whether the ' at end opens a $'...' string, in which a backslash escapes
+// the next character, a quote included: the $ before it is no part of $$ and
+// no backslash escapes it. It reads backwards from end, so a long command
+// costs no more per quote.
+const ansiQuote = (text, end) => {
+  // $$ is the shell's process id, so of the $ no backslash escapes, an odd
+  // number must stand before the quote.
+  let i = end;
+  while (i > 0 && text[i - 1] === '$') i--;
+  const dollars = end - i;
+  let slashes = 0;
+  while (i > 0 && text[i - 1] === '\\') {
+    i--;
+    slashes++;
+  }
+  // An odd number of backslashes escapes the first $ of the run.
+  const open = dollars - (slashes % 2);
+  return open > 0 && open % 2 === 1;
+};
+
 // Drops heredoc bodies, which hold scripts, messages and test cases that
-// name commands without running them. It reads the whole command the way the
-// shell does: a << inside quotes, (( )) or a comment opens nothing, and
-// neither does a here-string (<<<), but one inside a $( ) does, even when the
-// $( ) sits in double quotes, as in -m "$(cat <<'EOF' ... )".
+// name commands without running them, and joins line continuations. It reads
+// the whole command the way the shell does: a << inside quotes, (( )) or a
+// comment opens nothing, and neither does a here-string (<<<), but one inside
+// a $( ) does, even when the $( ) sits in double quotes, as in
+// -m "$(cat <<'EOF' ... )". A backslash before a newline joins the lines
+// outside quotes and in double quotes, but not in single quotes or at the end
+// of a comment. A # opens a comment only at the start of a word, which an
+// escaped space or a joined line does not end. In $'...' a backslash escapes
+// the next character, a quote included.
 function dropHeredocs(command) {
   let out = '';
+  // Where out last took a character a backslash escaped.
+  let escaped = -1;
   const pending = [];
   // Each context is a quote, or a command level with its own parenthesis
   // depth and arithmetic depth. The bottom one is the command itself.
   const stack = [{ kind: 'sh', parens: 0, arithmetic: 0 }];
+  // Reads the character the backslash at i escapes, the backslash being in
+  // out already, and returns where reading goes on. Before a newline the two
+  // drop out.
+  const escape = (i) => {
+    if (command[i + 1] === '\n') out = out.slice(0, -1);
+    else {
+      out += command[i + 1] ?? '';
+      escaped = out.length - 1;
+    }
+    return i + 1;
+  };
   for (let i = 0; i < command.length; i++) {
     const c = command[i];
     const top = stack.at(-1);
@@ -258,16 +321,19 @@ function dropHeredocs(command) {
     out += c;
     if (top.kind === "'") {
       if (c === "'") stack.pop();
-    } else if (top.kind === '"') {
+    } else if (top.kind === "$'") {
       if (c === '\\') out += command[++i] ?? '';
+      else if (c === "'") stack.pop();
+    } else if (top.kind === '"') {
+      if (c === '\\') i = escape(i);
       else if (c === '"') stack.pop();
       else if (command.startsWith('$(', i) && !command.startsWith('$((', i)) {
         out += command[++i];
         stack.push({ kind: 'sh', parens: 0, arithmetic: 0 });
       }
-    } else if (c === '\\') out += command[++i] ?? '';
-    else if (c === "'" || c === '"') stack.push({ kind: c });
-    else if (c === '#' && (i === 0 || /\s/.test(command[i - 1]))) {
+    } else if (c === '\\') i = escape(i);
+    else if (c === "'" || c === '"') stack.push({ kind: c === "'" && ansiQuote(command, i) ? "$'" : c });
+    else if (c === '#' && (out.length < 2 || (/[\s;&|(]/.test(out.at(-2)) && escaped !== out.length - 2))) {
       while (i + 1 < command.length && command[i + 1] !== '\n') out += command[++i];
     } else if (arithmeticAt(command, i)) {
       top.arithmetic++;
@@ -383,19 +449,21 @@ function scanShell(command, start, nested) {
     }
     if (quote) {
       raw += c;
-      if (c === '\\' && quote === '"' && i + 1 < command.length) raw += command[++i];
-      else if (c === quote) {
+      if (c === '\\' && quote !== "'" && i + 1 < command.length) raw += command[++i];
+      else if (c === quote.at(-1)) {
         bare += c;
         quote = null;
       }
       continue;
     }
-    if (c === '#' && /(?:^|\s)$/.test(bare)) {
+    // A # opens a comment at the start of a word, and an escaped space ends
+    // no word.
+    if (c === '#' && /(?:^|\s)$/.test(bare) && !/(?<!\\)(?:\\\\)*\\\s$/.test(bare)) {
       while (i + 1 < command.length && command[i + 1] !== '\n') i++;
     } else if (c === '\\' && i + 1 < command.length) {
       add(c + command[++i]);
     } else if (c === "'" || c === '"') {
-      quote = c;
+      quote = c === "'" && ansiQuote(command, i) ? "$'" : c;
       add(c);
     } else if (arithmeticAt(command, i)) {
       // Arithmetic, which may nest parentheses, stays in its command.
@@ -450,7 +518,7 @@ function scanShell(command, start, nested) {
 
 // An assignment's value: quoted strings, escaped characters, and the rest
 // up to a space.
-const VALUE = String.raw`(?:"(?:[^"\\]|\\.)*"|'[^']*'|\\.|[^\s"'\\])*`;
+const VALUE = String.raw`(?:${PIECE})*`;
 // What may come before the command itself: assignments, keywords, a brace,
 // and wrappers that run the command after them.
 const WRAPPERS = String.raw`command|exec|env|nohup|sudo(?:\s+-u\s+\S+|\s+-\w+)*|xargs(?:\s+-I\s*\S+|\s+-\w+(?:\s+\d+)?)*|timeout(?:\s+-[sk]\s+\S+|\s+--(?:signal|kill-after)(?:=\S+|\s+\S+)|\s+-\S+)*\s+\S+`;
@@ -459,9 +527,12 @@ const LEADING = new RegExp(String.raw`^(?:(?:[A-Za-z_]\w*=${VALUE}|${KEYWORD_WOR
 const FUNCTION_KEYWORD = new RegExp(String.raw`^((?:${KEYWORD_WORDS}\s+)*)function\s+[^\s(){}]+\s+(?=\{)`);
 const KEYWORD_TOKEN = new RegExp(String.raw`^(?:if|then|elif|else|while|until|do|time|-p|!)$`);
 const DECLARE = new RegExp(`^${KEYWORDS}(?:(?:export|local|declare|readonly|typeset)(?:\\s+(?:--|[-+]\\w+))*\\s+)?`);
-const TMP = /^(?:\/private)?\/(?:tmp|var\/folders)\//;
+const TOOL_PATH = /^\S*\/(?=(?:git|gh)\s)/;
+const TMP = /^(?:\/private)?\/(?:tmp|var\/folders)(?:\/|$)/;
 const ASSIGNMENT = new RegExp(String.raw`([A-Za-z_]\w*)=(${VALUE})`, 'g');
-const ASSIGNMENTS = new RegExp(String.raw`^(?:[A-Za-z_]\w*=${VALUE}\s*)+$`);
+// Whitespace or the end follows each value, so a value cannot also be read as
+// the start of the next assignment.
+const ASSIGNMENTS = new RegExp(String.raw`^(?:[A-Za-z_]\w*=${VALUE}(?:\s+|$))+$`);
 // The -R or --repo flag that gh's pr, issue and other groups take, before or
 // after the group. gh api has no such flag, and fails on it.
 const GH_REPO = /\s(?:-R|--repo)(?:\s+|=)\S+/g;
@@ -565,10 +636,12 @@ function resolveFrom(from, to) {
 // throwaway repo under a temporary directory, and whether it writes a file.
 // It follows cd, cd -, pushd, popd, subshells, git -C, --git-dir and
 // GIT_DIR through the call, with the variables it sets, and places what
-// mktemp makes. A dry run or a help request writes nothing. A repo git
-// init made under a loop variable or a helper's argument is a scaffold.
-function bashCall(command, cwd) {
-  const vars = {};
+// mktemp makes. It reads the string bash, sh or zsh -c runs, with the
+// variables this call filled in or passed on, and git or gh named by a path.
+// A dry run or a help request writes nothing. A repo git init made under a
+// loop variable or a helper's argument is a scaffold.
+function bashCall(command, cwd, inherited = {}) {
+  const vars = { ...inherited };
   const temps = [];
   // mktemp makes its directory under -p DIR or --tmpdir=DIR, under the
   // temporary directory with -t, a bare --tmpdir or no template, and beside
@@ -602,14 +675,39 @@ function bashCall(command, cwd) {
   // $PWD is the directory at that point, $HOME is ~, and $TMPDIR is
   // temporary when the call did not set them.
   const known = (name) => (name === 'PWD' && dir ? dir : name === 'HOME' ? '~' : name === 'TMPDIR' ? '/tmp' : undefined);
-  const expand = (word) =>
-    unquote(word)
-      .replace(/__mktemp(\d+)__/g, (m, n) => mktempDir(temps[n]))
-      .replace(/\$\{(\w+)(:?)-([^}]*)\}/g, (m, name, colon, fallback) => {
-        const value = vars[name] ?? known(name);
-        return value === undefined || (colon && value === '') ? fallback : value;
-      })
-      .replace(/\$\{?(\w+)\}?/g, (m, name) => vars[name] ?? known(name) ?? m);
+  // Fills in the variables the call knows, or those scope names, in one pass,
+  // so a value filled in is never read again. A name scope holds as null is
+  // known to be unset, and a name nobody knows stays as written; either way a
+  // ${ :- } or ${ - } takes its fallback, and a null name otherwise comes out
+  // empty. The fallback is a word of its own, read as one. A $ after an odd
+  // number of backslashes is escaped and stays.
+  const lookup = (scope, name) => (Object.hasOwn(scope, name) ? scope[name] : known(name));
+  const fill = (text, scope, held) =>
+    text.replace(/(?<=(?:^|[^\\])(?:\\\\)*)\$(?:\{(\w+)(?:(:?)-([^}]*))?\}|(\w+))/g, (m, braced, colon, fallback, plain) => {
+      const value = lookup(scope, braced ?? plain);
+      if (fallback !== undefined) return value == null || (colon && value === '') ? expand(fallback, scope, held) : value;
+      return value === null ? '' : value ?? m;
+    });
+  // A word read part by part, as the shell does: single quotes keep
+  // everything as written, $'...' reads its escapes as the shell does, double
+  // quotes fill in variables and let a backslash make $, `, " and \ plain,
+  // and outside quotes variables are filled in and a backslash makes any
+  // character plain. Line continuations were joined before the call was
+  // split. A ${ } is one part, whatever quotes it holds. held says what a
+  // $(mktemp) held out of the call becomes: by default the directory it
+  // makes.
+  const PARTS = /\$'((?:[^'\\]|\\[\s\S])*)'|'([^']*)'|"((?:[^"\\]|\\[\s\S])*)"|((?:\$\{[^}]*\}|\$\$|(?!\$['$])[^'"\\]|\\[\s\S])+)|([\s\S])/g;
+  const expand = (word, scope = vars, held = (n) => mktempDir(temps[n])) => {
+    let out = '';
+    for (const [, ansi, single, double, bare, lone] of word.replace(/__mktemp(\d+)__/g, (m, n) => held(n)).matchAll(PARTS)) {
+      if (ansi !== undefined) out += ansiText(ansi);
+      else if (single !== undefined) out += single;
+      else if (double !== undefined) out += fill(double, scope, held).replace(/\\([$`"\\])/g, '$1');
+      else if (bare !== undefined) out += fill(bare, scope, held).replace(/\\([\s\S])/g, '$1');
+      else out += lone;
+    }
+    return out;
+  };
   let dir = cwd || '';
   let last = dir;
   const dirs = [];
@@ -649,7 +747,7 @@ function bashCall(command, cwd) {
   const unnamed = new RegExp(`\\$\\{?(?:[\\d@*]${loops.map((name) => `|${name}\\b`).join('')})`);
   // Exported names reach git; a plain assignment does not, unless set -a is
   // on. A subshell keeps its own copy of both; a case branch does not.
-  let exported = new Set();
+  let exported = new Set(Object.keys(inherited));
   let exportAll = false;
   // A function's body is read where it is written, as if it ran there. Each
   // { pushes a brace, a function's carrying the locals to undo at its }. A
@@ -716,11 +814,12 @@ function bashCall(command, cwd) {
       // Options end at --, or at the first word that is no option.
       const list = words(bareCommand).slice(1);
       for (let i = 0; i < list.length && /^[-+]./.test(list[i]) && list[i] !== '--'; i++) {
+        // Each o in a group names an option in a word of its own.
         const w = list[i];
-        const named = /o$/.test(w) ? list[i + 1] : null;
-        if (/^-[a-zA-Z]*a/.test(w) || (/^-[a-zA-Z]*o$/.test(w) && named === 'allexport')) exportAll = true;
-        if (/^\+[a-zA-Z]*a/.test(w) || (/^\+[a-zA-Z]*o$/.test(w) && named === 'allexport')) exportAll = false;
-        if (named !== null) i++;
+        const named = list.slice(i + 1, i + 1 + (w.match(/o/g) || []).length);
+        if (/^-[a-zA-Z]*a/.test(w) || (w.startsWith('-') && named.includes('allexport'))) exportAll = true;
+        if (/^\+[a-zA-Z]*a/.test(w) || (w.startsWith('+') && named.includes('allexport'))) exportAll = false;
+        i += named.length;
       }
       continue;
     }
@@ -771,8 +870,9 @@ function bashCall(command, cwd) {
       }
       continue;
     }
-    const body = raw.replace(LEADING, '');
-    const bare = segment.bare.replace(DECLARE, '').replace(LEADING, '');
+    // git or gh named by a path, such as /usr/bin/git, is git or gh.
+    const body = raw.replace(LEADING, '').replace(TOOL_PATH, '');
+    const bare = segment.bare.replace(DECLARE, '').replace(LEADING, '').replace(TOOL_PATH, '');
     const plain = stripArithmetic(bare).replace(/\[\[[\s\S]*?\]\]/g, '');
     if (/(?<![=>])>{1,2}\s*(?!&|\/dev\/null\b)[^\s|&>]/.test(plain) || /^tee\s/.test(bare)) wroteFile = true;
     // cd with no directory goes home, and pushd and popd move like cd.
@@ -835,6 +935,50 @@ function bashCall(command, cwd) {
       }
       continue;
     }
+    // The assignments written before the command on its line, word by word,
+    // so a wrapper's --flag=value is none.
+    const prefix = {};
+    for (const w of words(raw.slice(0, raw.length - body.length))) {
+      const assignment = /^([A-Za-z_]\w*)=(.*)$/s.exec(w);
+      if (assignment) prefix[assignment[1]] = assignment[2];
+    }
+    // bash, sh or zsh -c runs its string as a command of its own, from here.
+    if (/^(?:\S*\/)?(?:ba|z)?sh\s/.test(bare)) {
+      // The shell reads options up to its first other word, or up to --, and
+      // with -c among them that word is the command: in bash -c -e "cmd" it
+      // is "cmd", and in bash script.sh -c, the -c belongs to the script.
+      // --rcfile, --init-file and each o or O in an option group take the
+      // next word.
+      const list = words(body).slice(1);
+      let command = false;
+      let i = 0;
+      for (; i < list.length && /^[-+]/.test(list[i]) && list[i] !== '--'; i++) {
+        if (/^-[a-zA-Z]*c/.test(list[i])) command = true;
+        // Each o or O in a group takes a word of its own.
+        if (/^(?:--rcfile|--init-file)$/.test(list[i])) i++;
+        else if (/^[-+][a-zA-Z]+$/.test(list[i])) i += (list[i].match(/[oO]/g) || []).length;
+      }
+      if (list[i] === '--') i++;
+      const word = command ? list[i] : undefined;
+      if (word) {
+        // The string is read as this shell reads any word: it fills in its
+        // own variables outside single quotes, before the assignments on its
+        // line exist, and removes quotes and escapes. A $(mktemp) held out of
+        // it above goes back in for the inner call to run. The inner shell
+        // inherits what this one exported, and those assignments. A name this
+        // call cannot place is unset, except PWD, which any shell has even
+        // when the call names no directory.
+        const unset = Object.fromEntries(Object.keys(prefix).filter((name) => name !== 'PWD' && lookup(vars, name) === undefined).map((name) => [name, null]));
+        const string = expand(word, { ...unset, ...vars }, (n) => `$(mktemp${temps[n]})`);
+        const inherited = {};
+        for (const name of exported) if (Object.hasOwn(vars, name)) inherited[name] = vars[name];
+        for (const [name, value] of Object.entries(prefix)) inherited[name] = expand(value);
+        const inner = bashCall(string, dir, inherited);
+        if (inner.wroteFile) wroteFile = true;
+        for (const write of inner.writes) if (!writes.some((w) => w.kind === write.kind && w.scratch === write.scratch)) writes.push(write);
+      }
+      continue;
+    }
     // The option words, read once: help requests and dry runs write nothing.
     const optionWords = /^(?:git|gh)\s/.test(bare) ? options(body) : [];
     if (optionWords.some((w) => w === '--help' || w === '-h')) continue;
@@ -843,8 +987,7 @@ function bashCall(command, cwd) {
     if (/^git\s/.test(bare)) {
       const { sub, targets, gitDir: named } = gitCommand(body);
       // GIT_DIR set before git on its line, or exported earlier in the call.
-      const before = words(raw.slice(0, raw.length - body.length)).find((w) => w.startsWith('GIT_DIR='));
-      const gitDir = named ?? (before ? before.slice(8) : exported.has('GIT_DIR') ? vars.GIT_DIR : undefined);
+      const gitDir = named ?? prefix.GIT_DIR ?? (exported.has('GIT_DIR') ? vars.GIT_DIR : undefined);
       // A dry run sends nothing: --dry-run on both, and -n on a push, alone
       // or in a group such as -fn.
       const dry = optionWords.some((w) => w === '--dry-run' || (sub === 'push' && /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w)));
@@ -882,24 +1025,75 @@ function mcpWrite(name) {
   return MCP_POST.test(match[2]) ? 'post' : 'mcp';
 }
 
-// The words in your message that ask for each kind of write. Asking to push
-// asks for the commit it needs. An approval such as "yes" or "go ahead" names
-// no write and is counted apart, because an approval is not a request: the
-// workflow wants those confirmed.
+// The words in your message that ask for each kind of write, with their
+// inflections and nothing longer, so pushed asks and pushback does not.
+// Asking to push asks for the commit it needs. An approval such as "yes" or "go
+// ahead" names no write and is counted apart, because an approval is not a
+// request: the workflow wants those confirmed.
+// Check in asks for a commit only in its commit sense: before what gets
+// committed, as in check in the changes, check in all the test files or check
+// in everything; as check it in, unless a place to look or a time follows, as
+// in check it in the browser or check it in a minute; or alone at the end of
+// the message, as in check in please. A greeting, a plan, a question, and
+// check in with or on someone ask for nothing: just checking in, let me check
+// in, let's check in tomorrow, can we check in?
+const CHECK_IN = [
+  String.raw`check(?:s|ed|ing)?\s+in\s+(?:everything|all\s+of\s+it|(?:(?:the|my|your|our|these|those|this|that|all)\s+){0,2}(?:(?!on\b|with\b)[\w-]+\s+)?(?:changes?|fix(?:es)?|work|files?|commits?|diff|code|patch(?:es)?|tests?|updates?|edits?|readme|scripts?))`,
+  String.raw`check(?:s|ed|ing)?\s+(?:it|this|that|them|these|those)\s+in(?!\s+(?:(?:the|a|an|my|your|our)\s+)?(?:browser|logs?|console|terminal|ui|app|readme|docs?|ci|devtools|chrome|safari|firefox|prod\w*|staging|minute|bit|while|second)\b)`,
+  String.raw`(?<!\b(?:just|wanted\s+to|let['’]?s|let\s+me|we|i['’]ll|i\s+will|i['’]d|quick)\s+)check\s+in(?=(?:\s+(?:please|now))?[\s.!,]*$)`,
+].join('|');
 const APPROVAL = /^\W*(?:yes|yep|yeah|ok(?:ay)?|sure|go ahead|proceed|approved?|do it|sounds good|lgtm|looks good)\b/i;
-const ANY_REQUEST = /\b(?:commit|push|ship|check in|prs?|pull requests?|merge|issues?|tickets?|labels?|release|tag|post|comment|reply|send|submit)\b/i;
+const WORDS = {
+  commit: String.raw`commit(?:s|ted|ting)?|${CHECK_IN}`,
+  push: String.raw`push(?:es|ed|ing)?|ship(?:s|ped|ping)?`,
+  pr: String.raw`prs?|pull requests?|title|description`,
+  merge: String.raw`merg(?:e|es|ed|ing)`,
+  issue: String.raw`issues?|tickets?`,
+  label: String.raw`label(?:s|ed|led|ing|ling)?`,
+  release: String.raw`releas(?:e|es|ed|ing)|tag(?:s|ged|ging)?`,
+  post: String.raw`post(?:s|ed|ing)?|comment(?:s|ed|ing)?|repl(?:y|ies|ied|ying)|send(?:s|ing)?|sent|submit(?:s|ted|ting)?`,
+};
+const asks = (...kinds) => new RegExp(String.raw`\b(?:${kinds.map((k) => WORDS[k]).join('|')})\b`, 'i');
+// Any write's word, but a PR's only by name: a title or a description asks
+// for no repo, workflow or secret.
+const ANY_REQUEST = new RegExp(String.raw`\b(?:${Object.entries(WORDS).map(([k, w]) => (k === 'pr' ? 'prs?|pull requests?' : w)).join('|')})\b`, 'i');
 const REQUEST = {
-  commit: /\b(?:commit|push|ship|check in)/i,
-  push: /\b(?:push|ship)/i,
-  pr: /\b(?:prs?|pull requests?|title|description)\b/i,
-  merge: /\bmerge/i,
-  issue: /\b(?:issues?|tickets?)\b/i,
-  label: /\blabel/i,
-  release: /\b(?:release|tag)/i,
-  post: /\b(?:post|comment|reply|send|submit)/i,
+  commit: asks('commit', 'push'),
+  push: asks('push'),
+  pr: asks('pr'),
+  merge: asks('merge'),
+  issue: asks('issue'),
+  label: asks('label'),
+  release: asks('release'),
+  post: asks('post'),
   api: ANY_REQUEST,
   mcp: ANY_REQUEST,
 };
+// What follows one of these asks for nothing, up to punctuation, an em dash,
+// an en dash not after a digit, a spaced hyphen or double hyphen, or a word
+// that starts a new clause. A flag such as --force has no space after its
+// hyphens and ends nothing: "don't push or commit yet, just tidy it" asks for
+// neither, "commit it without pushing" asks for no push, and "don't wait for
+// CI before you push" asks for one. A stretch that opens with forget or
+// hesitate, as in "don't you forget to push", "don't ever forget to push" or
+// "without forgetting to push", is a reminder and asks for what it names, and
+// so is wait to after any of these words but without, as in "don't wait to
+// push", "no need to wait to push" or "no need to keep waiting to push".
+// "Don't wait for CI to push", "don't bother waiting to push" and "don't
+// waste time waiting to push" ask too; bother and waste time alone do not.
+// The for names a check, such as CI, tests, checks, the build, the pipeline,
+// a workflow, GitHub Actions, review, approval, green or the linter, with up
+// to two words before it, not a person: in "don't wait for me
+// to push" someone else pushes. "Without waiting to push" is left negated,
+// since it reads as leaving the push for later, and so are "never waited to
+// push" and "never waits to push", which report rather than ask.
+const NEGATED = /\b(?:don['’]?t|do not|never|no need to|without)\b[^.,;:!?\n]*?(?=\b(?:and|but|then|just|so|before|until|unless|after|when|once|if)\b|\u2014|(?<!\d)\u2013|\s--?\s|[.,;:!?\n]|$)/gi;
+const REMINDER = /^\S+(?:\s+not|\s+need\s+to)?(?:\s+you)?\s+(?:ever\s+)?(?:forget\w*|hesitat\w*)\b|^(?!without\b)\S+(?:\s+not|\s+need\s+to)?(?:\s+you)?\s+(?:ever\s+)?(?:wait|keep\s+waiting|bother\s+waiting|waste\s+time\s+waiting)(?:\s+for\s+(?:\w+\s+){0,2}?(?:ci|checks?|tests?|builds?|pipeline|reviews?|approval|green|lint\w*|actions|workflows?)\b(?:\s+(?:run|job|pass|to\s+pass|to\s+finish))?)?\s+to\b/i;
+const unasked = (text) => text.replace(NEGATED, (span) => (REMINDER.test(span) ? span : ' '));
+// Whether text asks for a write of this kind, and the same for text unasked
+// has already read.
+const asksIn = (kind, asked) => REQUEST[kind].test(asked);
+const asksFor = (kind, text) => asksIn(kind, unasked(text));
 
 const ANOTHER_PASS = /\b(?:another|one more|final|second|third|fresh)\b[^.?!\n]{0,40}?\b(?:pass|review|verification|round|look)\b|\bone more time\b|\bre-?review\b|\b(?:review|verify|check)\w*\s+(?:it\s+|this\s+|that\s+|them\s+)?again\b/i;
 const DRAFT = /\bdrafts?\b|\b(?:give me|write|prepare|compose)\b[^.?!\n]{0,60}?\b(?:comment|reply|message|response)\b/i;
@@ -1046,11 +1240,17 @@ async function collect(files) {
         continue;
       }
 
-      if (entry.type === 'user' && !sub) {
-        const message = typedMessage(entry);
+      // A message typed while a turn runs is kept as a queued_command
+      // attachment inside that turn, and never as a user entry of its own.
+      const queued = entry.type === 'attachment' && entry.attachment?.type === 'queued_command' ? entry.attachment : null;
+      if ((entry.type === 'user' || queued) && !sub) {
+        const message = queued
+          ? typedMessage({ type: 'user', isMeta: entry.isMeta || queued.isMeta, isSidechain: entry.isSidechain, origin: queued.origin, message: { content: queued.prompt } })
+          : typedMessage(entry);
         if (message) {
           typed.push({ ts, session, prompt, ...message });
-          if (turn && !turn.typed) turn.typed = message.text;
+          // Every message typed in a turn is part of what it asks for.
+          if (turn) turn.typed = turn.typed ? `${turn.typed}\n${message.text}` : message.text;
           if (message.command) {
             const name = skillName(message.command);
             if (turn) turn.skills.add(name);
@@ -1184,12 +1384,25 @@ function count(data, hookErrors, opts) {
     });
   }
 
+  // When each family first loaded each skill. A skill loaded in an earlier
+  // turn is still in context for the turns after it.
+  const loaded = new Map();
+  for (const turn of data.turns.values()) {
+    const key = family(turn.session);
+    if (!loaded.has(key)) loaded.set(key, new Map());
+    const first = loaded.get(key);
+    for (const skill of turn.skills) if (!first.has(skill) || turn.ts < first.get(skill)) first.set(skill, turn.ts);
+  }
+  const hasSkill = (turn, skill) => loaded.get(family(turn.session))?.get(skill) <= turn.ts;
+
   for (const turn of data.turns.values()) {
     if (turn.edits) add(turn.ts, (b) => b.editingFamilies.add(family(turn.session)));
     if (turn.scratchWrites) add(turn.ts, (b) => (b.scratchWrites += turn.scratchWrites));
     if (!turn.writes.length) continue;
     const request = turn.typed ?? latestTyped(byFamily, family(turn.session), turn.ts);
-    const missing = turn.writes.some((write) => !REQUEST[write.kind].test(request));
+    // Read once per turn, however many writes it made.
+    const asked = unasked(request);
+    const missing = turn.writes.some((write) => !asksIn(write.kind, asked));
     const approved = missing && APPROVAL.test(request);
     add(turn.ts, (b) => {
       b.writeTurns++;
@@ -1199,8 +1412,8 @@ function count(data, hookErrors, opts) {
         b.writes[write.kind] = (b.writes[write.kind] || 0) + 1;
         if (write.sub) b.subagentWrites++;
         if (write.kind === 'post') b.posts++;
-        if (write.kind === 'commit' && !turn.skills.has('commit')) b.commitsWithoutSkill++;
-        if (write.kind === 'pr' && !turn.skills.has('pr')) b.prWritesWithoutSkill++;
+        if (write.kind === 'commit' && !hasSkill(turn, 'commit')) b.commitsWithoutSkill++;
+        if (write.kind === 'pr' && !hasSkill(turn, 'pr')) b.prWritesWithoutSkill++;
       }
     });
   }
@@ -1224,10 +1437,13 @@ function count(data, hookErrors, opts) {
       b.reviewedSessions.add(r.session);
     });
   }
-  for (const e of hookErrors) add(e.ts, (b) => b.hookErrors++);
+  // null when the run keeps to one project: the log names none, so its errors
+  // cannot be kept to it.
+  for (const e of hookErrors ?? []) add(e.ts, (b) => b.hookErrors++);
 
   const rows = [...weeks.keys()].sort().map((week) => ({ week, ...finish(weeks.get(week)) }));
   const total = finish(totals);
+  if (hookErrors === null) for (const bucket of [...rows, total]) bucket.hookErrors = null;
   total.weeks = spanWeeks(opts, rows);
   // A count for the whole window only: a week row for it would stretch the
   // span, and every rate with it.
@@ -1284,7 +1500,7 @@ function headline(t) {
     ['Families compacted', pct(t.familiesCompacted, t.families)],
     ['Review tokens per reviewed session', t.reviewedSessions ? thousands(t.reviewTokens / t.reviewedSessions) : 'n/a'],
     ['Ultra reviews', String(t.ultraReviews)],
-    ['Hook errors', String(t.hookErrors)],
+    ['Hook errors', t.hookErrors === null ? 'n/a' : String(t.hookErrors)],
   ];
 }
 
@@ -1330,13 +1546,16 @@ async function main() {
     } catch (error) {
       fail(`cannot read ${opts.compare}: ${error.message}`);
     }
-    if (!baseline?.totals || typeof baseline.totals !== 'object') fail(`${opts.compare} holds no saved totals`);
+    // Every headline row reads totals, and the remote writes row adds up
+    // totals.writes.
+    const totals = baseline?.totals;
+    if (!totals || typeof totals !== 'object' || !totals.writes || typeof totals.writes !== 'object') fail(`${opts.compare} holds no saved totals`);
     baseline.window ??= {};
   }
 
   const files = transcriptFiles(projects, opts.project);
   const data = await collect(files);
-  const hookErrors = readHookErrors(path.join(config, 'plugins', 'data', 'eng-mewanakoon', 'eng-hook.log'));
+  const hookErrors = opts.project ? null : readHookErrors(path.join(config, 'plugins', 'data', 'eng-mewanakoon', 'eng-hook.log'));
   const { rows, total } = count(data, hookErrors, opts);
 
   const report = {
@@ -1369,8 +1588,8 @@ async function main() {
 }
 
 // Run as a script, it reports. Imported, as the tests do, it only lends
-// bashCall.
-export { bashCall };
+// bashCall and asksFor.
+export { asksFor, bashCall };
 const runAsScript = () => {
   try {
     return fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);

@@ -1,0 +1,752 @@
+# Shell commands and what the pre-tool hook decides for each. A line
+# "== <deny|ask|allow> <note>" starts a case, and every line after it up to
+# the next such line is the command, newlines and all. Lines before the first
+# case are these notes.
+#
+# The first 42 cases are the old block-pr-comments.sh battery. The state for
+# every case has eng:commit, eng:pr and eng:issue loaded and a message asking
+# for all of them, so each result is what the post guard and the confirmation
+# prompt decide. The write gate has its own cases in scripts/test-hooks.sh.
+== deny posting
+gh pr comment 5 --body "hi"
+== deny
+gh pr review 5 --approve --body "lgtm"
+== deny
+gh issue comment 5 -b x
+== deny
+gh pr comment 5 --body "$(cat draft.md)"
+== deny
+gh api --method POST /repos/o/r/issues/5/comments -f body=hi
+== deny
+gh api -X POST /repos/o/r/pulls/5/reviews -f event=APPROVE
+== deny
+gh api /repos/o/r/issues/5/comments -f body=hi
+== deny
+gh api --method PATCH /repos/o/r/issues/comments/99 -f body=edited
+== deny
+curl -X POST https://api.github.com/repos/o/r/issues/5/comments -d {"body":"hi"}
+== deny
+gh pr close 5 --comment "superseded"
+== deny
+gh pr reopen 5 --comment "back"
+== deny reached indirectly
+git status && gh pr comment 5 -b x
+== deny
+npm test; gh issue comment 5 -b x
+== deny
+timeout 30 gh pr comment 5 -b x
+== deny
+GH_TOKEN=abc gh pr comment 5 -b x
+== deny
+sh -c "gh pr comment 5 -b x"
+== deny
+bash -c 'gh pr review 5 --approve'
+== allow reading
+gh pr view 5
+== allow
+gh pr view 5 --comments
+== allow
+gh api /repos/o/r/issues/5/comments
+== allow
+gh api /repos/o/r/pulls/5/reviews --paginate
+== allow
+gh api --method GET /repos/o/r/issues/5/comments -f per_page=100
+== allow
+gh api /repos/o/r/pulls/5/comments --jq ".[].body"
+== allow
+curl -s https://api.github.com/repos/o/r/issues/5/comments
+== allow other git and gh writes, asked for and with the skill loaded
+git commit -m "x"
+== allow
+git push origin main
+== allow
+git checkout -b feature/x
+== allow
+git push -u origin feature/x
+== allow
+gh pr create --title x --body y
+== allow
+gh pr edit 5 --body y
+== ask merging was allowed by the old guard and now always asks
+gh pr merge 5
+== ask closing too
+gh pr close 5
+== allow
+gh api --method POST /repos/o/r/pulls -f title=x
+== allow text about the rule
+grep -rn 'gh pr comment' ~/.claude
+== allow
+rg 'gh api .* /comments' docs/
+== allow
+printf "gh pr comment 5 -b x\n" >> notes.md
+== allow
+echo "run: gh api --method POST /repos/o/r/issues/5/comments -f body=x" > example.txt
+== allow a heredoc body is data
+cat > doc.md <<EOF
+Never run gh pr comment 5 --body "x".
+Never run gh api --method POST /repos/o/r/issues/5/comments -f body=x.
+EOF
+== allow
+sed -i "" "s/gh pr comment/gh pr view/" script.sh
+== allow unrelated
+./scripts/check.sh --doctor
+== allow
+npm test
+== allow
+ls -la
+== deny closing an issue with a comment posts it
+gh issue close 5 --comment "fixed in #6"
+== deny
+gh issue reopen 5 -c "back"
+== deny
+gh pr close 5 --comment=superseded
+== deny graphql comment and review mutations
+gh api graphql -f query='mutation { addComment(input: {subjectId: "x", body: "hi"}) { clientMutationId } }'
+== deny
+gh api graphql -F query=@review.graphql -f query='mutation { addPullRequestReviewThreadReply(input: {}) { comment { id } } }'
+== deny
+gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "x"}) { thread { id } } }'
+== deny
+curl -s -X POST https://api.github.com/graphql -d '{"query":"mutation { addComment(input: {}) { clientMutationId } }"}'
+== allow a graphql query reads
+gh api graphql -f query='query { repository(owner: "o", name: "r") { pullRequest(number: 5) { reviewThreads(first: 50) { nodes { id } } } } }'
+== deny replies and reactions
+gh api -X POST /repos/o/r/pulls/5/comments/7/replies -f body=x
+== deny
+gh api -X POST /repos/o/r/issues/comments/7/reactions -f content=+1
+== deny through a wrapper and its flags
+nice -n 10 gh pr comment 5 -b x
+== deny
+env GH_TOKEN=x gh pr review 5 --comment -b x
+== deny
+xargs -I{} gh pr comment {} -b x < prs.txt
+== deny
+zsh -lc "cd repo && gh issue comment 5 -b x"
+== deny
+eval "gh pr comment 5 -b x"
+== deny on a later line
+git status
+gh pr comment 5 -b x
+== deny in a subshell
+(cd repo && gh pr comment 5 -b x)
+== deny after a negation
+! gh pr review 5 --approve
+== allow a quoted operator is not a separator
+git commit -m "fix: a && b; c | d"
+== allow redirections stay with their command
+npm test 2>&1 | tail -5
+== allow a comment is not a command
+ls # gh pr comment 5 -b x
+== allow a heredoc with a quoted and dashed delimiter
+cat <<-'EOT' > notes.md
+	gh pr comment 5 -b x
+	EOT
+== ask the line after a heredoc is a command again
+cat > notes.md <<EOF
+text
+EOF
+gh pr merge 5
+== allow a herestring is data
+grep -c x <<< "gh pr comment 5"
+== allow git global options are walked past
+git -C ../other --no-pager log --oneline
+== allow
+git -C ../other -c core.hooksPath=/dev/null push origin feature/x
+== ask a push that forces, deletes or sends tags
+git push --force origin feature/x
+== ask
+git push -f origin feature/x
+== ask
+git push -uf origin feature/x
+== ask
+git push --force-with-lease origin feature/x
+== ask
+git push --force-with-lease=feature/x:abc123 origin feature/x
+== ask
+git push origin +feature/x
+== ask
+git push origin :feature/x
+== ask
+git push --delete origin feature/x
+== ask
+git push -d origin feature/x
+== ask
+git push --tags
+== ask
+git push --follow-tags origin main
+== ask
+git push --mirror backup
+== ask
+git push --prune origin
+== ask
+git -C ../other push --force origin feature/x
+== allow a refspec with a colon in the middle is a plain push
+git push origin HEAD:refs/heads/feature/x
+== allow local history operations
+git merge origin/main
+== allow
+git rebase --continue
+== allow
+git cherry-pick --continue
+== ask other remote writes
+gh release create v1.0.0 --notes-file notes.md
+== ask
+gh workflow run check.yml
+== ask
+gh run rerun 123
+== ask
+gh pr reopen 5
+== ask
+gh repo delete o/r --yes
+== ask
+gh secret set TOKEN < token.txt
+== ask
+gh api -X PUT /repos/o/r/pulls/5/merge
+== ask
+gh api -X DELETE /repos/o/r/git/refs/heads/x
+== ask
+gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'
+== allow reading releases and runs
+gh release view v1.0.0
+== allow
+gh run view 123 --log-failed
+== ask publishes
+npm publish
+== ask
+pnpm publish --access public
+== ask
+yarn npm publish
+== ask
+cargo publish
+== allow a script that only has publish in its name
+npm run publish-docs
+== ask deploys
+gcloud builds submit --config cloudbuild.yaml
+== ask
+gcloud run deploy api --source .
+== ask
+firebase deploy --only functions
+== ask
+terraform apply -auto-approve
+== ask
+./deploy-staging.sh
+== ask
+scripts/deploy.sh prod
+== ask
+npx prisma migrate deploy
+== ask
+DATABASE_URL=x pnpm prisma migrate deploy
+== allow a local migration
+npx prisma migrate dev --name init
+== allow
+terraform plan
+== allow write gate commands with the skill loaded and asked for
+gh issue create --title x --body-file body.md
+== allow
+gh issue edit 5 --add-label bug
+== allow
+gh label create bug --color ff0000
+== allow
+gh api -X POST /repos/o/r/issues -f title=x
+== allow
+gh api -X POST /repos/o/r/issues/5/labels -f labels[]=bug
+== allow
+gh pr ready 5
+== allow
+gh issue create --web
+== allow a command substitution is read too
+git commit -m "$(cat msg.txt)"
+== deny
+out="$(gh pr comment 5 -b x 2>&1)"
+== deny
+echo `gh pr review 5 --approve`
+== ask
+result=$(git push --force origin x)
+== ask the line after a herestring is a command
+grep x <<< "$y"
+git push --force origin x
+== ask wrapper options that take a value
+sudo -u me git push --force origin x
+== ask
+timeout -s KILL 10 git push --force origin x
+== deny
+env -u FOO gh pr comment 5 -b x
+== ask
+pnpm -r publish
+== ask a GraphQL query it cannot read
+gh api graphql -F query=@post.graphql
+== ask
+gh api graphql -f query="$(cat post.graphql)"
+== allow a GraphQL query with variables reads
+gh api graphql -F owner=o -f query='query($owner: String!) { repository(owner: $owner, name: "r") { id } }'
+== ask a tag named as a ref
+git push origin refs/tags/v1.0.0
+== ask
+git push origin tag v1.0.0
+== ask a deploy script run through a shell
+bash scripts/deploy-prod.sh
+== deny a heredoc inside a substitution is text
+git commit -m "$(cat <<'MSG'
+Fix the user's bug (part one
+MSG
+)" && gh pr comment 5 -b x
+== ask env -S runs its value as a command
+env -S 'git push --force origin x'
+== ask shell options with a value before the script
+bash -o pipefail deploy.sh
+== ask package options with a value before the subcommand
+pnpm --filter app publish
+== ask
+npm --prefix packages/a publish
+== ask
+npm -w pkg publish
+== deny an arithmetic shift is not a heredoc
+y=$((x<<1))
+gh pr comment 5 -b x
+== deny
+echo $(( 1 << 2 ))
+gh pr comment 5 -b x
+== ask
+(( y = x << 1 ))
+git push -f origin x
+== deny a here-string inside a substitution is not a heredoc
+x=$(cat <<<hi)
+gh pr comment 5 -b x
+== ask pnpm -w takes no value
+pnpm -w publish
+== ask env -S in its other spellings
+env -S git push --force origin main
+== ask
+env -iS "git push --force origin main"
+== ask
+env --split-string="git push -f origin main"
+== ask a redirection before the command is not the command
+2>&1 git push --force origin x
+== deny
+>/dev/null gh pr comment 5 -b x
+== deny
+> out.txt gh pr comment 5 -b x
+== deny a heredoc fed to a shell is a script
+bash <<EOF
+gh pr comment 5 -b x
+EOF
+== ask
+cat <<EOF | sh
+git push --force origin x
+EOF
+== allow a heredoc fed to another command stays data
+cat <<EOF | grep x
+gh pr comment 5 -b x
+EOF
+== ask a REST write that commits or moves a branch
+gh api -X PUT repos/o/r/contents/a.txt -f message=x -f content=eA== && git push --force origin x
+== allow with the skill loaded it goes through the push gate
+gh api -X PUT repos/o/r/contents/a.txt -f message=x -f content=eA==
+== allow
+gh api -X POST repos/o/r/git/refs -f ref=refs/heads/x -f sha=abc
+== deny gh takes -R or --repo anywhere
+gh -R o/r pr comment 5 -b x
+== deny
+gh --repo o/r pr comment 5 -b x
+== deny
+gh pr --repo o/r comment 5 -b x
+== deny
+gh --repo=o/r issue comment 5 -b x
+== ask
+gh -R o/r pr merge 5
+== allow
+gh -R o/r pr view 5
+== deny an unquoted heredoc body still runs substitutions
+cat <<EOF > notes.md
+$(gh pr comment 5 -b x)
+EOF
+== deny
+cat <<EOF
+`gh pr review 5 --approve`
+EOF
+== allow a quoted heredoc body is plain text
+cat <<'EOF' > notes.md
+$(gh pr comment 5 -b x)
+EOF
+== deny ANSI-C quoting
+echo $'it\'s'; gh pr comment 5 -b x
+== allow rare git remote writes go through the push gate
+git subtree push --prefix dist origin gh-pages
+== ask
+git send-email --to x@example.com 0001.patch
+== allow help and dry runs write nothing
+git push --help
+== allow
+git push --dry-run --force origin x
+== allow
+npm publish --dry-run
+== allow a search reads even when POSTed
+gh api -f q=x search/issues
+== deny GitHub Enterprise
+gh api -X POST https://github.example.com/api/v3/repos/o/r/issues/5/comments -f body=x
+== deny more wrappers and forms
+watch -n 5 gh pr comment 5 -b x
+== deny
+function post { gh pr comment 5 -b x; }
+== deny
+find . -name x -exec gh pr comment 5 -b x \;
+== deny
+echo "gh pr comment 5 -b x" | sh
+== ask
+exec -a name git push --force origin x
+== allow gh pr create --web or --dry-run can push, so it goes through the push gate
+gh pr create --dry-run --title x
+== deny httpie and curl uploads
+http api.github.com/repos/o/r/issues/1/comments body=hi
+== allow
+http api.github.com/repos/o/r/issues/1/comments per_page==100
+== ask
+curl -T file.txt https://api.github.com/repos/o/r/contents/x && git push -f origin x
+== ask more gh remote writes
+gh gist create notes.txt --public
+== ask
+gh repo fork o/r
+== ask
+gh repo sync
+== allow a dash and a space before the delimiter
+cat <<- EOF
+	x
+
+	gh pr comment 1 -b x
+	EOF
+== deny tracker CLIs that comment or approve
+glab mr note 5 -m lgtm
+== deny
+glab mr approve 5
+== deny
+jira issue comment add PROJ-1 "done"
+== ask flock takes a lock file first
+flock /tmp/lock git push --force origin main
+== deny
+flock /tmp/lock -c 'gh pr comment 5 -b x'
+== deny watch runs its words through sh
+watch 'gh pr comment 5 -b x'
+== deny every curl and wget body flag
+curl --data-ascii body=x https://api.github.com/repos/o/r/issues/5/comments
+== deny
+curl -sd '{"body":"x"}' https://api.github.com/repos/o/r/issues/5/comments
+== deny
+curl -sXPOST https://api.github.com/repos/o/r/issues/5/reactions -d x
+== deny
+wget --post-file=body.json https://api.github.com/repos/o/r/issues/5/comments
+== deny a here-string fed to a shell
+bash <<< "gh pr comment 5 -b x"
+== ask
+sh <<<'git push --force origin main'
+== deny GraphQL read from a heredoc on stdin
+gh api graphql -F query=@- <<'EOF'
+mutation { addComment(input: {subjectId: "x", body: "y"}) { clientMutationId } }
+EOF
+== ask deploys behind options and runners
+terraform -chdir=infra apply -auto-approve
+== ask
+npx firebase-tools deploy
+== ask
+firebase hosting:channel:deploy preview
+== ask
+source ./deploy.sh
+== ask
+. ./deploy-prod.sh
+== ask
+yarn workspace app publish
+== ask more remote writes
+gh pr update-branch 5
+== ask
+gh project item-add 1 --owner o --url x
+== ask
+docker push registry.example.com/app:1
+== ask
+git push -o merge_request.create origin x
+== deny
+claude -p "/code-review 5 --comment"
+== allow local servers are not GitHub
+curl -X POST http://localhost:3000/api/graphql -d '{"query":"mutation { createIssue { id } }"}'
+== allow
+curl -X DELETE http://localhost:8080/api/v3/users/1
+== deny a GitHub Enterprise host
+curl -X POST https://github.example.com/api/v3/repos/o/r/issues/5/comments -d x
+== allow local work that only mentions a write
+echo prisma migrate deploy
+== allow
+git commit --dry-run
+== deny a backslash-quoted delimiter still reads as text, so a fed shell runs it
+bash <<\EOF
+gh pr comment 5 -b x
+EOF
+== allow a backslash-quoted heredoc body does not run substitutions
+cat <<\EOF > notes.md
+$(gh pr comment 5 -b x)
+EOF
+== allow curl -G sends data as a GET
+curl -sG https://api.github.com/repos/o/r/pulls/1/comments --data-urlencode per_page=100
+== allow
+curl -G https://api.github.com/repos/o/r/issues -d state=open
+== allow help writes nothing
+gh pr comment --help
+== allow
+gh pr merge --help
+== allow
+gh issue create -h
+== ask a GraphQL body read from a file
+curl -X POST -d @payload.json https://api.github.com/graphql
+== deny a redirect glued to the command
+gh pr comment>/dev/null 1 -b x
+== ask
+git push>/dev/null --force origin x
+== allow a file descriptor redirect stays one word
+npm test 2>/dev/null
+== deny a GraphQL comment sent by curl with a heredoc
+curl -d @- https://api.github.com/graphql <<EOF
+{"query":"mutation { addComment(input: {}) { clientMutationId } }"}
+EOF
+== deny a message that looks like a flag is still a message
+gh pr comment 1 -b --help
+== allow
+git commit -m "--dry-run"
+== ask more deploy tools
+kubectl apply -f deploy.yaml
+== ask
+helm upgrade app ./chart
+== ask
+vercel --prod
+== ask
+fly deploy
+== ask
+aws s3 sync dist s3://bucket
+== allow reads with the same tools
+kubectl get pods
+== allow
+aws s3 ls s3://bucket
+== deny a quoted --comment= value is still the flag
+gh pr close 12 --comment="Superseded"
+== ask &> before the command
+&>/dev/null git push --force origin x
+== deny a heredoc or echo piped into curl or gh api
+cat <<EOF | curl -d @- https://api.github.com/graphql
+{"query":"mutation { addComment(input: {}) { clientMutationId } }"}
+EOF
+== deny
+echo '{"query":"mutation { addComment(input: {}) { x } }"}' | gh api graphql --input -
+== ask vercel deploys by default
+vercel --yes
+== ask
+vercel ./out
+== allow
+vercel logs app
+== ask more kubectl and aws writes
+kubectl label pod x a=b
+== ask
+kubectl -n prod rollout restart deploy/app
+== allow
+kubectl rollout status deploy/app
+== ask
+aws lambda update-function-code --function-name f --zip-file fileb://f.zip
+== ask
+aws s3 rb s3://bucket
+== allow
+aws s3 cp s3://bucket/x .
+== allow
+aws --profile p lambda list-functions
+== allow gh aliases through the gate
+gh pr new --title x --body-file b.md
+== ask
+gh repo new o/r --private
+== ask
+pnpm changeset publish
+== ask
+pnpm exec changeset publish
+== allow
+cargo publish --dry-run
+== allow Graphite submit goes through the push and PR gates
+gt submit
+== ask printf's line break piped into a shell
+printf 'git push --force origin x\n' | sh
+== deny a chat webhook post
+curl -X POST --data '{"text":"done"}' https://hooks.slack.com/services/T0/B0/x
+== allow
+curl -s https://hooks.slack.com/
+== deny glab writes
+glab api projects/1/merge_requests/2/notes -f body=hi
+== allow
+glab mr create --fill --yes
+== ask
+glab mr merge 5
+== allow
+glab mr view 5
+== deny glab api in its other spellings
+glab api --method=POST projects/1/merge_requests/2/notes
+== deny
+glab api -XPOST projects/1/issues/2/notes
+== deny
+glab api graphql -f query='mutation { createNote(input: {}) { note { id } } }'
+== allow
+glab api -X GET projects/1/merge_requests/2/notes -f per_page=100
+== allow
+glab mr create --fill --push
+== ask
+glab variable set X y
+== deny webhooks through httpie, but not a GET
+http hooks.slack.com/services/x text=hi
+== allow
+curl -G -d q=1 https://hooks.slack.com/x
+== deny printf's line breaks separate commands for the shell
+printf 'echo hi\ngh pr comment 1 -b x\n' | sh
+== deny more chat posts
+curl -X POST -d @msg.json "$SLACK_WEBHOOK_URL"
+== deny
+curl -X POST -d '{"text":"x"}' https://chat.googleapis.com/v1/spaces/a/messages
+== deny
+curl -X POST https://slack.com/api/chat.postMessage -d channel=c -d text=x
+== allow
+curl -I -X HEAD https://hooks.slack.com/x
+== allow
+http POST localhost:3000/api/settings url=https://hooks.slack.com/x
+== deny glab approvals through the API
+glab api -X POST projects/1/merge_requests/2/approve
+== ask
+glab api -XPUT projects/1/merge_requests/2/merge
+== deny webhook URLs keep their query strings
+curl -X POST "https://chat.googleapis.com/v1/spaces/A/messages?key=k&token=t" -d @m.json
+== deny
+curl -X POST "https://slack.com/api/chat.postMessage?channel=C&text=hi"
+== deny
+echo '{"text":"hi"}' | http hooks.slack.com/services/x
+== deny
+curl -X POST -d x "$slack_hook_url"
+== allow a local endpoint named webhook is not a chat
+curl -X POST -d x localhost:3000/WEBHOOK
+== ask a GitLab GraphQL query read from a file
+glab api graphql -F query=@m.graphql
+== allow a GitLab GraphQL query reads
+glab api graphql -f query='query { currentUser { name } }'
+== deny a Teams workflow URL with its query string
+curl -X POST "https://x.logic.azure.com/workflows/abc/triggers/manual/paths/invoke?api-version=1&sig=s" -d x
+== deny httpie with a lowercase method
+xh post hooks.slack.com/services/x text=hi
+== allow curl takes no bare method word, so -o post is a file name
+curl -s https://api.github.com/repos/o/r/issues/5/comments -o post
+== allow glab -R in every place
+glab -Ra/b mr view 5
+== deny
+echo '{"body":"x"}' | http api.github.com/repos/o/r/issues/1/comments
+== deny
+curl -X POST -d x "${BASE}${SLACK_WEBHOOK_PATH}"
+== deny httpie --raw sends a body
+http --raw '{"text":"x"}' hooks.slack.com/services/x
+== allow a GraphQL directive is not a file
+gh api graphql -f query='query { viewer { login @skip(if: false) } }'
+== ask a GraphQL body from a file with no extension
+curl -X POST -d @payload https://api.github.com/graphql
+== ask a webhook ID in a path is not a webhook URL
+curl -X DELETE https://api.github.com/repos/o/r/hooks/$WEBHOOK_ID
+== allow
+curl -X POST -H "X-Token: $WEBHOOK_SECRET" https://example.com/build
+== allow an explicit GET with piped input reads
+echo x | http GET api.github.com/repos/o/r/issues/1/comments
+== allow local webhook testing with a secret header
+curl -X POST localhost:3000/webhook -H "X-Gitlab-Token: $WEBHOOK_SECRET" -d @push.json
+== allow
+curl -X POST localhost:3000/webhooks/$WEBHOOK_ID -d @fixture.json
+== deny
+curl -X POST "$BASE_URL/$SLACK_WEBHOOK_PATH" -d x
+== deny glab -R joined to its value
+glab -Ra/b mr note 5 -m x
+== allow a variables file leaves the query readable
+gh api graphql -f query='query { viewer { login } }' -F vars=@v.json
+== allow httpie --offline sends nothing
+http --offline --raw x api.github.com/repos/o/r/issues/1/comments
+== ask a file-sourced query written with =
+gh api graphql -Fquery=@q.graphql
+== ask
+curl -X POST --data-binary=@q.graphql https://api.github.com/graphql
+== allow a custom directive in a readable query
+gh api graphql -f query='query { user(login: "x") { name @cached } }'
+== deny a webhook variable inside a literal URL
+curl -X POST "https://hooks.example.com/$SLACK_WEBHOOK_PATH" -d x
+== allow a webhook variable as an option's value is not the URL
+curl -X POST localhost:3000/webhook -u "$WEBHOOK_USER:$WEBHOOK_PASS" -d @e.json
+== allow
+http POST localhost:3000/webhook < "$WEBHOOK_FIXTURE"
+== ask more docker image pushes
+docker image push registry.example.com/app:1
+== ask
+docker buildx build --push -t app .
+== ask
+docker --context prod push app
+== ask an S3 upload with flags after the destination
+aws s3 sync ./dist s3://bucket --delete
+== allow a dry run bundled with force sends nothing
+git push -nf origin x
+== deny a webhook variable followed by a query string
+curl -X POST "$DISCORD_WEBHOOK_URL?wait=true" -d '{"content":"done"}'
+== deny
+curl -X POST --url="$SLACK_WEBHOOK_URL" -d x
+== ask a short option glued to its file
+curl -X POST -d@q.json https://api.github.com/graphql
+== allow a header that names a webhook secret is not the URL
+curl -X POST localhost:3000/x -H "X-Sig: $SLACK_WEBHOOK_URL" -d x
+== allow a field that holds a webhook URL is data
+http POST localhost:3000/settings hook=https://hooks.slack.com/x
+== ask S3 uploads in more forms
+echo x | aws s3 cp - s3://b/k
+== ask
+aws s3 cp --sse ./f s3://b/k
+== ask a glued push option is not a dry run, and asks like -o
+git push -oci.skip origin x
+== ask
+git push -uo merge_request.create origin x
+== ask docker pushes through compose and bake
+docker compose push
+== ask
+docker buildx bake --push
+== ask
+docker --tlscacert ca.pem push app
+== deny curl --url= names the request URL
+curl -X POST --url=https://api.github.com/graphql -d '{"query":"mutation { addComment(input: {}) { clientMutationId } }"}'
+== allow gh help right after the subcommand
+gh pr create --help
+== ask docker pushes with flags before the subcommand
+docker compose -f prod.yml push
+== ask
+docker-compose push
+== ask
+docker buildx --builder b build --push .
+== ask
+docker buildx build -o type=image,name=r/x,push=true .
+== allow docker words inside a container command are not a push
+docker run --rm alpine echo build --push
+== allow
+docker compose exec app git status
+== ask
+docker buildx imagetools create -t r/x:1 r/x:0
+== ask docker-compose build --push
+docker-compose -f a.yml build --push
+== ask
+docker buildx build --output type=registry .
+== ask compose options with values, builder aliases and publish
+docker compose --ansi never push
+== ask
+docker builder build --push .
+== ask
+docker compose publish r/app:1
+== allow
+docker-compose exec app git status
+== ask a forced push with push options still reads as forced (its reason is checked in test-hooks.sh)
+git push -fo ci.skip origin main
+== ask docker image build is buildx build
+docker image build --push -t app .
+== ask compose option values that look like subcommands
+docker compose --profile build push
+== ask
+docker compose -p up push
+== ask a push option named tag asks about the option, not a tag push
+git push -o tag origin main
+== ask docker-compose global options with values
+docker-compose --log-level DEBUG push
+== ask docker compose alpha publish
+docker compose -f a.yml alpha publish r/app

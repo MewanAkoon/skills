@@ -22,7 +22,9 @@ One other file ships the same way:
 [standards/workflow.md](standards/workflow.md), the standing workflow every
 session follows. A SessionStart hook in the plugin sends it, with
 `plain-writing`'s core rules, at the start of every session and again after
-each compaction. The hook is Claude Code packaging, like the manifests.
+each compaction. Other hooks in the plugin enforce the rules that have to hold,
+listed under "What the hooks enforce" below. The hooks are Claude Code
+packaging, like the manifests.
 
 One narrow exception to "plain markdown", named in [AGENTS.md](AGENTS.md)
 under "What belongs here": the Cursor rules file carries a `description` that
@@ -86,7 +88,7 @@ ok
 It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
 when an old link or a personal copy of one of these skills is still loading,
-when the `skillOverrides` entry is missing, or when the plugin's session hook
+when the `skillOverrides` entry is missing, or when one of the plugin's hooks
 has logged an error.
 
 ### Updating
@@ -224,6 +226,47 @@ that has a procedure, so a change of phase is the cue to load it:
 The other skills hold knowledge a phase reaches for, or are modes you start
 yourself.
 
+### What the hooks enforce
+
+The skills say what to do. The plugin's hooks stop what must not happen, in
+every session and inside subagents. They run in Claude Code only.
+
+| Action | What happens |
+|---|---|
+| A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post` | Denied, with a note to write the draft to a file |
+| A `git commit` or push, a PR create, edit or ready, an issue or label write, and a GitHub MCP tool that writes files or pushes | Denied in a subagent, and when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message. When the skill loaded but your message did not ask, you confirm it in a prompt. `gh issue create --web`, which you submit yourself, passes |
+| A PR merge, close or reopen, a release, a workflow run or rerun, a repo, gist, project, secret or variable write, a push that forces, deletes or sends tags, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and any other MCP tool whose name says it writes, such as create, update, delete, send or publish | You confirm it in a prompt, auto mode included |
+| A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
+| Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
+
+The Claude app's own MCP servers, such as the one a project thread replies
+through, are exempt from every check, because they carry the conversation
+with you. Two of their tools are the exception. A command the terminal tool
+runs is read like any other, and the tool that turns on a PR's auto-merge
+asks like a merge. Three hints are best effort: a review comment link
+names `eng:pr-feedback`, a pull request link with no request gets a note to
+ask what you want, and a git conflict names `eng:merge-conflicts`.
+
+Your message asks for a write when the last clause that names it does so
+without holding back: no negation, no deferral such as "later" or "I'll", and
+no question. So "commit, but don't push" asks for the commit and not the push,
+and so does "commit and push. Don't push."
+After a takeback such as "actually" or "scratch that", only what comes next
+counts, and a write it does not name again is taken back.
+The rule errs toward a prompt, but it reads words rather than meaning, so the
+skill lock and the skills' own rules stay the main guard.
+
+The hooks catch a slip, not a determined bypass. They read commands the way
+a shell splits them, so a quoted
+`gh pr comment` in a grep or a heredoc stays allowed, while a command inside
+`$( )`, or a heredoc fed to a shell, is read too. They cannot see git aliases or push settings, a tag pushed
+by its bare name, a commit made by anything but `git commit`, such as
+`git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
+an MCP tool whose name hides what it does, or a browser posting through a web
+page. A hook that breaks fails open: it logs an error, which
+`./scripts/check.sh --doctor` reports, and the session carries on. The write
+gate is the exception by design: when it cannot read its state, it asks.
+
 ## Skills
 
 Every skill loads as `eng:<name>`. The tables link the folders.
@@ -296,9 +339,10 @@ The checker covers the mechanical half of that standard, and
 [AGENTS.md](AGENTS.md) lists what it checks. CI runs it on every pull request
 and on every push to `main`, on Linux and on macOS, without `--doctor`, since
 a fresh runner has no Claude Code install to inspect. The checker also runs
-`./scripts/test-hooks.sh`, which feeds the session hook its inputs and checks
-what it sends, and, where Node is installed, the fixtures for
-`scripts/stats.mjs`. CI also runs the validator on a pinned Claude Code.
+`./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
+including every command case under `tests/hooks/pre-tool/`, and checks what
+they send, and, where Node is installed, the fixtures for `scripts/stats.mjs`.
+CI also runs the validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
@@ -310,7 +354,8 @@ requests that picked the same version fail there.
 
 `evals/` holds cases for `claude plugin eval`: each workflow skill loads at its
 moment, `eng:issue` stays out of "look into issue 42", the contract is in
-context at the start, and looking into a repo commits nothing. Every run is a
+context at the start, looking into a repo commits nothing, a commit waits for
+`eng:commit`, and an unreviewed hand-back gets the review gate's reminder. Every run is a
 model call on your account, so they stay out of CI. Run them before a release:
 
 ```bash

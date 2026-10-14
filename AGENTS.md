@@ -27,18 +27,18 @@ Node. The commands they carry:
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
-| `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs from `tests/hooks/` and checks what it sends. `check.sh` runs it. |
+| `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
 | `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node is installed. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 
-None of them needs a package installed beyond `jq`, which macOS 15 and the CI
-runners ship, `claude` for the validator and `--doctor`, and Node for
-`stats.mjs`. Where Node is missing, `check.sh` warns and skips the stats
-fixtures. Each bash script resolves its own path with `readlink -f`, and
-`check.sh` takes its file list from `git`. `scripts/legacy.sh` is not run on
-its own: `link.sh` and `--doctor` both source it for the old skill names and
-for resolving where a link points.
+None of them needs a package installed beyond `jq` and `git`, which macOS 15
+and the CI runners ship, `claude` for the validator and `--doctor`, and Node
+for `stats.mjs`. The hook needs the same two and `awk`. Where Node is missing,
+`check.sh` warns and skips the stats fixtures. Each bash script resolves its
+own path with `readlink -f`, and `check.sh` takes its file list from `git`.
+`scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
+source it for the old skill names and for resolving where a link points.
 
 `package.json` carries those as `npm run check`, `doctor`, `validate`,
 `test:hooks`, `stats`, and `unlink`, plus `npm run test:stats`, which runs
@@ -61,9 +61,13 @@ harness, and neither carrying machinery of its own:
   names the skill for each step that has a procedure, so every skill it names
   has to exist and be model-invoked.
 
-The manifests and `hooks/` are the Claude Code packaging around them. The hook
-reads `standards/workflow.md` and `plain-writing` at run time and adds
-nothing of its own, so a file read outside the plugin still reads the same.
+The manifests and `hooks/` are the Claude Code packaging around them. The
+session hook reads `standards/workflow.md` and `plain-writing` at run time and
+adds nothing of its own, so a file read outside the plugin still reads the
+same. The other hooks enforce the workflow's rules on posting, remote writes
+and review, and in places go further. For example, a subagent never runs
+`git commit` or pushes, and a PR merge, release or deploy always asks, even when your
+message asked for it.
 
 Other plugins stay out, even when useful on the machine you are sitting at.
 Recommendations of that kind live in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md),
@@ -146,7 +150,8 @@ follows, and enforcing it is what this repo is for.
   compaction keeps of a skill.
 - `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and `evals/*/scaffold.sh`
   parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
-  parses under `sh -n`, which names a syntax error plainly, and its fixtures
+  parses under `sh -n`, which names a syntax error plainly,
+  `hooks/classify-command.awk` loads in `awk`, and the hook's fixtures
   pass. Where Node is installed, `scripts/stats.mjs` parses under
   `node --check` and its fixtures pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
@@ -189,8 +194,8 @@ runner has no Claude Code install to inspect: that Claude Code is 2.1.293 or
 later; that `eng@mewanakoon` is installed at user scope, enabled and at this
 clone's version; that no old link or personal copy of one of these skills sits
 in `~/.claude/skills`; that `~/.claude/settings.json` is valid JSON and sets
-`skillOverrides` for `commit` and `pr` to `"off"`; and that the session hook has
-logged no error under `~/.claude/plugins/data/eng-mewanakoon/`.
+`skillOverrides` for `commit` and `pr` to `"off"`; and that the plugin's hooks
+have logged no error under `~/.claude/plugins/data/eng-mewanakoon/`.
 `CLAUDE_CONFIG_DIR` moves where it looks, as it does for Claude Code. Anything
 to fix fails the run, so a hook can gate on it.
 

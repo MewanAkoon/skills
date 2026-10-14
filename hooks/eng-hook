@@ -111,15 +111,20 @@ decision() {
   }}'
 }
 
+# Prints this session's state directory without creating it. Fails when there
+# is no data directory or no session id.
+state_path() {
+  [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || return 1
+  sid="$(printf '%s' "$f_sid" | tr -c 'A-Za-z0-9_-' '-')"
+  [ -n "$sid" ] || return 1
+  printf '%s\n' "$CLAUDE_PLUGIN_DATA/sessions/$sid"
+}
+
 # Sets $state to this session's state directory, creating it. Fails when
 # there is no data directory or no session id.
 find_state() {
   [ -z "$state" ] || return 0
-  [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || return 1
-  sid="$f_sid"
-  sid="$(printf '%s' "$sid" | tr -c 'A-Za-z0-9_-' '-')"
-  [ -n "$sid" ] || return 1
-  state="$CLAUDE_PLUGIN_DATA/sessions/$sid"
+  state="$(state_path)" || { state=""; return 1; }
   if ! mkdir -p "$state" 2>/dev/null; then
     log "cannot create $state"
     state=""
@@ -250,7 +255,7 @@ record_review() {
       *..) set +f; return 0 ;;
       *..*) target="${a##*..}" ;;
       # A pull request reads what was pushed to it, not the local changes.
-      '#'[0-9]* | http*/pull/[0-9]*) pr=yes; break ;;
+      '#'[0-9]* | http*/pull/[0-9]* | http*/merge_requests/[0-9]*) pr=yes; break ;;
       # A branch, a commit or another URL is not the local changes.
       *[!0-9]*) set +f; return 0 ;;
       # Digits alone are a pull request's number.
@@ -778,16 +783,13 @@ pushed_refs() {
 # Before a push or a pull request command, which the classifier named in
 # $found, keeps the command, its kind and where every remote branch stood,
 # so the post-tool hook can tell what it moved, even when the same command
-# also commits. Opening a pull request needs its branch pushed, not moved.
+# also commits. Opening a pull request, which the classifier names with
+# "open pr", needs its branch pushed, not moved.
 note_push() {
   [ -z "$f_agent" ] || return 0
   printf '%s\n' "$found" | grep -Eqx 'gate (push|pr)' || return 0
   kind=push
-  case " $command " in
-    # Neither opens one.
-    *" --web"* | *" --dry-run"*) ;;
-    *" pr create "* | *" pr new "* | *" mr create "* | *" mr new "*) kind=open ;;
-  esac
+  printf '%s\n' "$found" | grep -qx 'open pr' && kind=open
   find_state || return 0
   {
     printf '%s\n' "$kind"
@@ -801,10 +803,12 @@ note_push() {
 # opened on a branch already there. A push that moved only tags, a deletion
 # or the default branch moves no such branch, and records nothing. The refs
 # decide a push, not the exit status, because a command can fail after its
-# push landed. A pull request that failed to open records nothing.
+# push landed. A pull request that failed to open counts only when its
+# command's push moved a branch.
 record_push() {
+  # Most commands push nothing, so look for the file before touching state.
+  [ -f "$(state_path)/push-pending" ] || return 0
   find_state || return 0
-  [ -f "$state/push-pending" ] || return 0
   pending="$(cat "$state/push-pending" 2>/dev/null)"
   ran="$(get .tool_input.command)"
   [ "$(printf '%s\n' "$pending" | sed -n 2p)" = "$(printf '%s' "$ran" | git hash-object --stdin 2>/dev/null)" ] || return 0
@@ -813,12 +817,11 @@ record_push() {
   head="$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" || return 0
   after="$(pushed_refs "$f_cwd")"
   [ -n "$after" ] || return 0
-  if [ "$kind" = open ]; then
-    [ "$f_event" = PostToolUseFailure ] && return 0
-  else
+  if [ "$kind" != open ] || [ "$f_event" = PostToolUseFailure ]; then
+    before="$(printf '%s\n' "$pending" | sed '1,2d')"
     moved=no
     for ref in $after; do
-      printf '%s\n' "$pending" | sed '1,2d' | grep -qxF "$head $ref" || moved=yes
+      printf '%s\n' "$before" | grep -qxF "$head $ref" || moved=yes
     done
     [ "$moved" = yes ] || return 0
   fi

@@ -827,12 +827,12 @@ pr_commit() {
   printf '%s\n' "$1" > "$pr/a.txt"
   git -C "$pr" -c user.name=t -c user.email=t@t commit -qam "$1"
 }
-# Stubs stand in for gh and glab, so no test reaches a real service. Each
+# Stubs stand in for gh, glab and gt, so no test reaches a real service. Each
 # exits with the status in $scratch/stub-status.
 mkdir -p "$scratch/stub"
 # The stub reads its status when it runs, so the expansion stays quoted.
 # shellcheck disable=SC2016
-for tool in gh glab; do
+for tool in gh glab gt; do
   printf '#!/bin/sh\nexit "$(cat %s/stub-status 2>/dev/null || echo 0)"\n' "$scratch" > "$scratch/stub/$tool"
   chmod +x "$scratch/stub/$tool"
 done
@@ -886,9 +886,12 @@ pr_stop
 # review of the pull request by number clears it.
 pr_commit six
 git -C "$pr" push -q 2>/dev/null
-pr_bash 'gh pr create --web'
-pr_stop
-pr_reminded && bad "pr reminder: a pull request left to the browser got a reminder"
+for web in 'gh pr create --web' 'gh pr create -w' 'gh pr create --web=true' 'gh pr create -dw' \
+  'gh pr create --title x --body-file b.md --dry-run' 'glab mr create -w' 'glab mr create -yw' 'gt submit --dry-run'; do
+  pr_bash "$web"
+  pr_stop
+  pr_reminded && bad "pr reminder: '$web', which opens no pull request, got a reminder"
+done
 printf '1\n' > "$scratch/stub-status"
 pr_bash 'gh pr create --title x --body-file body.md'
 pr_stop
@@ -902,6 +905,34 @@ git -C "$pr" push -q 2>/dev/null
 pr_bash 'glab mr create --title x'
 pr_stop
 pr_reminded || bad "pr reminder: a new merge request got no reminder"
+# The reminder went out above, so the state file shows what the review did.
+pr_review "high https://gitlab.com/o/r/-/merge_requests/5"
+[ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
+  || bad "pr reminder: a review of the merge request did not count"
+# What the classifier says about a pull request command decides its gate and
+# whether it counts as opening one.
+for case in 'gh pr create -twip -b x|gate pr open pr' 'gh pr create --web=false -t x|gate pr open pr' \
+  'gh pr create -dw|gate push' 'gh pr create --dry-run=true|gate push' 'glab mr create --web=false -t x|gate pr open pr' \
+  'glab mr create -yw|gate pr' 'gt submit|gate push gate pr open pr' 'gt submit --dry-run|gate push gate pr'; do
+  said="$(printf '%s' "${case%%|*}" | awk -f hooks/classify-command.awk | tr '\n' ' ')"
+  [ "$said" = "${case#*|} " ] || bad "classifier: '${case%%|*}' gave '$said', not '${case#*|}'"
+done
+# A pull request opened through the API counts too, by REST or GraphQL.
+for api in 'gh api repos/o/r/pulls -f title=x -f head=feature -f base=main' \
+  "gh api graphql -f query='mutation { createPullRequest(input: {}) { pullRequest { url } } }'"; do
+  pr_commit "api-$(printf '%s' "$api" | cksum | cut -d' ' -f1)"
+  git -C "$pr" push -q 2>/dev/null
+  pr_bash "$api"
+  pr_stop
+  pr_reminded || bad "pr reminder: a pull request opened by '$api' got no reminder"
+done
+# A push that landed counts though the pull request after it failed to open.
+pr_commit six-fail
+printf '1\n' > "$scratch/stub-status"
+pr_bash 'git push -q && gh pr create --title x --body-file b.md'
+rm -f "$scratch/stub-status"
+pr_stop
+pr_reminded || bad "pr reminder: a push followed by a pull request that failed to open got no reminder"
 # A commit and its push in one command count, though the branch's name was
 # already among the remote branches.
 pr_bash 'printf six2 > a.txt && git -c user.name=t -c user.email=t@t commit -qam six2 && git push -q'

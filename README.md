@@ -285,7 +285,10 @@ a shell splits them, so a quoted
 by its bare name, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name hides what it does, or a browser posting through a web
-page. A hook that breaks fails open: it logs an error, which
+page. The reminder to review the whole PR reads only the Bash tool. It misses
+a PR opened through an MCP tool or `glab api`, a push run in the background, a push to a URL
+rather than a named remote, and a push from a clone that tracks only one
+branch. It reads a short commit hash made only of digits as a PR number. A hook that breaks fails open: it logs an error, which
 `./scripts/check.sh --doctor` reports, and the session carries on.
 
 ## Skills
@@ -376,8 +379,7 @@ requests that picked the same version fail there.
 `evals/` holds cases for `claude plugin eval`: each workflow skill loads at its
 moment, `eng:issue` stays out of "look into issue 42", the contract is in
 context at the start, looking into a repo commits nothing, a commit waits for
-`eng:commit`, an unreviewed hand-back gets the review gate's reminder, and a
-push gets the reminder to review the whole PR. Every run is a
+`eng:commit`, and an unreviewed hand-back gets the review gate's reminder. Every run is a
 model call on your account, so they stay out of CI. Run them before a release:
 
 ```bash
@@ -389,8 +391,11 @@ claude plugin eval . --ablation none --runs 1 --scaffold --allow-tools Bash \
 case gets it only when it lists Bash in `allowed_tools` and the run passes
 `--allow-tools Bash`; the case that forbids `git commit` does both.
 
-The eval sandbox blocks `git`, so the review loop is checked by hand. In an
-empty directory, run `tests/review-loop/setup.sh` from the clone, then:
+The eval sandbox blocks `git`, so two things are checked by hand: the review
+loop, and whether Claude acts on the reminder to review the whole PR after a
+push. `./scripts/test-hooks.sh` covers when that reminder fires. For the
+review loop, in an empty directory, run `tests/review-loop/setup.sh` from the
+clone, then:
 
 ```bash
 claude -p "The plan in PLAN.md is approved. Implement it." \
@@ -399,7 +404,9 @@ claude -p "The plan in PLAN.md is approved. Implement it." \
 ```
 
 A good run calls `code-review` with `high` and a `<hash>..<hash>` range,
-briefs the intent check beside it, and commits nothing.
+briefs the intent check beside it, and commits nothing. For the reminder,
+push a PR's branch in a live session: the next hand-back runs `code-review`
+with `high` on the whole PR, or says that review is still owed.
 
 ## Usage counts
 

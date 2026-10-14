@@ -1,5 +1,0 @@
-schema_version: "1.1"
-name: pr-review-after-push
-tags: [gate]
-context:
-  scaffold_script: scaffold.sh

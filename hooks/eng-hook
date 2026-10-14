@@ -1,23 +1,75 @@
 #!/bin/sh
 # Hook entry point for the eng plugin. hooks/hooks.json runs it as
 #
-#   eng-hook session-start
+#   eng-hook <mode>
 #
-# on SessionStart. It sends the workflow contract and the Punctuation and Word
-# choice sections of plain-writing as context, read from the plugin's own
-# files at run time, so there is no generated file to keep in step. On a
-# compaction it also asks Claude Code to load the skill listing again, which
-# compaction drops.
+# with the hook's JSON input on stdin, one mode per event:
 #
-# Every failure exits 0, so a broken hook never stops a session. A failure is
-# written to eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor
-# reads. Needs jq for the JSON. Without it the block goes out as plain text,
-# which Claude Code also takes as context, and the listing reload is skipped.
+#   session-start  SessionStart. Sends the workflow contract and the
+#                  Punctuation and Word choice sections of plain-writing, read
+#                  from the plugin's own files at run time. On a compaction it
+#                  also asks Claude Code to load the skill listing again, which
+#                  compaction drops.
+#   prompt         UserPromptSubmit. Keeps your latest message for the write
+#                  gate, and adds a hint when it is a pull request link.
+#   expansion      UserPromptExpansion. Records a skill you type, blocks
+#                  /code-review with --comment or --post, and records the
+#                  tree a review you type will read.
+#   pre-tool       PreToolUse. The post guard, the write gate and the
+#                  confirmation prompt for shell commands and MCP tools, and
+#                  the guard on a code-review the model calls.
+#   post-tool      PostToolUse and PostToolUseFailure. Records a skill that
+#                  loaded, and adds a hint when git reports a conflict.
+#   stop           Stop. The review gate.
+#
+# State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
+# plugin updates: turn (the text of your latest message), skills (those loaded
+# since), start-hash (the uncommitted changes when the session started) and
+# review-hash (the same when a review covering them last ran). It is not read from
+# the transcript, which Claude Code writes asynchronously. Where the state
+# cannot be read, the write gate asks rather than allows.
+#
+# Every failure exits 0, so a broken hook never stops a session or a tool. A
+# failure is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which
+# check.sh --doctor reads. Needs jq. Without it the session block goes out as
+# plain text, which Claude Code also takes as context, and every other mode
+# does nothing.
 
 set -u
 
 mode="${1:-}"
 root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+input=""
+state=""
+
+# The code-review flags that post to a pull request.
+POST_FLAGS='--comment(=[^[:space:]]*)?|--post(=[^[:space:]]*)?'
+
+POST_REASON="Posting a comment, review or reply is off limits in this setup, and \
+no approval releases it. Write the draft to a file with the command that would \
+post it, give the user the path, and say that is why. Reading stays open."
+
+# The words in a message that name a write, for telling a clause that asks
+# for one from a clause that only qualifies it.
+WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)? ?in|prs?|pull[ -]requests?|merge[ -]requests?|mrs?|issues?|tickets?'
+
+# The words in an MCP tool's name that say what it does: it reads, it posts,
+# or it writes somewhere else.
+READS="read get list search fetch view retrieve query find lookup download"
+POSTS="comment comments reply review reviews reaction reactions approve"
+WRITES="create update delete apply execute deploy merge upload set send post \
+publish share trash remove append insert clear move edit write submit add \
+assign close reopen archive unarchive push commit fork schedule save request \
+forward run invoke trigger dispatch duplicate restore generate batch upsert \
+patch rename drop cancel reset transition invite enable disable rerun copy \
+import revoke grant destroy terminate stop kill rollback restart scale reboot \
+shutdown convert modify reprioritize star unstar dismiss mark manage subscribe \
+unsubscribe follow unfollow"
+
+REVIEW_REMINDER="There are uncommitted changes that have not been reviewed since \
+they last changed. If this hands back finished work, run the review step in \
+eng:implement first. If you are stopping to ask a question or report a blocker, \
+say so and end the turn."
 
 log() {
   printf 'eng-hook: %s\n' "$1" >&2
@@ -28,8 +80,161 @@ log() {
   return 0
 }
 
+# Prints one value from the hook's input, or nothing when it is absent.
+get() {
+  printf '%s' "$input" | jq -r "$1 // empty" 2>/dev/null
+}
+
+# Prints the JSON that adds $2 as context on the event named $1.
+context() {
+  jq -n --arg e "$1" --arg c "$2" \
+    '{hookSpecificOutput: {hookEventName: $e, additionalContext: $c}}'
+}
+
+# Prints the JSON for a PreToolUse decision, $1, with the reason $2.
+decision() {
+  jq -n --arg d "$1" --arg r "$2" '{hookSpecificOutput: {
+    hookEventName: "PreToolUse", permissionDecision: $d, permissionDecisionReason: $r
+  }}'
+}
+
+# Sets $state to this session's state directory, creating it. Fails when
+# there is no data directory or no session id.
+find_state() {
+  [ -z "$state" ] || return 0
+  [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || return 1
+  sid="$f_sid"
+  sid="$(printf '%s' "$sid" | tr -c 'A-Za-z0-9_-' '-')"
+  [ -n "$sid" ] || return 1
+  state="$CLAUDE_PLUGIN_DATA/sessions/$sid"
+  if ! mkdir -p "$state" 2>/dev/null; then
+    log "cannot create $state"
+    state=""
+    return 1
+  fi
+  # Session start prunes directories by age, so a session in use stays young.
+  touch "$state" 2>/dev/null
+  return 0
+}
+
+# A skill's name as the gate compares it: eng:commit, /eng:commit and commit
+# are all commit.
+skill_name() {
+  n="${1#/}"
+  printf '%s' "${n#eng:}"
+}
+
+record_skill() {
+  [ -n "$1" ] || return 0
+  find_state || return 0
+  skill_name "$1" >> "$state/skills"
+  printf '\n' >> "$state/skills"
+}
+
+# True when the words in $1 hold one matching the extended regex $2.
+has_word() {
+  printf ' %s ' "$1" | tr '\t\n' '  ' | grep -Eiq "[[:space:]]($2)[[:space:]]"
+}
+
+# Prints a hash of the uncommitted changes in the repo holding directory $1,
+# tracked and untracked, leaving out .claude/plans and .claude/handoffs. Prints "clean" when there
+# are none, and fails outside a git repo.
+tree_state() {
+  top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  [ -n "$top" ] || return 1
+  base=HEAD
+  # A repo with no commit yet compares against the empty tree.
+  git -C "$top" rev-parse -q --verify HEAD >/dev/null 2>&1 ||
+    base=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+  # Plans and handoffs are left out, as the review loop's snapshot leaves them.
+  # The untracked names are listed once, NUL-separated, so a quote or a
+  # newline in one cannot break the list.
+  ts_list="$(mktemp "${TMPDIR:-/tmp}/eng-hook-untracked.XXXXXX")" || return 1
+  git -C "$top" ls-files -z --others --exclude-standard -- . \
+    ':(exclude).claude/plans' ':(exclude).claude/handoffs' > "$ts_list" 2>/dev/null
+  if git -C "$top" diff --quiet "$base" -- . ':(exclude).claude/plans' ':(exclude).claude/handoffs' 2>/dev/null &&
+    [ ! -s "$ts_list" ]; then
+    rm -f "$ts_list"
+    printf 'clean\n'
+    return 0
+  fi
+  # The diff streams into the hash rather than sitting in a variable. The
+  # untracked files are hashed a hundred at a time; a batch that fails is
+  # dropped and hashed file by file, so one that cannot be, such as a link to
+  # a directory, stands as its name and only its batch is slowed. The script is single-quoted
+  # for sh -c, which expands its arguments.
+  # shellcheck disable=SC2016
+  ts_hash="$(
+    {
+      git -C "$top" diff --binary "$base" -- . ':(exclude).claude/plans' ':(exclude).claude/handoffs' 2>/dev/null
+      tr '\0' '\n' < "$ts_list"
+      [ -s "$ts_list" ] && (cd "$top" && xargs -0 -n 100 sh -c '
+        out="$(git hash-object -- "$@" 2>/dev/null)" && { printf "%s\n" "$out"; exit 0; }
+        for f; do git hash-object -- "$f" 2>/dev/null || printf "unhashed %s\n" "$f"; done
+      ' sh < "$ts_list")
+    } | git -C "$top" hash-object --stdin
+  )"
+  rm -f "$ts_list"
+  [ -n "$ts_hash" ] || return 1
+  printf '%s\n' "$ts_hash"
+}
+
+# Prints the tree object of the working tree as the review loop snapshots it:
+# every file, untracked too, with the plans and handoffs as HEAD has them.
+worktree_tree() {
+  wt_index="$(mktemp "${TMPDIR:-/tmp}/eng-hook-index.XXXXXX")" || return 1
+  # Built from HEAD rather than a copy of the index, whose cached file stats
+  # can hide an edit made in the same second as the copy.
+  rm -f "$wt_index"
+  # A step that fails leaves a partial index, whose tree is not this one.
+  if GIT_INDEX_FILE="$wt_index" git -C "$1" read-tree HEAD 2>/dev/null &&
+    GIT_INDEX_FILE="$wt_index" git -C "$1" add -A 2>/dev/null &&
+    GIT_INDEX_FILE="$wt_index" git -C "$1" reset -q -- ':/.claude/plans' ':/.claude/handoffs' 2>/dev/null; then
+    GIT_INDEX_FILE="$wt_index" git -C "$1" write-tree 2>/dev/null
+    wt_status=$?
+  else
+    wt_status=1
+  fi
+  rm -f "$wt_index"
+  return "$wt_status"
+}
+
+# Records that the uncommitted changes were reviewed, when the review's
+# arguments, $1, cover them: no target, which reviews the local changes, or a
+# range ending in a snapshot of this very tree. A pull request or another
+# range reviews something else, so it records nothing.
+record_review() {
+  find_state || return 0
+  cwd="$f_cwd"
+  target=""
+  skip=no
+  # The arguments are words to read, not patterns to expand against files.
+  set -f
+  for a in $1; do
+    if [ "$skip" = yes ]; then skip=no; continue; fi
+    case "$a" in
+      low | medium | high | xhigh | max | ultra) ;;
+      --max-findings) skip=yes ;;
+      -*) ;;
+      # A range with no end, such as HEAD.., stops at HEAD and so reads no
+      # uncommitted change.
+      *..) set +f; return 0 ;;
+      *..*) target="${a##*..}" ;;
+      # A pull request, a branch or a URL is not the local changes.
+      *) set +f; return 0 ;;
+    esac
+  done
+  set +f
+  if [ -n "$target" ]; then
+    top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
+    reviewed="$(git -C "$top" rev-parse -q --verify "$target^{tree}" 2>/dev/null)" || return 0
+    [ "$reviewed" = "$(worktree_tree "$top")" ] || return 0
+  fi
+  now="$(tree_state "$cwd")" || return 0
+  printf '%s\n' "$now" > "$state/review-hash"
+}
+
 session_start() {
-  input="$(cat)"
   contract="$root/standards/workflow.md"
   writing="$root/skills/plain-writing/SKILL.md"
 
@@ -66,7 +271,7 @@ $rules"
     return 0
   fi
 
-  source="$(printf '%s' "$input" | jq -r '.source // empty' 2>/dev/null)"
+  source="$(get .source)"
   reload=false
   [ "$source" = compact ] && reload=true
 
@@ -76,10 +281,467 @@ $rules"
       + (if $reload then {reloadSkills: true} else {} end)
     )
   }' || log "jq could not build the output"
+
+  if find_state; then
+    # A resume or a compaction keeps the changes the session started with.
+    # Hashing a large tree here could cost the block its timeout, so the first
+    # prompt hashes it instead, before the model can change anything.
+    if [ "$source" = startup ] || [ "$source" = clear ] || [ ! -f "$state/start-hash" ]; then
+      rm -f "$state/start-hash"
+      : > "$state/start-pending"
+    fi
+    find "$CLAUDE_PLUGIN_DATA/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
+      -exec rm -rf {} + 2>/dev/null
+  fi
+  return 0
 }
 
+# The part of a prompt that is your own words. In a Claude project a message
+# arrives wrapped with the project's routing, and a relay from the project's
+# coordinator quotes yours, so only the bodies a human wrote count there.
+request_text() {
+  printf '%s' "$1" | jq -Rrs '
+    if test("^\\s*<wake[ >]") or contains("<coordinator-relay>") then
+      [ scan("<message[^>]*from=\"human\"[^>]*>([\\s\\S]*?)</message>"),
+        scan("<cited[^>]*author=\"user\"[^>]*>([\\s\\S]*?)</cited>") ]
+      | map(.[0]) | join("\n")
+    else . end' 2>/dev/null
+}
+
+on_prompt() {
+  if find_state && [ -f "$state/start-pending" ]; then
+    tree_state "$f_cwd" > "$state/start-hash" 2>/dev/null || rm -f "$state/start-hash"
+    rm -f "$state/start-pending"
+  fi
+  text="$(get .prompt)"
+  lead="$(printf '%s\n' "$text" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;p;q;}')"
+  # A background task reporting back or another session's message is not
+  # yours, so it keeps the state of the message before it.
+  case "$lead" in
+    '<task-notification'* | '<cross-session-message'*) return 0 ;;
+  esac
+  request="$(request_text "$text")"
+  # A project event no human wrote, such as CI reporting back, keeps it too.
+  case "$lead" in
+    '<wake '* | '<wake>'*) envelope=yes ;;
+    *) case "$text" in *'<coordinator-relay>'*) envelope=yes ;; *) envelope=no ;; esac ;;
+  esac
+  if [ "$envelope" = yes ] && [ -z "$(printf '%s' "$request" | tr -d '[:space:]')" ]; then
+    return 0
+  fi
+  if find_state; then
+    printf '%s\n' "$request" > "$state/turn"
+    : > "$state/skills"
+    # UserPromptExpansion fires before this, so a skill typed as a slash
+    # command is recorded again after the reset.
+    case "$lead" in
+      /*) record_skill "${lead%%[[:space:]]*}" ;;
+    esac
+  fi
+
+  pr='https?://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+'
+  if printf '%s' "$request" | grep -Eq "${pr}[^[:space:]]*#(issuecomment-|discussion_r|pullrequestreview-|r[0-9])"; then
+    context UserPromptSubmit "The message links a pull request review comment. The eng:pr-feedback skill covers review feedback."
+  elif printf '%s' "$request" | grep -Eq "$pr" &&
+    [ -z "$(printf '%s' "$request" | sed -E "s#${pr}[^[:space:]]*##g" | tr -d '[:space:]')" ]; then
+    context UserPromptSubmit "The message is a pull request link with no request. Ask what to do with it rather than starting a review."
+  fi
+}
+
+on_expansion() {
+  name="$(skill_name "$(get .command_name)")"
+  case "${name##*:}" in
+    code-review | review)
+      if has_word "$(get .command_args)" "$POST_FLAGS"; then
+        jq -n --arg r "The eng plugin blocks --comment and --post on a review, because nothing is posted to a pull request from here. Run it without them and the findings stay in the session; ask for a draft file of comments if you want one." \
+          '{decision: "block", reason: $r}'
+        return 0
+      fi
+      record_review "$(get .command_args)"
+      ;;
+  esac
+  record_skill "$name"
+}
+
+# Sets $verdict to allow, ask or deny, and $reason, for a write the eng skill
+# named by $1 runs: commit, push, pr or issue.
+gate() {
+  verdict=allow
+  reason=""
+  case "$1" in
+    commit)
+      skills=commit label=commit via="the eng:commit skill"
+      words='commit(s|ted|ting)?|check(ed)?( it)?[ -]?in|stage' ;;
+    push)
+      skills="commit pr" label=push via="the eng:commit skill, or eng:pr when it pushes its branch"
+      words='push(ed|es|ing)?|prs?|pull[ -]requests?|merge[ -]requests?|(a|an|the|this|that|my|new|open|create|raise|make|submit|update) mrs?' ;;
+    pr)
+      skills=pr label="pull request change" via="the eng:pr skill"
+      words='prs?|pull[ -]requests?|merge[ -]requests?|(a|an|the|this|that|my|new|open|create|raise|make|submit|update) mrs?' ;;
+    *)
+      skills=issue label="issue change" via="the eng:issue skill"
+      words='issues?|tickets?' ;;
+  esac
+  if [ -n "$f_agent" ]; then
+    verdict=deny
+    reason="A subagent never commits, pushes, changes a pull request or writes an issue. Hand the work back to the main session."
+    return 0
+  fi
+  if ! find_state || [ ! -f "$state/turn" ]; then
+    verdict=ask
+    reason="The eng plugin could not read what the user's latest message asked for, so confirm this $label."
+    return 0
+  fi
+  loaded=no
+  for s in $skills; do
+    grep -qx "$s" "$state/skills" 2>/dev/null && loaded=yes
+  done
+  if [ "$loaded" = no ]; then
+    verdict=deny
+    reason="Load $via with the Skill tool first. It runs this $label, and only when the user's latest message asks for one."
+    return 0
+  fi
+  # The message is read clause by clause, split at . ; : ! ? and at a comma
+  # before a word that turns the sentence, such as but, then, just or don't; a
+  # comma in a list keeps "don't stage, commit or push" one clause.
+  #
+  # Two word lists, kept apart on purpose. $holding is what holds a write back
+  # inside the clause that names it: a negation, a deferral such as "later",
+  # "when" or "I'll", a drop such as "cancel", or a question. $opening is what
+  # a clause naming no write opens with when it holds back the clause before,
+  # such as ", but not yet", ". Let me review it first" or ". Let's wait for
+  # CI"; such a clause joins the one before and marks it held. Any other
+  # clause naming no write is filler and drops out, and one that starts with
+  # "then" is a next step.
+  #
+  # The last clause that names the write decides. So "commit, but don't push"
+  # asks for the commit and not the push, "commit and push. Don't push." asks
+  # for the commit only, and "why did the push fail?" asks for neither. "Don't
+  # forget to" is a request, and "never mind the push" or "scratch the PR"
+  # holds back what it names. After a takeback ("actually", "scratch that",
+  # "never mind"), only the clauses from it on count, and a write they don't
+  # name is taken back. A word joined to more by a hyphen, as in pr-feedback,
+  # is another word. When unsure, this errs toward asking.
+  #
+  # A takeback is one of these phrases, or a clause that starts with "wait",
+  # "nope" or "no,", as in "commit and push. No, don't push".
+  takeback='(^|[^a-z])(actually|scratch that|on second thought|never ?mind|nvm|forget that|cancel that|ignore that|hold on|take that back|disregard that|change of plan|oh wait|no,? wait|wait,? no)([^a-z]|$)|^ *(nope|wait)([^a-z]|$)|^ *no *(,|$)'
+  holding='zzheld|zzquestion|don[^ ]{0,3}t|dont|wont|cant|didnt|doesnt|isnt|shouldnt|wouldnt|couldnt|havent|hasnt|arent|wasnt|werent|neednt|mustnt|[a-z]+n[^a-z ]{1,3}t|cannot|let me [a-z -]*first|never|not|no|nope|without|avoid|refrain|leave|nothing|my job|myself|hold off|hold for|on hold|hold it|hang on|hang tight|one sec|just a sec|in a sec|give me a (minute|sec|second|moment)|scratch|stop|instead|rather|except|later|yet|until|before|after|once|when|tomorrow|wait|maybe|ideally|in a (bit|minute|while)|i[^a-z ]{1,3}ll|ill|i will|we[^a-z ]{1,3}ll|we will|we can'
+  opening='([+], *)? *(and |but |though |however |while |just |so |hmm,? |well,? |ok,? |okay,? |yes,? |maybe |probably |ideally |please |only )*(not|no|never|don|do not|wait|until|later|yet|hold|without|after|once|when|tomorrow|nope|let.?s (wait|hold)|i.?d (rather|wait|hold)|i want to (review|check|look)|i.?ll|we should wait|better (wait|hold)|first|in a bit|soon|hang on|hang tight|one sec|just a sec|give me|give [a-z]+ a (minute|sec|second|moment)|then again|stop|let me (think|sleep|run|take|double|review|check|look|test|verify|see|wait|try|have|confirm|make sure|fix|finish)|on (second thought|reflection))([^a-z]|$)'
+  said="$(tr '[:upper:]' '[:lower:]' < "$state/turn" |
+    # "Don't forget to commit" asks. "When you're done" ending a clause, and
+    # "let me know when it's up", only time the report, not the write.
+    sed -E "s/(don[^ ]{0,3}t|do not) forget to //g; s/when you[^ ]{0,4} (done|finished|ready) *([.,;!?]|$)/\\2/g; s/(ping|tell|let) me( know)? when (it|that|this)[^ ]{0,3} *(is )?(up|done|merged|open|out|finished) *([.,;!?]|$)/\\6/g" |
+    sed -E "s/(never ?mind|forget|scratch|scrap|ditch|drop|skip|cancel|hold on|hold) (about )?(the )?(($WRITE_WORDS)([^a-z0-9_-]|$))/scratch the \\4/g" |
+    awk '{ gsub(/[?]/, " zzquestion\n"); gsub(/[.;:!]/, "\n");
+      gsub(/, *(but|then|so|and then|while|though|however|just|please|don[^ ]*t|do not|never|no|not|without|i[^a-z ]+ll|we[^a-z ]+ll) /, "\n+&"); print }' |
+    awk -v w="(^|[^a-z0-9_-])($WRITE_WORDS)([^a-z0-9_-]|$)" -v tb="$takeback" -v op="^($opening)" '
+      { if (have && $0 !~ w && $0 !~ /^(\+, *)? *no (rush|worries|problem|hurry)( at all)? *$/ && $0 ~ op) {
+          sub(/^\+/, ""); last = last " " $0 " zzheld"; next }
+        sub(/^\+/, "")
+        # Filler that names no write and takes nothing back, such as "hmm" or
+        # "did the tests pass?", drops out.
+        if ($0 !~ w && $0 !~ tb) next
+        if (have) print last; last = $0; have = 1 }
+      END { if (have) print last }')"
+  word_re() { printf '(^|[^[:alnum:]_-])(%s)([^[:alnum:]_-]|$)' "$1"; }
+  # The clauses that count: from the last takeback on, when one names a word
+  # in $1; none at all, when a takeback names none of them; else every one.
+  counting() {
+    t="$(printf '%s\n' "$said" | grep -Ein "$takeback" | tail -1 | cut -d: -f1)"
+    if [ -n "$t" ]; then
+      # What the takeback's own clause says before it is taken back too.
+      after="$(printf '%s\n' "$said" | sed -n "$t,\$p" |
+        awk -v t="$takeback" 'NR == 1 { while (match($0, t)) $0 = substr($0, RSTART + RLENGTH) } { print }')"
+      if printf '%s\n' "$after" | grep -Eiq "$(word_re "$1")"; then
+        printf '%s\n' "$after"
+      fi
+      return 0
+    fi
+    printf '%s\n' "$said"
+  }
+  # True when a counting clause asks for one of the words $1, and when one
+  # holds back.
+  # The last counting clause that names the word decides, so "commit and
+  # push. Don't push." asks for the commit only, and dropping it ("scratch
+  # the PR", "never mind the push") holds it back too.
+  has_request() {
+    counting "$1" | grep -Ei "$(word_re "$1")" | tail -1 |
+      grep -Eivq "(^|[^a-z])($holding)([^a-z]|\$)"
+  }
+  held_back() {
+    printf '%s\n' "$said" | grep -Ei "$(word_re "$1")" | grep -Eiq "(^|[^a-z])($holding)([^a-z]|\$)"
+  }
+  push_word='push(ed|es|ing)?'
+  # "Push this" asks for the commit that goes with the push, unless the
+  # message mentions a commit, staging or a check-in at all.
+  if [ "$1" = commit ] && ! has_request "$words" && has_request "$push_word" &&
+    ! grep -Eiq '(^|[^a-z])(commit[a-z]*|stag(e|ed|ing)|check(ed)?( it)? ?in)([^a-z]|$)' "$state/turn"; then
+    words="$push_word"
+  fi
+  # A PR request implies a push, but a push the message holds back, and asks
+  # for nowhere else, is not asked for.
+  refused=no
+  push_asked=no
+  if [ "$1" = push ]; then
+    has_request "$push_word" && push_asked=yes
+    [ "$push_asked" = no ] && held_back "$push_word" && refused=yes
+  fi
+  # A push is asked for when the push itself is, whatever happens to the PR.
+  if [ "$refused" = yes ] || { [ "$push_asked" = no ] && ! has_request "$words"; }; then
+    verdict=ask
+    reason="The user's latest message does not ask for this $label. Confirm it."
+  fi
+}
+
+# Prints what an MCP tool writes, in the parser's form, from its name split
+# into words.
+mcp_tool() {
+  rest="${1#mcp__}"
+  server="${rest%%__*}"
+  name="${rest#*__}"
+  # The Claude app's own servers carry its chat, panes and settings. The
+  # terminal tool that runs a command is read as a shell command instead.
+  case "$1" in
+    mcp__ccd_pr__set_auto_merge) printf 'confirm %s\n' "$1"; return 0 ;;
+  esac
+  case "$server" in
+    hearthbot | claude-code-remote | ccd_* | visualize | Claude_Browser | claude-in-chrome | \
+      terminal | scheduled-tasks | Claude_Code_iOS_Simulator | ide) return 0 ;;
+  esac
+  # createPRReview splits into create, PR and Review.
+  words=" $(printf '%s' "$name" | sed 's/\([a-z0-9]\)\([A-Z]\)/\1 \2/g; s/\([A-Z]\)\([A-Z][a-z]\)/\1 \2/g' |
+    tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' ' ') "
+  # Making a draft is not a write, since you send it yourself. Sending,
+  # deleting, publishing or scheduling one is.
+  case "$words" in
+    *" pull request "* | *" merge request "*) ;;
+    # Publishing a draft note on GitLab posts it.
+    *" publish draft note "* | *" publish draft notes "*) printf 'post %s\n' "$1"; return 0 ;;
+    *" draft "* | *" drafts "*)
+      # Slack's send_message_draft only makes a message draft.
+      case "$words" in *" message draft "*) return 0 ;; esac
+      for v in send delete publish schedule; do
+        case "$words" in *" $v "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+      done
+      return 0 ;;
+  esac
+  # The first word that reads or writes decides, so get_commit and
+  # comments_list read and delete_list writes. A read joined to a write, as in
+  # get_or_create, writes.
+  first=""
+  for w in $(printf '%s' "$words" | sed 's/ pull request / pull_request /g; s/ merge request / merge_request /g'); do
+    case " $READS $WRITES " in *" $w "*) first="$w"; break ;; esac
+  done
+  case " $READS " in
+    *" $first "*)
+      for v in $WRITES $POSTS; do
+        case "$words" in *" or $v "* | *" and $v "*) first="$v" ;; esac
+      done ;;
+  esac
+  # An HTTP-shaped name such as API-post-search reads when it searches.
+  case "$first" in
+    post) case "$words" in *" search "* | *" query "*) return 0 ;; esac ;;
+  esac
+  case " $READS " in *" $first "*) return 0 ;; esac
+  # Sending or posting a message, a DM or a chat line is a post. In a chat
+  # service, adding or writing one is too, and Slack's and Teams' own tool
+  # names say so even under a connector named by an id.
+  case "$words" in
+    *" conversations add message "* | *" create chat message "* | *" create channel message "*)
+      printf 'post %s\n' "$1"; return 0 ;;
+  esac
+  case "$words" in
+    *" send "* | *" post "* | *" schedule "*)
+      case "$words" in
+        *" message "* | *" messages "* | *" dm "* | *" chat "*) printf 'post %s\n' "$1"; return 0 ;;
+      esac ;;
+  esac
+  case "$server" in
+    *[Ss]lack* | *[Tt]eams* | *[Dd]iscord* | *[Cc]hat* | *[Zz]ulip* | *[Mm]attermost* | \
+      *[Ww]hats[Aa]pp* | *[Tt]elegram* | *[Ii]ntercom* | *[Ww]ebex*)
+      case "$words" in
+        *" add message "* | *" add messages "* | *" create message "* | *" create messages "* | *" write message "* | *" chat write "* | *" create post "* | *" create posts "*)
+          printf 'post %s\n' "$1"; return 0 ;;
+      esac ;;
+  esac
+  # A note or discussion on a merge request or an issue is a comment, and so
+  # is resolving a review thread.
+  case "$words" in
+    *" note "* | *" notes "* | *" discussion "* | *" thread "*)
+      case "$words" in
+        *" merge request "* | *" issue "* | *" mr "*) printf 'post %s\n' "$1"; return 0 ;;
+      esac
+      # GitLab calls a comment a note, but release notes are not comments.
+      case "$server:$words" in
+        *[Gg]it[Ll]ab*:*" release "*) ;;
+        *[Gg]it[Ll]ab*:*) printf 'post %s\n' "$1"; return 0 ;;
+      esac ;;
+  esac
+  case "$words" in
+    *" resolve "*)
+      case "$words" in *" thread "* | *" discussion "* | *" comment "*) printf 'post %s\n' "$1"; return 0 ;; esac ;;
+  esac
+  # A git server's commit and push are the same writes as the git commands.
+  case "$words" in
+    *" git commit "* | *" commit changes "*) printf 'gate commit\n'; return 0 ;;
+    *" git push "*) printf 'gate push\n'; return 0 ;;
+  esac
+  # Asking for a review is not posting one. "pull request" and "merge request"
+  # are nouns, not that.
+  case "$(printf '%s' "$words" | sed 's/ pull request / pull_request /g; s/ merge request / merge_request /g')" in
+    *" request "*) ;;
+    *)
+      for w in $POSTS; do
+        case "$words" in *" $w "*) printf 'post %s\n' "$1"; return 0 ;; esac
+      done
+      # A reaction, but not React the library.
+      case "$words" in
+        " react " | *" react to "* | *" emoji react "* | *" react message "* | *" message react "* | *" react comment "*)
+          printf 'post %s\n' "$1"; return 0 ;;
+      esac ;;
+  esac
+  # A claude.ai connector's server is named by an id, so GitHub's own words
+  # in the tool's name count too.
+  github=no
+  case "$server" in *[Gg]it[Hh]ub*) github=yes ;; esac
+  case "$words" in *" pull request "* | *" push files "* | *" or update file "*) github=yes ;; esac
+  case "$github" in
+    yes)
+      # Pushing files, or writing one, commits straight to the remote.
+      case "$words" in
+        *" push "* | *" file "* | *" files "*) printf 'gate push\n'; return 0 ;;
+        *" create branch "* | *" create ref "* | *" update ref "*) printf 'gate push\n'; return 0 ;;
+      esac
+      for v in create update add remove edit close reopen delete set assign write convert reprioritize; do
+        case "$words" in *" $v "*) ;; *) continue ;; esac
+        case "$words" in
+          *" issue "* | *" issues "* | *" label "* | *" labels "* | *" milestone "* | *" sub "*)
+            printf 'gate issue\n'; return 0 ;;
+          *" pull request "* | *" pr "*)
+            case "$v" in create | update | edit | convert) printf 'gate pr\n'; return 0 ;; esac ;;
+        esac
+      done ;;
+  esac
+  for v in $WRITES; do
+    case "$words" in *" $v "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+  done
+}
+
+# The guard on a code-review the model calls, under whatever namespace.
+skill_call() {
+  name="$(skill_name "$(get .tool_input.skill)")"
+  case "${name##*:}" in code-review | review) ;; *) return 0 ;; esac
+  args="$(get .tool_input.args)"
+  if has_word "$args" "$POST_FLAGS"; then
+    decision deny "$POST_REASON"
+  elif has_word "$args" 'ultra|--fix(=[^[:space:]]*)?'; then
+    decision deny "Run code-review at an explicit level such as medium, without ultra or --fix, and apply its findings yourself."
+  fi
+}
+
+on_pre_tool() {
+  tool="$f_tool"
+  case "$tool" in
+    Bash | Monitor | PowerShell | mcp__terminal__run_in_terminal)
+      command="$(get .tool_input.command)"
+      [ -n "$command" ] || return 0
+      if ! found="$(printf '%s' "$command" | awk -f "$root/hooks/classify-command.awk")"; then
+        log "the command parser failed"
+        return 0
+      fi ;;
+    Skill) skill_call; return 0 ;;
+    mcp__*) found="$(mcp_tool "$tool")" ;;
+    *) return 0 ;;
+  esac
+  [ -n "$found" ] || return 0
+
+  # Tiers apply in order: a post is denied outright, and a push the write gate
+  # allows still asks when it forces, deletes or pushes tags.
+  deny="" ask=""
+  while IFS= read -r line; do
+    kind="${line%% *}"
+    what="${line#* }"
+    case "$kind" in
+      post) [ -n "$deny" ] || deny="$POST_REASON" ;;
+      gate)
+        gate "$what"
+        case "$verdict" in
+          deny) [ -n "$deny" ] || deny="$reason" ;;
+          ask) ask="${ask:+$ask }$reason" ;;
+        esac ;;
+      confirm) ask="${ask:+$ask }This can write outside this machine: $what. Confirm it." ;;
+    esac
+  done <<EOF
+$found
+EOF
+  if [ -n "$deny" ]; then
+    decision deny "$deny"
+  elif [ -n "$ask" ]; then
+    decision ask "$ask"
+  fi
+}
+
+on_post_tool() {
+  case "$f_tool" in
+    # A skill a subagent loads leaves the main session's gate as it was.
+    Skill)
+      [ -n "$f_agent" ] && return 0
+      name="$(skill_name "$(get .tool_input.skill)")"
+      # A review that ran, as opposed to one that was asked for and refused.
+      case "${name##*:}" in code-review | review) record_review "$(get .tool_input.args)" ;; esac
+      record_skill "$name" ;;
+    Bash)
+      # A merge that stops on a conflict exits 1, which fires
+      # PostToolUseFailure with the output in error rather than PostToolUse.
+      event="$f_event"
+      if printf '%s' "$input" | jq -r '(.error // empty), (.tool_response // empty
+          | if type == "object" then [.stdout, .stderr] | map(. // "") | join("\n") else tostring end)' 2>/dev/null |
+        grep -Eq 'CONFLICT \(|Automatic merge failed|Merge conflict in|could not apply'; then
+        context "${event:-PostToolUse}" "Git reported a conflict. When the user's latest message asks for this operation, the eng:merge-conflicts skill resolves it."
+      fi ;;
+  esac
+}
+
+on_stop() {
+  # Once per turn: a stop this hook already continued passes.
+  [ "$(get .stop_hook_active)" = true ] && return 0
+  # A code-review still running in the background reports back later.
+  if printf '%s' "$input" | jq -e '[.background_tasks[]?
+      | select((.status // "running") | test("^(running|pending)$"))
+      | ((.description // "") + " " + (.agent_type // ""))
+      | select(test("code.?review"; "i"))] | length > 0' >/dev/null 2>&1; then
+    return 0
+  fi
+  find_state || return 0
+  now="$(tree_state "$f_cwd")" || return 0
+  [ "$now" = clean ] && return 0
+  [ "$now" = "$(cat "$state/start-hash" 2>/dev/null)" ] && return 0
+  [ "$now" = "$(cat "$state/review-hash" 2>/dev/null)" ] && return 0
+  context Stop "$REVIEW_REMINDER"
+}
+
+input="$(cat)"
+# The fields most modes read, parsed once.
+f_sid="" f_cwd="" f_agent="" f_tool="" f_event=""
+if command -v jq >/dev/null 2>&1; then
+  # tostring keeps every value one quoted word, whatever its JSON type.
+  eval "$(printf '%s' "$input" | jq -r '@sh "f_sid=\(.session_id // "" | tostring) f_cwd=\(.cwd // "" | tostring) f_agent=\(.agent_id // "" | tostring) f_tool=\(.tool_name // "" | tostring) f_event=\(.hook_event_name // "" | tostring)"' 2>/dev/null)"
+fi
 case "$mode" in
   session-start) session_start ;;
+  prompt | expansion | pre-tool | post-tool | stop)
+    if ! command -v jq >/dev/null 2>&1; then
+      log "jq not found, so the $mode hook did nothing"
+      exit 0
+    fi
+    case "$mode" in
+      prompt) on_prompt ;;
+      expansion) on_expansion ;;
+      pre-tool) on_pre_tool ;;
+      post-tool) on_post_tool ;;
+      stop) on_stop ;;
+    esac ;;
   *) log "unknown mode '$mode'" ;;
 esac
 exit 0

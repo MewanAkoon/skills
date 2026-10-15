@@ -1020,7 +1020,7 @@ pr_stop
 pr_reminded || bad "pr reminder: the push got no reminder once the tree was clean"
 # A three-dot range reads from the merge base, so it counts once the default
 # branch has moved past where the branch left it.
-side="$(git -C "$pr" commit-tree -p origin/main -m side "origin/main^{tree}")"
+side="$(git -C "$pr" -c user.name=t -c user.email=t@t commit-tree -p origin/main -m side "origin/main^{tree}")"
 git -C "$pr" push -q origin "$side:refs/heads/main" 2>/dev/null
 git -C "$pr" fetch -q origin
 pr_commit thirteen
@@ -1028,6 +1028,38 @@ pr_bash 'git push -q'
 pr_review "high origin/main...HEAD"
 [ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
   || bad "pr reminder: a three-dot range from the default branch did not count as the whole PR"
+pr_counted() { [ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ]; }
+pr_commit fourteen
+pr_bash 'git push -q'
+pr_review "high origin/main..HEAD"
+pr_counted || bad "pr reminder: a two-dot range from the default branch did not count as the whole PR"
+pr_commit fifteen
+pr_bash 'git push -q'
+pr_review "high origin/main..."
+pr_counted || bad "pr reminder: a three-dot range with no end did not count as the whole PR"
+# A link to one commit of the pull request reads part of it; its files page
+# reads all of it.
+pr_commit sixteen
+pr_bash 'git push -q'
+pr_review "high https://github.com/o/r/pull/12/commits/abc1234"
+pr_counted && bad "pr reminder: a link to one commit of the pull request counted as the whole of it"
+pr_review "medium https://github.com/o/r/pull/12"
+pr_counted && bad "pr reminder: a review of the pull request below high counted"
+pr_review "high https://github.com/o/r/pull/12/files"
+pr_counted || bad "pr reminder: a link to the pull request's files did not count"
+# Two commands running at once each keep their own state, by tool call.
+pr_commit seventeen
+pr_hook() {
+  hook_run "$1" "$(jq -cn --arg d "$pr" --arg c "$2" --arg e "$3" --arg i "$4" \
+    '{session_id: "pr", cwd: $d, hook_event_name: $e, tool_name: "Bash", tool_use_id: $i, tool_input: {command: $c}}')"
+}
+pr_hook pre-tool 'git push -q' PreToolUse t1
+pr_hook pre-tool 'gh pr edit 12 --title x' PreToolUse t2
+pr_hook post-tool 'gh pr edit 12 --title x' PostToolUse t2
+git -C "$pr" push -q 2>/dev/null
+pr_hook post-tool 'git push -q' PostToolUse t1
+pr_stop
+pr_reminded || bad "pr reminder: a push run beside another push command got no reminder"
 
 # Without jq the gates do nothing, exit 0, and log it.
 run_nojq() {

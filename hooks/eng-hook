@@ -29,9 +29,10 @@
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates: turn (the text of your latest message), skills (those loaded
 # since), start-hash (the uncommitted changes when the session started) and
-# review-hash (the same when a review covering them last ran), push-pending
-# (a push or pull request command about to run, with where every remote
-# branch stood before it), reviewed-commit (the end of the last range reviewed),
+# review-hash (the same when a review covering them last ran), push-pending.*
+# (one per push or pull request command about to run, named by its tool call,
+# with where every remote branch stood before it), reviewed-commit (the end of
+# the last range that read the whole pull request),
 # pr-head (the commit the last push or new pull request left on a remote
 # branch), pr-review (that commit, once a review reached it) and pr-reminded
 # (that commit, once the stop gate asked for its review). It is not read from
@@ -259,17 +260,17 @@ mark_pr_reviewed() {
 # range ending in a snapshot of this very tree. A pull request or another
 # range reviews something else, so neither counts for the local changes.
 #
-# It also records the review of the whole pull request: a pull request by
-# number or link, or a range ending at the pushed commit that starts at or
-# before the merge base with a remote's default branch, which stands in for
-# the PR's base. The end of the last such range is kept as reviewed-commit,
-# so a review run just before a push counts once the push lands on that same
-# commit. A review loop's snapshot is never the commit
-# that lands, so it does not count.
+# It also records the review of the whole pull request, at high or above: a
+# pull request by number or link to the pull request itself, or a range
+# ending at the pushed commit whose ends meet at or before the merge base with
+# a remote's default branch, which stands in for the PR's base. The end of the
+# last such range is kept as reviewed-commit, so a review run just before a
+# push counts once the push lands on that same commit. A review loop's
+# snapshot is never the commit that lands, so it does not count.
 record_review() {
   find_state || return 0
   cwd="$f_cwd"
-  range="" start="" target=""
+  start="" target="" local=yes deep=no
   skip=no
   pr=no
   # The arguments are words to read, not patterns to expand against files.
@@ -277,17 +278,26 @@ record_review() {
   for a in $1; do
     if [ "$skip" = yes ]; then skip=no; continue; fi
     case "$a" in
-      low | medium | high | xhigh | max | ultra) ;;
+      high | xhigh | max | ultra) deep=yes ;;
+      low | medium) ;;
       --max-findings) skip=yes ;;
       -*) ;;
-      # A range with no end, such as HEAD.., stops at HEAD and so reads no
-      # uncommitted change.
-      *..) set +f; return 0 ;;
       # A link to a range inside a pull request reads part of it.
       http*..*) set +f; return 0 ;;
-      *..*) range="$a" start="${a%%..*}" target="${a##*..}" ;;
-      # A pull request reads what was pushed to it, not the local changes.
-      '#'[0-9]* | http*/pull/[0-9]* | http*/merge_requests/[0-9]*) pr=yes; break ;;
+      # A range with no end, such as origin/main.., stops at HEAD and so reads
+      # no uncommitted change.
+      *..) start="${a%..}" start="${start%.}" target=HEAD local=no ;;
+      *..*) start="${a%%..*}" target="${a##*..}" ;;
+      # A pull request reads what was pushed to it, not the local changes. A
+      # link to one of its commits reads part of it.
+      http*/pull/[0-9]* | http*/merge_requests/[0-9]*)
+        rest="${a#*/pull/}"
+        [ "$rest" = "$a" ] && rest="${a#*/merge_requests/}"
+        case "${rest#"${rest%%[!0-9]*}"}" in
+          '' | / | /files | /files/ | /diffs | /diffs/) pr=yes; break ;;
+          *) set +f; return 0 ;;
+        esac ;;
+      '#'[0-9]*) pr=yes; break ;;
       # A branch, a commit or another URL is not the local changes.
       *[!0-9]*) set +f; return 0 ;;
       # Digits alone are a pull request's number.
@@ -295,21 +305,23 @@ record_review() {
     esac
   done
   set +f
+  # The whole pull request asks for a review at high or above.
   if [ "$pr" = yes ]; then
+    [ "$deep" = yes ] || return 0
     mark_pr_reviewed "$(cat "$state/pr-head" 2>/dev/null)"
     return 0
   fi
   if [ -n "$target" ]; then
     top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
     end="$(git -C "$top" rev-parse -q --verify "$target^{commit}" 2>/dev/null)"
-    # A three-dot range reads from where its two ends meet.
-    case "$range" in
-      *...*) [ -n "$end" ] && start="$(git -C "$top" merge-base "$start" "$end" 2>/dev/null)" ;;
-    esac
-    if [ -n "$end" ] && whole_range "$top" "$start" "$end"; then
+    # The range covers every commit after the point where its two ends meet,
+    # whether written with two dots or three.
+    [ -n "$end" ] && start="$(git -C "$top" merge-base "$start" "$end" 2>/dev/null)"
+    if [ -n "$end" ] && [ "$deep" = yes ] && whole_range "$top" "$start" "$end"; then
       printf '%s\n' "$end" > "$state/reviewed-commit"
       mark_pr_reviewed "$end"
     fi
+    [ "$local" = yes ] || return 0
     reviewed="$(git -C "$top" rev-parse -q --verify "$target^{tree}" 2>/dev/null)" || return 0
     [ "$reviewed" = "$(worktree_tree "$top")" ] || return 0
   fi
@@ -809,8 +821,19 @@ pushed_refs() {
     done
 }
 
+# Prints the name of the file that keeps a push or pull request command's
+# state between its two hooks: its tool call's id, or the command's hash where
+# Claude Code sends no id. Two commands running at once each keep their own,
+# and one the write gate or the user stops leaves a file no later command
+# reads.
+pending_file() {
+  key="$(get .tool_use_id | tr -c 'A-Za-z0-9_\n-' '-')"
+  [ -n "$key" ] || key="$(printf '%s' "$(get .tool_input.command)" | git hash-object --stdin 2>/dev/null)"
+  printf '%s\n' "push-pending.$key"
+}
+
 # Before a push or a pull request command, which the classifier named in
-# $found, keeps the command, its kind and where every remote branch stood,
+# $found, keeps its kind, its repo and where every remote branch stood,
 # so the post-tool hook can tell what it moved, even when the same command
 # also commits. Opening a pull request, which the classifier names with
 # "open pr", needs its branch pushed, not moved.
@@ -821,16 +844,12 @@ note_push() {
   printf '%s\n' "$found" | grep -qx 'open pr' && kind=open
   find_state || return 0
   # Outside a repo there is nothing to compare against afterwards.
-  if ! top="$(git -C "$f_cwd" rev-parse --show-toplevel 2>/dev/null)"; then
-    rm -f "$state/push-pending"
-    return 0
-  fi
+  top="$(git -C "$f_cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
   {
     printf '%s\n' "$kind"
-    printf '%s' "$command" | git hash-object --stdin 2>/dev/null
     printf '%s\n' "$top"
     git -C "$f_cwd" for-each-ref --format='%(objectname) %(refname)' refs/remotes/ 2>/dev/null
-  } > "$state/push-pending"
+  } > "$state/$(pending_file)"
 }
 
 # After the command note_push kept, records HEAD as the commit to review as a
@@ -842,20 +861,19 @@ note_push() {
 # command's push moved a branch.
 record_push() {
   # Most commands push nothing, so look for the file before touching state.
-  [ -f "$(state_path)/push-pending" ] || return 0
+  file="$(pending_file)"
+  [ -f "$(state_path)/$file" ] || return 0
   find_state || return 0
-  pending="$(cat "$state/push-pending" 2>/dev/null)"
-  ran="$(get .tool_input.command)"
-  [ "$(printf '%s\n' "$pending" | sed -n 2p)" = "$(printf '%s' "$ran" | git hash-object --stdin 2>/dev/null)" ] || return 0
-  rm -f "$state/push-pending"
+  pending="$(cat "$state/$file" 2>/dev/null)"
+  rm -f "$state/$file"
   kind="$(printf '%s\n' "$pending" | sed -n 1p)"
   # A command that changed directory is judged in the repo it started in.
-  [ "$(printf '%s\n' "$pending" | sed -n 3p)" = "$(git -C "$f_cwd" rev-parse --show-toplevel 2>/dev/null)" ] || return 0
+  [ "$(printf '%s\n' "$pending" | sed -n 2p)" = "$(git -C "$f_cwd" rev-parse --show-toplevel 2>/dev/null)" ] || return 0
   head="$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" || return 0
   after="$(pushed_refs "$f_cwd")"
   [ -n "$after" ] || return 0
   if [ "$kind" != open ] || [ "$f_event" = PostToolUseFailure ]; then
-    before="$(printf '%s\n' "$pending" | sed '1,3d')"
+    before="$(printf '%s\n' "$pending" | sed '1,2d')"
     moved=no
     for ref in $after; do
       printf '%s\n' "$before" | grep -qxF "$head $ref" || moved=yes

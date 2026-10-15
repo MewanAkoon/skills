@@ -1067,13 +1067,14 @@ pr_commit sixteen-d
 pr_bash 'git push -q'
 pr_review "high #12"
 pr_counted || bad "pr reminder: a pull request number written with # did not count"
-# A push command the user declined at a prompt leaves its state only until
-# the next message.
+# A push command keeps its state while a message arrives mid-run, and one the
+# user declined at a prompt keeps it only until the turn ends.
 hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "t9", tool_input: {command: "git push -q --force"}}')"
 ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 || bad "pr reminder: a push the gate asked about kept no state"
-hook_run prompt "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, prompt: "commit, push and open the PR"}')"
-ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 && bad "pr reminder: a declined push kept its state past the next message"
-set_state pr "commit, push and open the PR" commit pr
+hook_run prompt "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, prompt: "<task-notification>done</task-notification>"}')"
+ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 || bad "pr reminder: a message arriving mid-push dropped the push's state"
+pr_stop
+ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 && bad "pr reminder: a declined push kept its state past the end of the turn"
 # Two commands running at once each keep their own state, by tool call.
 pr_commit seventeen
 pr_hook() {

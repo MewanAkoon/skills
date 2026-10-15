@@ -86,8 +86,9 @@ reviewed as a whole. Before handing back, check whether the branch has an open \
 PR. If it has none, say nothing of this and end the turn. If it has one, \
 review the whole PR as step 6 of the workflow says: /code-review high on the \
 range from the merge base with the PR's base branch to HEAD, then judge the \
-findings and fix the valid ones. If you are stopping to ask a question or \
-report a blocker, say so and end the turn."
+findings and fix the valid ones through eng:implement, whose review loop \
+covers the fixes. If you are stopping to ask a question or report a blocker, \
+say so and end the turn."
 
 log() {
   printf 'eng-hook: %s\n' "$1" >&2
@@ -413,9 +414,6 @@ on_prompt() {
       tree_state "$f_cwd" > "$state/start-hash" 2>/dev/null || rm -f "$state/start-hash"
       rm -f "$state/start-pending"
     fi
-    # No tool runs between turns, so a push command's state still here belongs
-    # to one that never finished, such as one the user declined.
-    rm -f "$state"/push-pending.*
   fi
   text="$(get .prompt)"
   lead="$(printf '%s\n' "$text" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;p;q;}')"
@@ -834,7 +832,7 @@ pushed_refs() {
 # Prints the name of the file that keeps a push or pull request command's
 # state between its two hooks: its tool call's id, or the command's hash where
 # Claude Code sends no id. Two commands running at once each keep their own.
-# One the user declines at a prompt leaves its file until the next message.
+# One the user declines at a prompt leaves its file until the turn ends.
 pending_file() {
   key="$(get .tool_use_id | tr -c 'A-Za-z0-9_\n-' '-')"
   [ -n "$key" ] || key="$(printf '%s' "$(get .tool_input.command)" | git hash-object --stdin 2>/dev/null)"
@@ -925,6 +923,9 @@ on_post_tool() {
 }
 
 on_stop() {
+  # Every tool call of the turn has finished, so a push command's state still
+  # here belongs to one that never ran, such as one the user declined.
+  if dir="$(state_path)"; then rm -f "$dir"/push-pending.*; fi
   # Once per turn: a stop this hook already continued passes.
   [ "$(get .stop_hook_active)" = true ] && return 0
   # A code-review still running in the background reports back later.

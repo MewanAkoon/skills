@@ -248,7 +248,7 @@ every session and inside subagents. They run in Claude Code only.
 | A PR merge, close or reopen, a release, a workflow run or rerun, a repo, gist, project, secret or variable write, a push that forces, deletes or sends tags, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and any other MCP tool whose name says it writes, such as create, update, delete, send or publish | You confirm it in a prompt, auto mode included |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
-| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`. A review of a PR by number or link counts, and so does a range ending at that commit, run after the push or as the last range before it |
+| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review of the PR by number or link after the push counts, and so does a range from the merge base with a remote's default branch to that commit, run after the push or as the last such range before it |
 
 The Claude app's own MCP servers, such as the one a project thread replies
 through, are exempt from every check, because they carry the conversation
@@ -287,8 +287,8 @@ by its bare name, a commit made by anything but `git commit`, such as
 an MCP tool whose name hides what it does, or a browser posting through a web
 page. The reminder to review the whole PR reads only the Bash tool. It misses
 a PR opened through an MCP tool or `glab api`, a push run in the background, a push to a URL
-rather than a named remote, and a push from a clone that tracks only one
-branch. It reads a short commit hash made only of digits as a PR number. A hook that breaks fails open: it logs an error, which
+rather than a named remote, a push from a clone that tracks only one
+branch, and a push run after a `cd` that leaves the directory the session started in or is outside git. It reads a short commit hash made only of digits as a PR number, and counts no range as the whole PR on a remote whose default branch is unnamed and neither main nor master. When the reminder cannot go out in the turn of the push, it goes out at the end of a later turn. A hook that breaks fails open: it logs an error, which
 `./scripts/check.sh --doctor` reports, and the session carries on.
 
 ## Skills

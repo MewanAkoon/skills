@@ -17,7 +17,9 @@
 #                  tree a review you type will read.
 #   pre-tool       PreToolUse. The post guard, the write gate and the
 #                  confirmation prompt for shell commands and MCP tools, and
-#                  the guard on a code-review the model calls.
+#                  the guard on a code-review the model calls. Before a push or
+#                  a pull request command, keeps where the remote branches
+#                  stood.
 #   post-tool      PostToolUse and PostToolUseFailure. Records a skill that
 #                  loaded and a push that moved a remote branch to HEAD, and
 #                  adds a hint when git reports a conflict.
@@ -79,10 +81,12 @@ eng:implement first. If you are stopping to ask a question or report a blocker, 
 say so and end the turn."
 
 PR_REMINDER="This branch was pushed, or its PR opened, since the PR was last \
-reviewed as a whole. Before handing back, review the whole PR as step 6 of the \
-workflow says: /code-review high on the range from the merge base with the PR's \
-base branch to HEAD, then judge the findings and fix the valid ones. If you are \
-stopping to ask a question or report a blocker, say so and end the turn."
+reviewed as a whole. Before handing back, check whether the branch has an open \
+PR. If it has none, say nothing of this and end the turn. If it has one, \
+review the whole PR as step 6 of the workflow says: /code-review high on the \
+range from the merge base with the PR's base branch to HEAD, then judge the \
+findings and fix the valid ones. If you are stopping to ask a question or \
+report a blocker, say so and end the turn."
 
 log() {
   printf 'eng-hook: %s\n' "$1" >&2
@@ -217,6 +221,31 @@ worktree_tree() {
   return "$wt_status"
 }
 
+# Prints each remote's default branch in the repo at $1, one ref per line.
+# Where a remote names no default, its main and master stand in.
+default_refs() {
+  for remote in $(git -C "$1" remote 2>/dev/null); do
+    default="$(git -C "$1" symbolic-ref -q "refs/remotes/$remote/HEAD" 2>/dev/null)"
+    if [ -n "$default" ]; then
+      printf '%s\n' "$default"
+    else
+      printf '%s\n' "refs/remotes/$remote/main" "refs/remotes/$remote/master"
+    fi
+  done
+}
+
+# Succeeds when the range $2..$3 in the repo at $1 starts at or before where
+# $3 left some remote's default branch, so it reads the whole pull request
+# rather than its last few commits.
+whole_range() {
+  range_first="$(git -C "$1" rev-parse -q --verify "$2^{commit}" 2>/dev/null)" || return 1
+  for default in $(default_refs "$1"); do
+    range_base="$(git -C "$1" merge-base "$default" "$3" 2>/dev/null)" || continue
+    git -C "$1" merge-base --is-ancestor "$range_first" "$range_base" 2>/dev/null && return 0
+  done
+  return 1
+}
+
 # Records that the commit $1 was reviewed as the pull request, when it is the
 # one the last push or new pull request left on a remote branch.
 mark_pr_reviewed() {
@@ -231,15 +260,16 @@ mark_pr_reviewed() {
 # range reviews something else, so neither counts for the local changes.
 #
 # It also records the review of the whole pull request: a pull request by
-# number or link, or any range ending at the pushed commit, because the hook
-# cannot tell the PR or its base. The end of the last range is kept as
-# reviewed-commit, so a review run just before a push counts once the push
-# lands on that same commit. A review loop's snapshot is never the commit
+# number or link, or a range ending at the pushed commit that starts at or
+# before the merge base with a remote's default branch, which stands in for
+# the PR's base. The end of the last such range is kept as reviewed-commit,
+# so a review run just before a push counts once the push lands on that same
+# commit. A review loop's snapshot is never the commit
 # that lands, so it does not count.
 record_review() {
   find_state || return 0
   cwd="$f_cwd"
-  target=""
+  start="" target=""
   skip=no
   pr=no
   # The arguments are words to read, not patterns to expand against files.
@@ -253,7 +283,9 @@ record_review() {
       # A range with no end, such as HEAD.., stops at HEAD and so reads no
       # uncommitted change.
       *..) set +f; return 0 ;;
-      *..*) target="${a##*..}" ;;
+      # A link to a range inside a pull request reads part of it.
+      http*..*) set +f; return 0 ;;
+      *..*) start="${a%%..*}" target="${a##*..}" ;;
       # A pull request reads what was pushed to it, not the local changes.
       '#'[0-9]* | http*/pull/[0-9]* | http*/merge_requests/[0-9]*) pr=yes; break ;;
       # A branch, a commit or another URL is not the local changes.
@@ -270,7 +302,7 @@ record_review() {
   if [ -n "$target" ]; then
     top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
     end="$(git -C "$top" rev-parse -q --verify "$target^{commit}" 2>/dev/null)"
-    if [ -n "$end" ]; then
+    if [ -n "$end" ] && whole_range "$top" "$start" "$end"; then
       printf '%s\n' "$end" > "$state/reviewed-commit"
       mark_pr_reviewed "$end"
     fi
@@ -791,9 +823,15 @@ note_push() {
   kind=push
   printf '%s\n' "$found" | grep -qx 'open pr' && kind=open
   find_state || return 0
+  # Outside a repo there is nothing to compare against afterwards.
+  if ! top="$(git -C "$f_cwd" rev-parse --show-toplevel 2>/dev/null)"; then
+    rm -f "$state/push-pending"
+    return 0
+  fi
   {
     printf '%s\n' "$kind"
     printf '%s' "$command" | git hash-object --stdin 2>/dev/null
+    printf '%s\n' "$top"
     git -C "$f_cwd" for-each-ref --format='%(objectname) %(refname)' refs/remotes/ 2>/dev/null
   } > "$state/push-pending"
 }
@@ -814,11 +852,13 @@ record_push() {
   [ "$(printf '%s\n' "$pending" | sed -n 2p)" = "$(printf '%s' "$ran" | git hash-object --stdin 2>/dev/null)" ] || return 0
   rm -f "$state/push-pending"
   kind="$(printf '%s\n' "$pending" | sed -n 1p)"
+  # A command that changed directory is judged in the repo it started in.
+  [ "$(printf '%s\n' "$pending" | sed -n 3p)" = "$(git -C "$f_cwd" rev-parse --show-toplevel 2>/dev/null)" ] || return 0
   head="$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" || return 0
   after="$(pushed_refs "$f_cwd")"
   [ -n "$after" ] || return 0
   if [ "$kind" != open ] || [ "$f_event" = PostToolUseFailure ]; then
-    before="$(printf '%s\n' "$pending" | sed '1,2d')"
+    before="$(printf '%s\n' "$pending" | sed '1,3d')"
     moved=no
     for ref in $after; do
       printf '%s\n' "$before" | grep -qxF "$head $ref" || moved=yes
@@ -826,10 +866,8 @@ record_push() {
     [ "$moved" = yes ] || return 0
   fi
   printf '%s\n' "$head" > "$state/pr-head"
-  # A review of a range ending here, run before the push, already covers it.
-  [ "$head" = "$(cat "$state/reviewed-commit" 2>/dev/null)" ] &&
-    printf '%s\n' "$head" > "$state/pr-review"
-  return 0
+  # A review of the whole range ending here, run before the push, covers it.
+  mark_pr_reviewed "$(cat "$state/reviewed-commit" 2>/dev/null)"
 }
 
 on_post_tool() {

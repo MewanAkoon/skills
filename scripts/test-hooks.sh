@@ -873,12 +873,15 @@ pr_stop
 pr_reminded || bad "pr reminder: a review ending at another commit cleared it"
 pr_commit four
 pr_bash 'git push -q'
-pr_review "high --max-findings 5 $(git -C "$pr" rev-parse HEAD~1)..HEAD"
+pr_review "high $(git -C "$pr" rev-parse HEAD~1)..HEAD"
 pr_stop
-[ ! -s "$scratch/out" ] || bad "pr reminder: a review ending at the pushed commit did not clear it"
+pr_reminded || bad "pr reminder: a review of the last commit alone cleared it"
+pr_review "high --max-findings 5 $(git -C "$pr" merge-base origin/main HEAD)..HEAD"
+pr_stop
+[ ! -s "$scratch/out" ] || bad "pr reminder: a review of the whole range did not clear it"
 # A review that ran before the push counts once the push lands on its end.
 pr_commit five
-pr_review "high $(git -C "$pr" rev-parse HEAD~1)..HEAD"
+pr_review "high $(git -C "$pr" merge-base origin/main HEAD)..HEAD"
 pr_bash 'git push -q'
 pr_stop
 [ ! -s "$scratch/out" ] || bad "pr reminder: a review run before the push did not count"
@@ -943,6 +946,9 @@ pr_bash 'git push -q'
 pr_review "high 5abc"
 pr_stop
 pr_reminded || bad "pr reminder: a review of a commit read as a pull request cleared it"
+pr_review "high https://github.com/o/r/pull/12/files/$(git -C "$pr" merge-base origin/main HEAD)..$(git -C "$pr" rev-parse HEAD)"
+[ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
+  && bad "pr reminder: a link to a range inside the pull request counted as the whole of it"
 pr_review "high 12"
 pr_stop
 [ ! -s "$scratch/out" ] || bad "pr reminder: a review of the pull request did not clear it"
@@ -971,6 +977,14 @@ git -C "$pr" tag v1
 pr_bash 'git push -q origin v1'
 pr_stop
 pr_reminded && bad "pr reminder: a tag push got a reminder"
+# A push that starts outside the repo and changes into it has nothing to
+# compare against, so this one, which moves nothing, records nothing.
+cmd="cd $pr && git push -q"
+hook_run pre-tool "$(jq -cn --arg d "$scratch/plain" --arg c "$cmd" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}')"
+(eval "$cmd") > /dev/null 2>&1
+hook_run post-tool "$(jq -cn --arg d "$pr" --arg c "$cmd" '{session_id: "pr", cwd: $d, hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: {command: $c}}')"
+pr_stop
+pr_reminded && bad "pr reminder: a push that moved nothing, run from outside the repo, got a reminder"
 pr_bash 'git push -q origin HEAD:main'
 pr_stop
 pr_reminded && bad "pr reminder: a push to the default branch got a reminder"

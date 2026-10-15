@@ -279,8 +279,8 @@ record_review() {
   for a in $1; do
     if [ "$skip" = yes ]; then skip=no; continue; fi
     case "$a" in
-      high | xhigh | max | ultra) deep=yes ;;
-      low | medium) ;;
+      [hH][iI][gG][hH] | [xX][hH][iI][gG][hH] | [mM][aA][xX] | [uU][lL][tT][rR][aA]) deep=yes ;;
+      [lL][oO][wW] | [mM][eE][dD][iI][uU][mM]) ;;
       --max-findings) skip=yes ;;
       -*) ;;
       # A link to a range inside a pull request reads part of it.
@@ -297,7 +297,7 @@ record_review() {
         # A query or an anchor can narrow the page to one commit or thread,
         # so a link with either does not count.
         case "${rest#"${rest%%[!0-9]*}"}" in
-          '' | / | /files | /files/ | /diffs | /diffs/) pr=yes ;;
+          '' | / | /files | /files/ | /changes | /changes/ | /diffs | /diffs/) pr=yes ;;
           *) set +f; return 0 ;;
         esac ;;
       '#'[0-9]*)
@@ -409,11 +409,9 @@ request_text() {
 }
 
 on_prompt() {
-  if find_state; then
-    if [ -f "$state/start-pending" ]; then
-      tree_state "$f_cwd" > "$state/start-hash" 2>/dev/null || rm -f "$state/start-hash"
-      rm -f "$state/start-pending"
-    fi
+  if find_state && [ -f "$state/start-pending" ]; then
+    tree_state "$f_cwd" > "$state/start-hash" 2>/dev/null || rm -f "$state/start-hash"
+    rm -f "$state/start-pending"
   fi
   text="$(get .prompt)"
   lead="$(printf '%s\n' "$text" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;p;q;}')"
@@ -846,7 +844,8 @@ pending_file() {
 # "open pr", needs its branch pushed, not moved.
 note_push() {
   [ -z "$f_agent" ] || return 0
-  printf '%s\n' "$found" | grep -Eqx 'gate (push|pr)' || return 0
+  # Editing a pull request pushes nothing and opens nothing.
+  printf '%s\n' "$found" | grep -Eqx 'gate push|open pr' || return 0
   kind=push
   printf '%s\n' "$found" | grep -qx 'open pr' && kind=open
   find_state || return 0

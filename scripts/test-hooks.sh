@@ -854,6 +854,8 @@ pr_review() {
 }
 pr_stop() { stop pr "${1:-}" "$pr"; }
 pr_reminded() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null | grep -q 'review the whole PR'; }
+# True when a review was recorded for the pushed commit at HEAD.
+pr_counted() { [ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ]; }
 start pr "$pr"
 # A denied push never runs, so it gets no post-tool hook and keeps no state.
 hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "t0", tool_input: {command: "git push -q"}}')"
@@ -883,6 +885,7 @@ pr_review "high $(git -C "$pr" rev-parse HEAD~1)..HEAD"
 pr_stop
 pr_reminded || bad "pr reminder: a review of the last commit alone cleared it"
 pr_review "high --max-findings 5 $(git -C "$pr" merge-base origin/main HEAD)..HEAD"
+pr_counted || bad "pr reminder: a review of the whole range did not count"
 pr_stop
 [ ! -s "$scratch/out" ] || bad "pr reminder: a review of the whole range did not clear it"
 # A review that ran before the push counts once the push lands on its end.
@@ -962,9 +965,9 @@ pr_review "high 5abc"
 pr_stop
 pr_reminded || bad "pr reminder: a review of a commit read as a pull request cleared it"
 pr_review "high https://github.com/o/r/pull/12/files/$(git -C "$pr" merge-base origin/main HEAD)..$(git -C "$pr" rev-parse HEAD)"
-[ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
-  && bad "pr reminder: a link to a range inside the pull request counted as the whole of it"
-pr_review "high 12"
+pr_counted && bad "pr reminder: a link to a range inside the pull request counted as the whole of it"
+pr_review "HIGH 12"
+pr_counted || bad "pr reminder: a review of the pull request, its level in capitals, did not count"
 pr_stop
 [ ! -s "$scratch/out" ] || bad "pr reminder: a review of the pull request did not clear it"
 # A push to a remote branch the branch does not track, as to a fork, counts.
@@ -1034,7 +1037,6 @@ pr_bash 'git push -q'
 pr_review "high origin/main...HEAD"
 [ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
   || bad "pr reminder: a three-dot range from the default branch did not count as the whole PR"
-pr_counted() { [ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ]; }
 pr_commit fourteen
 pr_bash 'git push -q'
 pr_review "high origin/main..HEAD"
@@ -1057,8 +1059,8 @@ pr_commit sixteen-b
 pr_bash 'git push -q'
 pr_review "high https://github.com/o/r/pull/12#discussion_r987"
 pr_counted && bad "pr reminder: a link to one thread of the pull request counted as the whole of it"
-pr_review "https://github.com/o/r/pull/12/files high"
-pr_counted || bad "pr reminder: a link to the pull request's files, with the level after it, did not count"
+pr_review "https://github.com/o/r/pull/12/changes high"
+pr_counted || bad "pr reminder: a link to the pull request's changes, with the level after it, did not count"
 pr_commit sixteen-c
 pr_bash 'git push -q'
 pr_review "12 xhigh"

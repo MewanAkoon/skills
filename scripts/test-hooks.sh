@@ -855,6 +855,12 @@ pr_review() {
 pr_stop() { stop pr "${1:-}" "$pr"; }
 pr_reminded() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null | grep -q 'review the whole PR'; }
 start pr "$pr"
+# A denied push never runs, so it gets no post-tool hook and keeps no state.
+hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "t0", tool_input: {command: "git push -q"}}')"
+[ "$(verdict)" = deny ] || bad "pr reminder: a push the user did not ask for was not denied"
+ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 && bad "pr reminder: a push the gate denied kept its state"
+# From here the user asked for the commits, pushes and pull requests.
+set_state pr "commit, push and open the PR" commit pr
 pr_stop
 [ ! -s "$scratch/out" ] || bad "pr reminder: a branch nobody pushed this session got a reminder"
 pr_commit two
@@ -1045,8 +1051,29 @@ pr_review "high https://github.com/o/r/pull/12/commits/abc1234"
 pr_counted && bad "pr reminder: a link to one commit of the pull request counted as the whole of it"
 pr_review "medium https://github.com/o/r/pull/12"
 pr_counted && bad "pr reminder: a review of the pull request below high counted"
-pr_review "high https://github.com/o/r/pull/12/files"
-pr_counted || bad "pr reminder: a link to the pull request's files did not count"
+pr_review "high #12abc"
+pr_counted && bad "pr reminder: a word that only starts like a pull request number counted"
+pr_commit sixteen-b
+pr_bash 'git push -q'
+pr_review "high https://github.com/o/r/pull/12#discussion_r987"
+pr_counted && bad "pr reminder: a link to one thread of the pull request counted as the whole of it"
+pr_review "https://github.com/o/r/pull/12/files high"
+pr_counted || bad "pr reminder: a link to the pull request's files, with the level after it, did not count"
+pr_commit sixteen-c
+pr_bash 'git push -q'
+pr_review "12 xhigh"
+pr_counted || bad "pr reminder: a pull request number with the level after it did not count"
+pr_commit sixteen-d
+pr_bash 'git push -q'
+pr_review "high #12"
+pr_counted || bad "pr reminder: a pull request number written with # did not count"
+# A push command the user declined at a prompt leaves its state only until
+# the next message.
+hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "t9", tool_input: {command: "git push -q --force"}}')"
+ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 || bad "pr reminder: a push the gate asked about kept no state"
+hook_run prompt "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, prompt: "commit, push and open the PR"}')"
+ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 && bad "pr reminder: a declined push kept its state past the next message"
+set_state pr "commit, push and open the PR" commit pr
 # Two commands running at once each keep their own state, by tool call.
 pr_commit seventeen
 pr_hook() {

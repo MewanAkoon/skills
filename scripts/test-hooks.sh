@@ -885,6 +885,15 @@ pr_review "high $(git -C "$pr" merge-base origin/main HEAD)..HEAD"
 pr_bash 'git push -q'
 pr_stop
 [ ! -s "$scratch/out" ] || bad "pr reminder: a review run before the push did not count"
+# A pull request opened on a commit whose push was already reminded about
+# gets its own reminder.
+pr_commit five-open
+pr_bash 'git push -q'
+pr_stop
+pr_reminded || bad "pr reminder: a push got no reminder before its pull request opened"
+pr_bash 'gh pr create --title x --body-file body.md'
+pr_stop
+pr_reminded || bad "pr reminder: a pull request opened on a commit already reminded about got no reminder"
 # A pull request opened on the pushed branch asks for the same review, and a
 # review of the pull request by number clears it.
 pr_commit six
@@ -1009,6 +1018,16 @@ reminded || bad "pr reminder: uncommitted changes lost their reminder to the pus
 git -C "$pr" checkout -q -- a.txt
 pr_stop
 pr_reminded || bad "pr reminder: the push got no reminder once the tree was clean"
+# A three-dot range reads from the merge base, so it counts once the default
+# branch has moved past where the branch left it.
+side="$(git -C "$pr" commit-tree -p origin/main -m side "origin/main^{tree}")"
+git -C "$pr" push -q origin "$side:refs/heads/main" 2>/dev/null
+git -C "$pr" fetch -q origin
+pr_commit thirteen
+pr_bash 'git push -q'
+pr_review "high origin/main...HEAD"
+[ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
+  || bad "pr reminder: a three-dot range from the default branch did not count as the whole PR"
 
 # Without jq the gates do nothing, exit 0, and log it.
 run_nojq() {

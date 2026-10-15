@@ -269,7 +269,7 @@ mark_pr_reviewed() {
 record_review() {
   find_state || return 0
   cwd="$f_cwd"
-  start="" target=""
+  range="" start="" target=""
   skip=no
   pr=no
   # The arguments are words to read, not patterns to expand against files.
@@ -285,7 +285,7 @@ record_review() {
       *..) set +f; return 0 ;;
       # A link to a range inside a pull request reads part of it.
       http*..*) set +f; return 0 ;;
-      *..*) start="${a%%..*}" target="${a##*..}" ;;
+      *..*) range="$a" start="${a%%..*}" target="${a##*..}" ;;
       # A pull request reads what was pushed to it, not the local changes.
       '#'[0-9]* | http*/pull/[0-9]* | http*/merge_requests/[0-9]*) pr=yes; break ;;
       # A branch, a commit or another URL is not the local changes.
@@ -302,6 +302,10 @@ record_review() {
   if [ -n "$target" ]; then
     top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || return 0
     end="$(git -C "$top" rev-parse -q --verify "$target^{commit}" 2>/dev/null)"
+    # A three-dot range reads from where its two ends meet.
+    case "$range" in
+      *...*) [ -n "$end" ] && start="$(git -C "$top" merge-base "$start" "$end" 2>/dev/null)" ;;
+    esac
     if [ -n "$end" ] && whole_range "$top" "$start" "$end"; then
       printf '%s\n' "$end" > "$state/reviewed-commit"
       mark_pr_reviewed "$end"
@@ -796,18 +800,11 @@ EOF
 # line, leaving out each remote's default branch, which no pull request is
 # opened from. Where a remote names no default, main and master stand in.
 pushed_refs() {
+  defaults="$(default_refs "$1")"
   git -C "$1" for-each-ref --points-at HEAD --format='%(refname)' refs/remotes/ 2>/dev/null |
     while IFS= read -r ref; do
-      rest="${ref#refs/remotes/}"
-      remote="${rest%%/*}"
-      branch="${rest#*/}"
-      [ "$branch" = HEAD ] && continue
-      default="$(git -C "$1" symbolic-ref -q "refs/remotes/$remote/HEAD" 2>/dev/null)"
-      if [ -n "$default" ]; then
-        [ "$ref" = "$default" ] && continue
-      else
-        case "$branch" in main | master) continue ;; esac
-      fi
+      case "$ref" in refs/remotes/*/HEAD) continue ;; esac
+      printf '%s\n' "$defaults" | grep -qxF "$ref" && continue
       printf '%s\n' "$ref"
     done
 }
@@ -866,6 +863,9 @@ record_push() {
     [ "$moved" = yes ] || return 0
   fi
   printf '%s\n' "$head" > "$state/pr-head"
+  # A pull request opened on a commit whose push was already reminded about
+  # asks for its own review.
+  [ "$kind" = open ] && rm -f "$state/pr-reminded"
   # A review of the whole range ending here, run before the push, covers it.
   mark_pr_reviewed "$(cat "$state/reviewed-commit" 2>/dev/null)"
 }

@@ -288,7 +288,7 @@ an MCP tool whose name hides what it does, or a browser posting through a web
 page. The reminder to review the whole PR reads only the Bash tool. It misses
 a PR opened through an MCP tool or `glab api`, a push run in the background, a push to a URL
 rather than a named remote, a push from a clone that tracks only one
-branch, and a push run after a `cd` that leaves the directory the session started in or is outside git. It reads a short commit hash made only of digits as a PR number, and counts no range as the whole PR on a remote whose default branch is unnamed and neither main nor master. When the reminder cannot go out in the turn of the push, it goes out at the end of a later turn. A hook that breaks fails open: it logs an error, which
+branch, and a push run after a `cd` that leaves the directory the session started in or is outside git. It reads a short commit hash made only of digits as a PR number, counts a review of any PR by number or link, whichever PR it is, and counts no range as the whole PR on a remote whose default branch is unnamed and neither main nor master, or for a PR based on another branch, such as one in a stack. When the reminder cannot go out in the turn of the push, it goes out at the end of a later turn. A hook that breaks fails open: it logs an error, which
 `./scripts/check.sh --doctor` reports, and the session carries on.
 
 ## Skills

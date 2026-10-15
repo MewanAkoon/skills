@@ -144,7 +144,7 @@ follows, and enforcing it is what this repo is for.
   every skill named that way exists and is model-invoked.
 - Size budgets, because each of these loads into someone's context. A
   model-invoked description is at most 300 bytes, and the set at most 3,900.
-  `standards/workflow.md` is at most 2,800 bytes, and the block the session
+  `standards/workflow.md` is at most 3,000 bytes, and the block the session
   hook sends at most 5,000. `investigate`'s `SKILL.md` is at most 6,500 bytes,
   `issue`'s 6,000, and `implement`'s and `pr-feedback`'s 5,000 each, with
   `implement/references/review.md` at most 3,500. Every other `SKILL.md` and

@@ -212,9 +212,10 @@ and `pr` back.
 
 [standards/workflow.md](standards/workflow.md) is eight standing steps:
 understand first, plan and stop, implement on approval, review until clean,
-commit and open PRs only when asked, handle PR feedback on evidence, never
-post, and report briefly. The plugin's SessionStart hook sends it at the start
-of every session and after each compaction. It names the skill for each step
+commit and open PRs only when asked, handle PR feedback on evidence and
+review the whole PR after each push, never post, and report briefly. The
+plugin's SessionStart hook sends it at the start of every session and after
+each compaction. It names the skill for each step
 that has a procedure, so a change of phase is the cue to load it:
 
 | Step | Skill |
@@ -223,7 +224,7 @@ that has a procedure, so a change of phase is the cue to load it:
 | 3, implement | `eng:implement` |
 | 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
 | 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
-| 6, PR feedback | `eng:pr-feedback` |
+| 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the whole PR |
 
 The other skills hold knowledge a phase reaches for, or are modes you start
 yourself.
@@ -247,6 +248,7 @@ every session and inside subagents. They run in Claude Code only.
 | A PR merge, close or reopen, a release, a workflow run or rerun, a repo, gist, project, secret or variable write, a push that forces, deletes or sends tags, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and any other MCP tool whose name says it writes, such as create, update, delete, send or publish | You confirm it in a prompt, auto mode included |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
+| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review at `high` or above of the PR by number or by a link to the PR or its files after the push counts, and so does a range whose ends meet at or before the merge base with a remote's default branch and that ends at that commit, run after the push or as the last such range before it |
 
 The Claude app's own MCP servers, such as the one a project thread replies
 through, are exempt from every check, because they carry the conversation
@@ -283,7 +285,10 @@ a shell splits them, so a quoted
 by its bare name, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name hides what it does, or a browser posting through a web
-page. A hook that breaks fails open: it logs an error, which
+page. The reminder to review the whole PR reads only the Bash tool. It misses
+a PR opened through an MCP tool or `glab api`, a push run in the background, a push to a URL
+rather than a named remote, a push from a clone that tracks only one
+branch, and a push run after a `cd` that leaves the directory the session started in or is outside git. It reads a short commit hash made only of digits as a PR number, counts a review of any PR by number or link, whichever PR it is, and counts no range as the whole PR on a remote whose default branch is unnamed and neither main nor master, or for a PR based on another branch, such as one in a stack. When the reminder cannot go out in the turn of the push, it goes out at the end of a later turn. It keeps one pushed commit per session, so of two branches pushed in one turn only the last gets a reminder, and `gt submit` counts as opening a PR even when it only updates one, which can bring a second reminder for the same commit. A PR opened with `--head` for another branch counts as one for the branch HEAD is on, when that branch is pushed. It checks only the repo the session is in at the stop, so a PR pushed from another repo gets no reminder once the session moves on, and it counts a review when the review starts, so one that is cancelled still counts. A hook that breaks fails open: it logs an error, which
 `./scripts/check.sh --doctor` reports, and the session carries on.
 
 ## Skills
@@ -386,8 +391,11 @@ claude plugin eval . --ablation none --runs 1 --scaffold --allow-tools Bash \
 case gets it only when it lists Bash in `allowed_tools` and the run passes
 `--allow-tools Bash`; the case that forbids `git commit` does both.
 
-The eval sandbox blocks `git`, so the review loop is checked by hand. In an
-empty directory, run `tests/review-loop/setup.sh` from the clone, then:
+The eval sandbox blocks `git`, so two things are checked by hand: the review
+loop, and whether Claude acts on the reminder to review the whole PR after a
+push. `./scripts/test-hooks.sh` covers when that reminder fires. For the
+review loop, in an empty directory, run `tests/review-loop/setup.sh` from the
+clone, then:
 
 ```bash
 claude -p "The plan in PLAN.md is approved. Implement it." \
@@ -395,8 +403,10 @@ claude -p "The plan in PLAN.md is approved. Implement it." \
   --output-format stream-json --verbose
 ```
 
-A good run calls `code-review` with `medium` and a `<hash>..<hash>` range,
-briefs the intent check beside it, and commits nothing.
+A good run calls `code-review` with `high` and a `<hash>..<hash>` range,
+briefs the intent check beside it, and commits nothing. For the reminder,
+push a PR's branch in a live session: the next hand-back runs `code-review`
+with `high` on the whole PR, or says that review is still owed.
 
 ## Usage counts
 

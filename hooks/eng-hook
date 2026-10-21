@@ -810,17 +810,29 @@ mcp_tool() {
     case "$words" in *" $w "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
   done
   # A doc write can still reach someone, move a file or drop content through
-  # its input: a reply to a comment, a mention of anyone but yourself, a
+  # its input: a reply to a comment, a mention of a person other than you, a
   # user:// person in a Notion property, a page made a skill, a Notion rewrite
-  # allowed to delete child pages, or a Drive file given a new parent or sent
-  # to the trash. Backslashes go first, so a payload sent as a string reads
-  # the same, and then any flat object naming you, such as your byline.
-  case "$(get '.tool_input | tostring' | tr -d '\\' | tr '[:upper:]' '[:lower:]' |
-    sed 's/{[^{}]*"user":"me"[^{}]*}//g')" in
-    *'"utterance"'* | *'"answering"'* | *'"mention"'* | *'user://'* | *'"is_skill":true'* | \
-      *'"allow_deleting_content":true'* | *'"parentid"'* | *'"addparents"'* | *'"trashed"'*)
-      printf 'confirm %s\n' "$1" ;;
+  # allowed to delete child pages, a database or folder trashed, emptied or
+  # given a dropped column, a Claude Docs file or tab deleted, a Drive file
+  # moved, trashed, locked or given back its folder's sharing. Backslashes go
+  # first, so a payload sent as a string reads the same, and then any flat
+  # object naming you, such as your byline. A mention that links a tab names
+  # no person, so it passes.
+  in="$(get '.tool_input | tostring' | tr -d '\\' | tr '[:upper:]' '[:lower:]' |
+    sed 's/{[^{}]*"user":"me"[^{}]*}//g')"
+  case "$in" in
+    *'"utterance"'* | *'"answering"'* | *'user://'* | *'"is_skill":true'* | \
+      *'"allow_deleting_content":true'* | *'"in_trash":true'* | *'"remove_files"'* | \
+      *'drop column'* | *'"verb":"delete"'* | *'"op":"delete","ref":{"object":"file"'* | \
+      *'"trashed"'* | *'"readonly"'* | *'"inheritedpermissionsdisabled"'* | *'"addparents"'*)
+      printf 'confirm %s\n' "$1"; return 0 ;;
   esac
+  # Drive's update_file moves a file by its parentId. Creating or copying into
+  # a folder is the edit itself.
+  case "$words$in" in *" update "*'"parentid"'*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+  if printf '%s' "$in" | grep -Eq '\{[^{}]*"type":"mention"[^{}]*"user"|\{[^{}]*"user"[^{}]*"type":"mention"'; then
+    printf 'confirm %s\n' "$1"
+  fi
 }
 
 # The guard on a code-review the model calls, under whatever namespace.

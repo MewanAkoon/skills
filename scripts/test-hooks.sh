@@ -252,6 +252,26 @@ hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claud
 [ "$(verdict)" = ask ] || bad "pre-tool: a mention inside a string payload did not ask"
 hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__create", "tool_input": {"blocks": {"me": {"user": "me", "id": "x", "type": "mention"}}}}'
 [ "$(verdict)" = allow ] || bad "pre-tool: a byline in another key order asked"
+# Input that drops content, moves a file or changes access asks.
+for input in \
+  '{"tool_name": "mcp__Notion__notion-update-data-source", "tool_input": {"data_source_id": "x", "in_trash": true}}' \
+  '{"tool_name": "mcp__Notion__notion-update-data-source", "tool_input": {"statements": "DROP COLUMN \"Status\""}}' \
+  '{"tool_name": "mcp__Notion__notion-update-folder", "tool_input": {"command": "remove_files", "file_urls": ["x"]}}' \
+  '{"tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"verb": "delete", "ref": {"object": "file", "id": "t"}}]}}' \
+  '{"tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "inheritedPermissionsDisabled": false}}' \
+  '{"tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "readOnly": true}}'; do
+  hook_run pre-tool "$(printf '%s' "$input" | jq -c '. + {session_id: "all", cwd: "/tmp"}')"
+  [ "$(verdict)" = ask ] || bad "pre-tool: a doc tool input that drops, moves or reshares did not ask: $input"
+done
+# Creating or copying into a folder, and a mention that links a tab, pass.
+for input in \
+  '{"tool_name": "mcp__Google_Drive__create_file", "tool_input": {"title": "Notes", "parentId": "f"}}' \
+  '{"tool_name": "mcp__Google_Drive__copy_file", "tool_input": {"fileId": "x", "parentId": "f"}}' \
+  '{"tool_name": "mcp__Claude_Docs__update", "tool_input": {"payload": {"blocks": {"t": {"type": "mention", "ref": "file/abc"}}}}}' \
+  '{"tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"op": "replace", "with": {"from": {"content": "a \"mention\" in text"}}}]}}'; do
+  hook_run pre-tool "$(printf '%s' "$input" | jq -c '. + {session_id: "all", cwd: "/tmp"}')"
+  [ "$(verdict)" = allow ] || bad "pre-tool: a plain doc edit asked: $input"
+done
 
 # The terminal tool that runs a command is read as a shell command.
 terminal() {

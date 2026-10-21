@@ -91,7 +91,8 @@ DOC_TOOL_WORDS="notion design designs"
 # comment, a calendar event, or an agent's skills and sessions.
 RISKY_VERBS="delete remove trash drop destroy purge revoke grant share unshare \
 invite publish unpublish post send forward schedule submit request assign \
-merge move run execute invoke trigger dispatch cancel stop restore transfer"
+merge move archive run execute invoke trigger dispatch cancel stop restore \
+transfer"
 RISKY_NOUNS="permission permissions member members collaborator collaborators \
 sharing access role roles public visibility comment comments discussion \
 discussions thread threads utterance utterances calendar event events meeting \
@@ -810,29 +811,36 @@ mcp_tool() {
     case "$words" in *" $w "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
   done
   # A doc write can still reach someone, move a file or drop content through
-  # its input: a reply to a comment, a mention of a person other than you, a
-  # user:// person in a Notion property, a page made a skill, a Notion rewrite
-  # allowed to delete child pages, a database or folder trashed, emptied or
-  # given a dropped column, a Claude Docs file or tab deleted, a Drive file
-  # moved, trashed, locked or given back its folder's sharing. Backslashes go
-  # first, so a payload sent as a string reads the same, and then any flat
-  # object naming you, such as your byline. A mention that links a tab names
-  # no person, so it passes.
-  in="$(get '.tool_input | tostring' | tr -d '\\' | tr '[:upper:]' '[:lower:]' |
-    sed 's/{[^{}]*"user":"me"[^{}]*}//g')"
-  case "$in" in
-    *'"utterance"'* | *'"answering"'* | *'user://'* | *'"is_skill":true'* | \
-      *'"allow_deleting_content":true'* | *'"in_trash":true'* | *'"remove_files"'* | \
-      *'drop column'* | *'"verb":"delete"'* | *'"op":"delete","ref":{"object":"file"'* | \
-      *'"trashed"'* | *'"readonly"'* | *'"inheritedpermissionsdisabled"'* | *'"addparents"'*)
-      printf 'confirm %s\n' "$1"; return 0 ;;
-  esac
-  # Drive's update_file moves a file by its parentId. Creating or copying into
-  # a folder is the edit itself.
-  case "$words$in" in *" update "*'"parentid"'*) printf 'confirm %s\n' "$1"; return 0 ;; esac
-  if printf '%s' "$in" | grep -Eq '\{[^{}]*"type":"mention"[^{}]*"user"|\{[^{}]*"user"[^{}]*"type":"mention"'; then
-    printf 'confirm %s\n' "$1"
-  fi
+  # its input, which jq reads as a tree, with any payload sent as a JSON
+  # string decoded first: a reply to a comment, a mention of a person other
+  # than you, a user:// person, a page made a skill, a Notion rewrite allowed
+  # to delete child pages, anything trashed, archived, emptied or given a
+  # dropped column, a Claude Docs file or tab deleted, a Sheets tab deleted or
+  # range protected, and a Drive file locked, resharing or moved. A mention
+  # that links a tab names no person, and creating or copying a file into a
+  # folder is the edit itself, so both pass.
+  case "$words" in *" update "*) moving=true ;; *) moving=false ;; esac
+  # shellcheck disable=SC2016
+  risky="$(printf '%s' "$input" | jq -r --argjson moving "$moving" '
+    def keys_: ["trashed", "readOnly", "inheritedPermissionsDisabled", "addParents",
+      "writersCanShare", "deleteSheet", "addProtectedRange", "updateProtectedRange",
+      "deleteProtectedRange", "answering"];
+    def risky:
+      if type == "string" then ascii_downcase
+        | . == "utterance" or . == "remove_files" or contains("user://")
+          or test("drop\\s+column")
+      elif type == "object" then
+        ((.type | type) == "string" and (.type | ascii_downcase) == "mention"
+          and has("user") and (.user | tostring | ascii_downcase) != "me")
+        or .is_skill == true or .allow_deleting_content == true
+        or .in_trash == true or .archived == true or .verb == "delete"
+        or (.op == "delete" and (.ref | type) == "object" and .ref.object == "file")
+        or any(keys_[] as $k | has($k); .)
+        or ($moving and has("parentId"))
+      else false end;
+    if any(.tool_input | walk(if type == "string" then (fromjson? // .) else . end)
+      | ..; risky) then "yes" else empty end' 2>/dev/null)"
+  [ -n "$risky" ] && printf 'confirm %s\n' "$1"
 }
 
 # The guard on a code-review the model calls, under whatever namespace.

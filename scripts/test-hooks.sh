@@ -259,7 +259,15 @@ for input in \
   '{"tool_name": "mcp__Notion__notion-update-folder", "tool_input": {"command": "remove_files", "file_urls": ["x"]}}' \
   '{"tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"verb": "delete", "ref": {"object": "file", "id": "t"}}]}}' \
   '{"tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "inheritedPermissionsDisabled": false}}' \
-  '{"tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "readOnly": true}}'; do
+  '{"tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "readOnly": true}}' \
+  '{"tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "writersCanShare": true}}' \
+  '{"tool_name": "mcp__Google_Sheets__update_spreadsheet", "tool_input": {"requests": [{"deleteSheet": {"sheetId": 1}}]}}' \
+  '{"tool_name": "mcp__Google_Sheets__update_spreadsheet", "tool_input": {"requests": [{"addProtectedRange": {"protectedRange": {}}}]}}' \
+  '{"tool_name": "mcp__notion__API-patch-page", "tool_input": {"page_id": "x", "archived": true}}' \
+  '{"tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"ref": {"object": "file", "id": "t"}, "op": "delete"}]}}' \
+  '{"tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"verb": "delete", "user": "me", "id": "t"}]}}' \
+  '{"tool_name": "mcp__Claude_Docs__create", "tool_input": {"payload": "{\"blocks\": {\"m\": {\"type\": \"mention\", \"user\": \"u1\"}}}"}}' \
+  '{"tool_name": "mcp__Claude_Docs__create", "tool_input": {"blocks": {"m": {"user": {"id": "u1"}, "type": "mention"}}}}'; do
   hook_run pre-tool "$(printf '%s' "$input" | jq -c '. + {session_id: "all", cwd: "/tmp"}')"
   [ "$(verdict)" = ask ] || bad "pre-tool: a doc tool input that drops, moves or reshares did not ask: $input"
 done

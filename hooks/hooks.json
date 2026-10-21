@@ -1,5 +1,5 @@
 {
-  "description": "Sends the eng workflow contract and the core writing rules at session start and after each compaction, and enforces the workflow: nothing is posted; commits, pushes, PRs and issues go only through their skills and on request; other remote writes ask first; changed code gets a review reminder before hand-back; and a push or a new PR gets a reminder to review the whole PR.",
+  "description": "Sends the eng workflow contract and the core writing rules at session start and after each compaction, and enforces the workflow: nothing is posted; commits, pushes, PRs and issues go only through their skills and on request; other remote writes ask first, except doc edits through the doc tools; changed code gets a review reminder before hand-back; and a push or a new PR gets a reminder to review the whole PR.",
   "hooks": {
     "SessionStart": [
       {

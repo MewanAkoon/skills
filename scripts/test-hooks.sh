@@ -227,6 +227,32 @@ done < tests/hooks/pre-tool/mcp.cases
 want="$(grep -Ec '^(deny|ask|allow) ' tests/hooks/pre-tool/mcp.cases)"
 [ "$count" -eq "$want" ] || bad "mcp.cases: ran $count of $want cases"
 
+# A doc tool's write passes, unless its input carries a comment.
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"op": "replace", "with": {"as": "markdown"}}]}}'
+[ "$(verdict)" = allow ] || bad "pre-tool: a doc edit asked"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__batch", "tool_input": {"batch": [{"op": "create", "ref": {"object": "utterance"}}]}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a comment through a doc tool did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__update", "tool_input": {"answering": "cmsg_1", "payload": "x"}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a reply to a doc comment did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__create", "tool_input": {"blocks": {"me": {"type": "Mention", "user": "u1"}}}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a doc that mentions someone did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__create", "tool_input": {"blocks": {"me": {"type": "mention", "user": "me"}}, "markdown": "As mentioned, the utterance"}}'
+[ "$(verdict)" = allow ] || bad "pre-tool: a doc with your own byline, or that only says mention, asked"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Notion__notion-create-pages", "tool_input": {"pages": [{"properties": {"Assignee": "user://abc"}}]}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a page that names a person did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "trashed": true}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a file sent to the trash did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Google_Drive__update_file", "tool_input": {"fileId": "x", "parentId": "y"}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a file moved to a new folder did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Notion__notion-update-page", "tool_input": {"command": "update_properties", "is_skill": true}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a page made a skill did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Notion__notion-update-page", "tool_input": {"command": "replace_content", "new_str": "x", "allow_deleting_content": true}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a rewrite allowed to delete child pages did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__create", "tool_input": {"payload": "{\"blocks\":{\"m\":{\"type\":\"mention\",\"user\":\"u1\"}}}"}}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a mention inside a string payload did not ask"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "tool_name": "mcp__Claude_Docs__create", "tool_input": {"blocks": {"me": {"user": "me", "id": "x", "type": "mention"}}}}'
+[ "$(verdict)" = allow ] || bad "pre-tool: a byline in another key order asked"
+
 # The terminal tool that runs a command is read as a shell command.
 terminal() {
   hook_run pre-tool "$(jq -cn --arg s "$1" --arg c "$2" '{session_id: $s, cwd: "/tmp", tool_name: "mcp__terminal__run_in_terminal", tool_input: {command: $c}}')"

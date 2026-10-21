@@ -75,6 +75,29 @@ patch rename drop cancel reset transition invite enable disable rerun copy \
 import revoke grant destroy terminate stop kill rollback restart scale reboot \
 shutdown convert modify reprioritize star unstar dismiss mark manage subscribe \
 unsubscribe follow unfollow"
+# The doc servers, as Claude Code names them, where a write that only edits a
+# doc, page, sheet or design runs with no prompt from here and Claude Code's
+# own permission settings decide. Every other MCP write asks.
+DOC_SERVERS="claude_docs google_drive google_docs google_sheets google_slides \
+notion canva"
+# A claude.ai connector can reach a session named by an id instead. There the
+# tool's own name tells: Claude Docs' bare create, update or batch, Sheets'
+# own names, or a name holding notion or design, as Notion's and Canva's do.
+# Drive's names, such as update_file, say too little, so they ask.
+DOC_TOOL_WORDS="notion design designs"
+# What still asks on a doc server: a verb that reaches other people, runs
+# something or is hard to undo, moving included, since a page or file takes
+# on the sharing of where it lands, or, beside a write, a noun for access, a
+# comment, a calendar event, or an agent's skills and sessions.
+RISKY_VERBS="delete remove trash drop destroy purge revoke grant share unshare \
+invite publish unpublish post send forward schedule submit request assign \
+merge move run execute invoke trigger dispatch cancel stop restore transfer"
+RISKY_NOUNS="permission permissions member members collaborator collaborators \
+sharing access role roles public visibility comment comments discussion \
+discussions thread threads utterance utterances calendar event events meeting \
+meetings message messages email emails skill skills agent agents session \
+sessions secret secrets token tokens key keys credential credentials password \
+passwords env config"
 
 REVIEW_REMINDER="There are uncommitted changes that have not been reviewed since \
 they last changed. If this hands back finished work, run the review step in \
@@ -712,7 +735,7 @@ mcp_tool() {
       esac ;;
   esac
   case "$words" in
-    *" resolve "*)
+    *" resolve "* | *" resolved "*)
       case "$words" in *" thread "* | *" discussion "* | *" comment "*) printf 'post %s\n' "$1"; return 0 ;; esac ;;
   esac
   # A git server's commit and push are the same writes as the git commands.
@@ -756,9 +779,48 @@ mcp_tool() {
         esac
       done ;;
   esac
-  for v in $WRITES; do
-    case "$words" in *" $v "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+  # A name with no write word, such as a guide, passes. The words are read as
+  # they are, so the merge in accept_merge_request counts.
+  write=no
+  for w in $WRITES; do
+    case "$words" in *" $w "*) write=yes; break ;; esac
   done
+  [ "$write" = yes ] || return 0
+  # A plugin's server is named plugin_<plugin>_<server>, a claude.ai
+  # connector's claude_ai_<server>.
+  doc=no
+  bare="${server#claude_ai_}"
+  bare="${bare#plugin_*_}"
+  lower="$(printf '%s' "$bare" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    *[!0-9a-f-]*)
+      case " $DOC_SERVERS " in *" $lower "*) doc=yes ;; esac ;;
+    *[0-9]*-*)
+      case "$words" in
+        " create " | " update " | " batch " | " update values " | " append values " | \
+          " batch clear values " | " insert dimension " | " update formulas " | \
+          " update spreadsheet " | " copy sheet to another spreadsheet ") doc=yes ;;
+      esac
+      for w in $DOC_TOOL_WORDS; do
+        case "$words" in *" $w "*) doc=yes; break ;; esac
+      done ;;
+  esac
+  [ "$doc" = yes ] || { printf 'confirm %s\n' "$1"; return 0; }
+  for w in $RISKY_VERBS $RISKY_NOUNS; do
+    case "$words" in *" $w "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+  done
+  # A doc write can still reach someone, move a file or drop content through
+  # its input: a reply to a comment, a mention of anyone but yourself, a
+  # user:// person in a Notion property, a page made a skill, a Notion rewrite
+  # allowed to delete child pages, or a Drive file given a new parent or sent
+  # to the trash. Backslashes go first, so a payload sent as a string reads
+  # the same, and then any flat object naming you, such as your byline.
+  case "$(get '.tool_input | tostring' | tr -d '\\' | tr '[:upper:]' '[:lower:]' |
+    sed 's/{[^{}]*"user":"me"[^{}]*}//g')" in
+    *'"utterance"'* | *'"answering"'* | *'"mention"'* | *'user://'* | *'"is_skill":true'* | \
+      *'"allow_deleting_content":true'* | *'"parentid"'* | *'"addparents"'* | *'"trashed"'*)
+      printf 'confirm %s\n' "$1" ;;
+  esac
 }
 
 # The guard on a code-review the model calls, under whatever namespace.

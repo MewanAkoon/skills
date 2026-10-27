@@ -19,9 +19,10 @@ concurrency:
 # Every Ubuntu job is pinned to a release, because ubuntu-latest moves on its
 # own: its move to 26.04 brought GNU awk 5.3, which stopped the hook's command
 # classifier with an internal error until hooks/classify-command.awk passed
-# words to base() as values. The check job runs on 24.04 and 26.04, so both
-# the older and the newer Linux awk stay covered. The plugin and shellcheck
-# jobs stay on 24.04, and moving them is its own change.
+# the words it gives base(), and the wrapper entry it gives has(), as values.
+# The check job runs on 24.04 and 26.04, so both the older and the newer Linux
+# awk stay covered. The plugin and shellcheck jobs stay on 24.04, and moving
+# them is its own change.
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both

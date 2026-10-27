@@ -152,6 +152,9 @@ set_state() {
 hook_run() {
   printf '%s' "$2" | env CLAUDE_PLUGIN_DATA="$data" "$hook" "$1" > "$scratch/out" 2> "$scratch/err"
   status=$?
+  # A classifier that fails makes the hook ask, which a case expecting ask
+  # would pass, so a failure fails the run whatever the case expects.
+  ! grep -q 'the command parser failed' "$scratch/err" || bad "$1: the command parser failed on: $2"
 }
 
 # Prints the PreToolUse decision in $scratch/out: allow when the hook printed
@@ -177,8 +180,6 @@ expect_bash() {
   local got
   got="$(verdict)"
   [ "$status" -eq 0 ] || bad "pre-tool exited $status on: $3"
-  # The hook fails open when the classifier fails, so a crash reads as allow.
-  ! grep -q 'the command parser failed' "$scratch/err" || bad "pre-tool: the command parser failed on: $3"
   [ "$got" = "$2" ] || { bad "pre-tool: got $got, want $2, for: $3"; return; }
   if [ -n "${4:-}" ]; then
     jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$4" \
@@ -246,6 +247,35 @@ terminal all 'gh pr comment 5 -b x'
 [ "$(verdict)" = deny ] || bad "pre-tool: a post through the terminal tool was not denied"
 terminal all 'npm run dev'
 [ "$(verdict)" = allow ] || bad "pre-tool: a dev server through the terminal tool was not allowed"
+
+# A command parser that fails asks rather than allows, and what it found
+# before it stopped still counts. A stand-in classifier in a scratch plugin
+# root prints $1 and exits 2, as gawk 5.3 did with an internal error. The
+# tool is $3, or Bash.
+broken="$scratch/broken"
+mkdir -p "$broken/hooks"
+parser_fails() {
+  printf 'BEGIN { %s exit 2 }\n' "$1" > "$broken/hooks/classify-command.awk"
+  rm -f "$scratch/data-broken/eng-hook.log"
+  jq -cn --arg c "$2" --arg t "${3:-Bash}" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {command: $c}}' |
+    env CLAUDE_PLUGIN_ROOT="$broken" CLAUDE_PLUGIN_DATA="$scratch/data-broken" "$hook" pre-tool > "$scratch/out" 2> /dev/null
+  status=$?
+  [ "$status" -eq 0 ] || bad "parser failure: exited $status on: $2"
+  grep -q 'the command parser failed with exit status 2' "$scratch/data-broken/eng-hook.log" 2>/dev/null \
+    || bad "parser failure: the log does not give the exit status for: $2"
+}
+parser_fails '' 'ls'
+[ "$(verdict)" = ask ] || bad "parser failure: a command with nothing found got $(verdict), want ask"
+jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'parser failed' \
+  || bad "parser failure: the reason does not name the parser"
+parser_fails 'print "post gh pr comment";' 'gh pr comment 5 -b x'
+[ "$(verdict)" = deny ] || bad "parser failure: a post found before the failure got $(verdict), want deny"
+parser_fails 'print "confirm a deploy";' './deploy.sh'
+[ "$(verdict)" = ask ] || bad "parser failure: a deploy found before the failure got $(verdict), want ask"
+reason="$(jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null)"
+case "$reason" in *"a deploy"*"parser failed"*) ;; *) bad "parser failure: the reason does not name both the deploy and the parser: $reason" ;; esac
+parser_fails '' 'ls' mcp__terminal__run_in_terminal
+[ "$(verdict)" = ask ] || bad "parser failure: a command through the terminal tool got $(verdict), want ask"
 
 # The write gate. A subagent is denied whatever the state.
 bash_call all 'git commit -m x' '{"agent_id": "a1", "agent_type": "general-purpose"}'
@@ -542,7 +572,7 @@ expect_bash pushed ask 'git push --force-with-lease origin feature/x' 'forces'
 # A typed /eng:commit is both the skill and the request.
 set_state typed "/eng:commit" commit
 expect_bash typed allow 'git commit -m x'
-# No state to read: the gate fails open, like the rest of the hook.
+# No state to read: the gate fails open, like every check but the command parser.
 jq -cn '{session_id: "missing", tool_name: "Bash", tool_input: {command: "git commit -m x"}}' |
   "$hook" pre-tool > "$scratch/out" 2>/dev/null
 [ "$(verdict)" = allow ] || bad "write gate: a commit with no state was not allowed"

@@ -37,13 +37,16 @@
 # branch), pr-review (that commit, once a review reached it) and pr-reminded
 # (that commit, once the stop gate asked for its review). It is not read from
 # the transcript, which Claude Code writes asynchronously. Where the state
-# cannot be read, the write gate allows, as every other check fails open.
+# cannot be read, the write gate allows.
 #
-# Every failure exits 0, so a broken hook never stops a session or a tool. A
+# Every failure exits 0, so a broken hook never stops a session. Each check
+# fails open and lets the tool run, except the command parser: on a shell
+# command it fails on, what it found before it failed is still denied as
+# usual, and anything else asks, because the command may post or write. A
 # failure is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which
-# check.sh --doctor reads. Needs jq. Without it the session block goes out as
-# plain text, which Claude Code also takes as context, and every other mode
-# does nothing.
+# check.sh --doctor reads.
+# Needs jq. Without it the session block goes out as plain text, which Claude
+# Code also takes as context, and every other mode does nothing.
 
 set -u
 
@@ -504,7 +507,8 @@ gate() {
     reason="A subagent never commits, pushes, changes a pull request or writes an issue. Hand the work back to the main session."
     return 0
   fi
-  # With no state to read, the gate fails open like the rest of the hook.
+  # With no state to read, the gate fails open, like every check but the
+  # command parser.
   find_state && [ -f "$state/turn" ] || return 0
   loaded=no
   for s in $skills; do
@@ -821,7 +825,7 @@ mcp_tool() {
 # - with $1 true, a new parent or folder, which moves the file.
 # Deleting text inside a doc through an op such as Claude Docs' delete is
 # editing it, so a key named op is not read, though one named operation is. A jq failure is logged and
-# counts as nothing risky, as every check here fails open.
+# counts as nothing risky, as every check but the command parser fails open.
 risky_input() {
   [ -n "$input" ] || return 1
   # shellcheck disable=SC2016
@@ -903,19 +907,24 @@ skill_call() {
 
 on_pre_tool() {
   tool="$f_tool"
+  failed=""
   case "$tool" in
     Bash | Monitor | PowerShell | mcp__terminal__run_in_terminal)
       command="$(get .tool_input.command)"
       [ -n "$command" ] || return 0
-      if ! found="$(printf '%s' "$command" | awk -f "$root/hooks/classify-command.awk")"; then
-        log "the command parser failed"
-        return 0
-      fi ;;
+      # Unlike the other checks, a classifier that fails asks rather than
+      # allows, because a command it could not read may post or write. What
+      # it printed before it stopped still counts, so a post it found, or a
+      # write the gate refuses, is still denied.
+      found="$(printf '%s' "$command" | awk -f "$root/hooks/classify-command.awk")" || {
+        log "the command parser failed with exit status $?"
+        failed="The hook's command parser failed, so it cannot tell whether this command posts or writes outside this machine. Check it before it runs."
+      } ;;
     Skill) skill_call; return 0 ;;
     mcp__*) found="$(mcp_tool "$tool")" ;;
     *) return 0 ;;
   esac
-  [ -n "$found" ] || return 0
+  [ -n "$found" ] || [ -n "$failed" ] || return 0
 
   # Tiers apply in order: a post is denied outright, and a push the write gate
   # allows still asks when it forces, deletes or pushes tags.
@@ -933,6 +942,7 @@ on_pre_tool() {
   done <<EOF
 $found
 EOF
+  [ -z "$failed" ] || ask="${ask:+$ask }$failed"
   # A command the gate denies never runs, so it has nothing to compare.
   [ -z "$deny" ] && [ "$tool" = Bash ] && note_push
   if [ -n "$deny" ]; then

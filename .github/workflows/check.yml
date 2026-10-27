@@ -16,6 +16,11 @@ concurrency:
   group: check-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
+# Every Ubuntu job is pinned to 24.04, because ubuntu-latest moved to 26.04 on
+# its own and the hook cases in tests/hooks/pre-tool/commands.cases that pipe
+# a command into sh, such as `echo "gh pr comment 5 -b x" | sh`, failed there
+# with no change here. Until the hook passes on 26.04, those cases run on
+# macOS and 24.04 only. Moving to 26.04 is its own change.
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
@@ -24,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       # Pinned to a commit, because a moving tag on the only gate this repo
@@ -50,7 +55,7 @@ jobs:
           CHECK_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
 
   plugin:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Pinned, because the validator's rules change with each release, and a
@@ -59,7 +64,7 @@ jobs:
       - run: CLAUDE_BIN="npx --yes @anthropic-ai/claude-code@2.1.293" ./scripts/validate-plugin.sh
 
   shellcheck:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Two version numbers, and they count different things. package.json

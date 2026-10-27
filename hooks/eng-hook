@@ -69,7 +69,7 @@ WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)
 # time: it deletes, moves, shares, sends, publishes, merges, deploys, runs or
 # stops something, or changes who has access.
 READS="read get list search fetch view retrieve query find lookup download \
-describe count inspect show"
+describe count inspect show summarize analyze"
 POSTS="comment comments reply review reviews reaction reactions approve"
 EDITS="create update set append insert edit write add save duplicate generate \
 batch upsert patch rename copy import convert modify reprioritize star unstar \
@@ -79,7 +79,7 @@ trash remove clear move submit assign close reopen archive unarchive push \
 commit fork schedule request forward run invoke trigger dispatch restore drop \
 purge cancel reset invite enable disable rerun revoke grant destroy terminate \
 stop kill rollback restart scale reboot shutdown manage subscribe unsubscribe \
-follow unfollow"
+follow unfollow unpublish deactivate erase wipe suspend uninstall disconnect"
 WRITES="$EDITS $RISKY"
 # The words in a name that ask like a risky verb, beside any verb not in
 # READS: access, money, deployments, releases, secrets, tokens, variables,
@@ -794,26 +794,30 @@ mcp_tool() {
 # - a verb, action, command, operation or method that is one of the risky
 #   words, such as a Claude Docs batch member that deletes a tab or a whole
 #   doc, or an HTTP method of DELETE, though not POST, which mostly creates;
-# - a status, state, folder, mailbox, destination or label of trash, as Gmail
-#   and WordPress trash things;
+# - a status, state, folder, mailbox, destination, location, target or move
+#   key set to trash, trashed or deleted, and a label of trash, as Gmail and
+#   WordPress trash things;
 # - a key that deletes, trashes, archives or drops, set to true or to an
 #   object, such as Notion's in_trash or allow_deleting_content, Drive's
 #   trashed, or a Sheets deleteSheet request;
 # - a key about access or visibility, such as a permission, a protected range,
 #   sharing or public;
 # - a key about people: an assignee, reviewer, invitee, attendee, recipient,
-#   subscriber or delegate set to a list, an object, a numeric id, or a name
-#   or id other than me, or an owner, person or member set to a list, an object or an
-#   email address, which covers a Notion page assigned to someone through
-#   its people property;
+#   subscriber, delegate, member or new owner, set to anyone but me, with a
+#   number counting only under a key ending in id, or an owner or person set
+#   to a list or object naming anyone but me, or to an email address, which
+#   covers a Notion page assigned to someone through its people property. A
+#   bare owner, a repo owner or an owner type is not a person, so a plain
+#   name there passes;
 # - a key that sends a notification, such as a calendar's sendUpdates or a
 #   notify flag;
 # - a person named in content: a user:// link, or a mention of a user other
 #   than you;
 # - a comment made through a generic tool, such as a Claude Docs utterance;
-# - in a sql, query, statement or ddl key, a SQL drop of a column, table,
-#   database, schema or index, a truncate, or a delete from, such as
-#   Notion's DROP COLUMN, so prose that says the same words passes;
+# - in a sql, query, queries, statement, statements or ddl key, a string or
+#   list holding a SQL drop of a table, column, database, schema, index, view,
+#   function, constraint or trigger, a truncate, or a delete from, such as
+#   Notion's DROP COLUMN. Other keys are not read for SQL, so prose passes;
 # - with $1 true, a new parent or folder, which moves the file.
 # Deleting text inside a doc through an op such as Claude Docs' delete is
 # editing it, so a key named op is not read, though one named operation is. A jq failure is logged and
@@ -827,6 +831,15 @@ risky_input() {
       def filled: . == true or ((type == "object" or type == "array") and length > 0);
       def personal: filled or (type == "string" and test("@|user://"));
       def set_: filled or (type == "string" and length > 0) or (type == "number");
+      def me: type == "string" and (lower | gsub("^\\s+|\\s+$"; "")) == "me";
+      def someone: (type == "string" and length > 0 and (me | not)) or (type == "number" and . != 0)
+        or ((type == "object" or type == "array") and length > 0);
+      def others($id):
+        if type == "array" then any(.[]; someone)
+        elif type == "object" then length > 0
+        elif type == "number" then . != 0 and $id
+        elif type == "string" then length > 0 and (me | not)
+        else . == true end;
       def decode: walk(if type == "string" then (fromjson? // .) else . end);
       def risky:
         if type == "string" then
@@ -838,13 +851,14 @@ risky_input() {
           or any(to_entries[]; .key as $key | ($key | lower) as $k | .value as $v
             | (($k | IN("verb", "action", "command", "operation", "method"))
                 and ($v | type) == "string"
-                and ($v | lower | gsub("^\\s+|\\s+$"; "") | IN($words[])
-                  and (. != "post" or $k != "method")))
-              or (($k | IN("sql", "query", "statement", "statements", "ddl"))
+                and ($v | lower | gsub("^\\s+|\\s+$"; "")
+                  | IN($words[]) and (. != "post" or $k != "method")))
+              or (($k | IN("sql", "query", "queries", "statement", "statements", "ddl"))
+                and ($v | if type == "array" then map(tostring) | join(";") else tostring end
+                  | test("\\b(drop\\s+(table|column|database|schema|index|view|function|constraint|trigger)|truncate(\\s+table)?\\s+\\w+|delete\\s+from)\\b"; "i")))
+              or (($k | test("status|state|folder|mailbox|destination|location|target|move")) and $k != "statement"
                 and ($v | type) == "string"
-                and ($v | test("\\b(drop\\s+(column|table|database|schema|index)|truncate|delete\\s+from)\\b"; "i")))
-              or (($k | test("status|state|folder|destination|location|mailbox|target|move"))
-                and ($v | type) == "string" and ($v | lower | gsub("^\\s+|\\s+$"; "")) == "trash")
+                and ($v | lower | gsub("^\\s+|\\s+$"; "") | IN("trash", "trashed", "deleted")))
               or (($k | test("label")) and ($v | tostring | test("\\btrash\\b"; "i")))
               or (($k | gsub("[_-]"; "") | test("^(send(updates|notifications?|notificationemails?|emails?|invites?|invitations?)|notify(users|recipients|people|attendees|followers)?)$"))
                 and ($v | set_) and ($v | tostring | lower | IN("none", "false", "0") | not))
@@ -856,10 +870,15 @@ risky_input() {
               or (($k | test("permission|protect|canshare|^(share|sharing|shared|access|accesslevel|role|roles|visibility|public|published|private|is_public)$"))
                 and ($v | set_ or . == false))
               or (($k | test("assign|reviewer|collaborat|invite|attendee|recipient|subscriber|delegate"))
-                and ($v | filled or (type == "number" and . != 0 and ($k | test("ids?$"))) or (type == "string" and length > 0 and lower != "me")))
-              or (($k | test("owner|^(people|person|persons|members?)$")) and ($v | personal))
-              or ($moving and ($k | IN("parentid", "parent_id", "parent", "addparents", "removeparents", "newparent",
-                "new_parent_id", "newparentid", "folderid", "folder_id"))))
+                and ($v | others($k | test("ids?$"))))
+              or (($k | gsub("[_-]"; "") | IN("member", "members", "memberid", "memberids", "ownerid", "ownerids"))
+                and ($v | others(true)))
+              or (($k | test("owner") and ($k | test("^owner$|repo|type") | not)) and ($v | others(false)))
+              or (($k | IN("owner", "people", "person", "persons"))
+                and ($v | if type == "array" then any(.[]; someone) else personal end))
+              or ($moving and ($k | gsub("[_-]"; "") | IN("parentid", "parent", "addparents", "removeparents",
+                "newparent", "newparentid", "folderid", "destinationfolderid", "destinationfolder",
+                "destinationparentid", "targetfolderid", "targetparentid"))))
         else false end;
       any(.tool_input // {} | decode | decode | ..; risky)
   ' > /dev/null 2>&1

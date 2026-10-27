@@ -1,7 +1,8 @@
 # MCP tool names and what the pre-tool hook decides for each, one
-# "<deny|ask|allow> <tool name>" per line. The state is the one
-# commands.cases uses. The names cover every form seen on this machine and
-# the trackers the plan names.
+# "<deny|ask|allow> <tool name> [<tool input as JSON>]" per line, the input
+# {} when left out. The state is the one commands.cases uses. The names cover
+# every form seen on this machine and the trackers the plan names. "allow"
+# means the hook stays out, and Claude Code's own permission settings decide.
 #
 # Posting: comment, reply, review, reaction, send_message, post_message,
 # schedule_message.
@@ -42,16 +43,16 @@ ask mcp__gmail__create_draft_and_send
 ask mcp__github__request_copilot_review
 allow mcp__3f1c-github-connector-id__create_pull_request
 allow mcp__3f1c-github-connector-id__push_files
-ask mcp__jira__get_or_create_issue
+allow mcp__jira__get_or_create_issue
 ask mcp__x__get_and_delete_item
-ask mcp__memory__save_memory
+allow mcp__memory__save_memory
 ask mcp__calendar__schedule_meeting
-ask mcp__db__upsert_record
+allow mcp__db__upsert_record
 ask mcp__db__drop_table
 ask mcp__billing__cancel_subscription
-ask mcp__jira__transition_issue
-ask mcp__drive__copy_file
-ask mcp__c64407bc-b8f7-494b-bb48-1cb85ff2b0d5__import-design-from-url
+allow mcp__jira__transition_issue
+allow mcp__drive__copy_file
+allow mcp__c64407bc-b8f7-494b-bb48-1cb85ff2b0d5__import-design-from-url
 deny mcp__github__approve_pull_request
 deny mcp__gitlab__approve_merge_request
 deny mcp__x__fetch_and_reply
@@ -61,23 +62,23 @@ deny mcp__x__send_chat_message
 ask mcp__ccd_pr__set_auto_merge
 deny mcp__gitlab__create_merge_request_note
 deny mcp__gitlab__create_issue_note
-ask mcp__notes__create_note
+allow mcp__notes__create_note
 deny mcp__gitlab__create_merge_request_discussion
 deny mcp__github__resolve_review_thread
 allow mcp__context7__resolve-library-id
 allow mcp__plugin_context7_context7__resolve-library-id
 allow mcp__ide__executeCode
-ask mcp__openai__create_chat_completion
-ask mcp__anthropic__create_message
-ask mcp__gmail__add_labels_to_message
+allow mcp__openai__create_chat_completion
+allow mcp__anthropic__create_message
+allow mcp__gmail__add_labels_to_message
 deny mcp__gitlab__publish_draft_note
 deny mcp__gitlab__create_merge_request_thread
-ask mcp__gmail__modify_message
+allow mcp__gmail__modify_message
 ask mcp__gitlab__update_release_notes
 deny mcp__gitlab__delete_note
 ask mcp__gitlab__create_release_notes
 deny mcp__ms365__create_channel_message
-ask mcp__ms365__create_message
+allow mcp__ms365__create_message
 deny mcp__mattermost__add_message
 deny mcp__mattermost__create_post
 deny mcp__webex__create_message
@@ -100,7 +101,7 @@ allow mcp__notion__API-retrieve-a-comment
 allow mcp__notion__API-post-search
 allow mcp__notion__API-post-database-query
 ask mcp__github__star_repository
-ask mcp__github__dismiss_notification
+allow mcp__github__dismiss_notification
 allow mcp__github__reprioritize_sub_issue
 ask mcp__github__rerun_failed_jobs
 ask mcp__x__terminate_instance
@@ -108,9 +109,9 @@ ask mcp__x__stop_instance
 ask mcp__x__kill_process
 ask mcp__gmail__forward_email
 ask mcp__x__run_workflow
-ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-duplicate-page
-ask mcp__c64407bc-b8f7-494b-bb48-1cb85ff2b0d5__generate-design
-ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-duplicate-page
+allow mcp__c64407bc-b8f7-494b-bb48-1cb85ff2b0d5__generate-design
+allow mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch
 # Issue writes in a GitHub server go through the write gate, which the state
 # allows.
 allow mcp__github__create_issue
@@ -128,15 +129,18 @@ allow mcp__github__convert_pull_request_to_draft
 allow mcp__github__reopen_issue
 allow mcp__github__push_files
 allow mcp__github__create_or_update_file
-# Every other write asks.
-ask mcp__linear__create_issue
-ask mcp__linear__update_issue
-ask mcp__fibery__createEntity
+# A write that only creates or changes something passes.
+allow mcp__linear__create_issue
+allow mcp__linear__update_issue
+allow mcp__fibery__createEntity
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages
+allow mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_values
+allow mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__append_values
+allow mcp__settings__setTheme
+# A write whose name deletes, moves, shares, sends, publishes, merges, deploys,
+# runs or touches access asks.
 ask mcp__github__merge_pull_request
-ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page
-ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages
-ask mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_values
-ask mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__append_values
 ask mcp__3d9c448c-f777-441d-9b67-d69090571521__trash_file
 ask mcp__3d9c448c-f777-441d-9b67-d69090571521__share_file
 ask mcp__gmail__send_email
@@ -144,7 +148,132 @@ ask mcp__vercel__deploy
 ask mcp__supabase__apply_migration
 ask mcp__supabase__execute_sql
 ask mcp__drive__upload_file
-ask mcp__settings__setTheme
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__delete
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-move-pages
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-delete-pages
+ask mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__batch_clear_values
+ask mcp__x__update_permissions
+ask mcp__x__add_members
+ask mcp__x__manage_roles
+# Edits shaped like the real calls pass, under a connector's id or its name.
+allow mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__update {"ref":{"object":"node","id":"02b0564f-05c8"},"engine":"prose","container":{"kind":"project","id":"900f"},"payload":{"ops":[{"op":"replace","target":{"kind":"blocks","ids":["myj5.40"]},"with":{"from":{"kind":"inline","content":"## Overview"},"as":"markdown"}},{"op":"delete","target":{"kind":"find","text":" if legal review runs long"}}]}}
+allow mcp__claude_ai_Claude_Docs__batch {"container":{"kind":"project","create":{"name":"Guide","doc":{"blocks":{"asof":{"type":"date","value":"2026-10-19"},"me":{"type":"mention","user":"me"},"s1":{"type":"pending","intent":"Overview"}},"markdown":"# Guide"}}},"batch":[]}
+allow mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__update {"ref":{"object":"node","id":"n"},"container":{"kind":"project","id":"p"},"payload":{"blocks":{"t":{"type":"mention","ref":"file/abc"}}},"answering":"root"}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"update_content","content_updates":[{"old_str":"a","new_str":"b"}]}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"update_properties","properties":{"Status":"Done","archived_note":"no"},"is_skill":false}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-data-source {"data_source_id":"x","statements":"ADD COLUMN \"Due\" DATE","in_trash":false}
+allow mcp__3d9c448c-f777-441d-9b67-d69090571521__create_file {"title":"Listing copy","parentId":"16E6","contentMimeType":"text/markdown","textContent":"# Listing"}
+allow mcp__3d9c448c-f777-441d-9b67-d69090571521__copy_file {"fileId":"x","parentId":"f"}
+allow mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_values {"spreadsheetId":"1T","range":"Units!R2:S13","values":[["a","b"]]}
+allow mcp__x__update_issue {"owner":"MewanAkoon","repo":"skills","body":"Ask sam@example.com"}
+# Input that drops content, moves a file, changes access or reaches someone
+# else asks, whatever the tool is called.
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch {"container":{"kind":"project","id":"p"},"batch":[{"verb":"delete","ref":{"object":"project","id":"p"}}]}
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch {"container":{"kind":"project","id":"p"},"batch":[{"verb":"Delete","ref":{"object":"file","id":"t"}}]}
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__create {"object":"utterance","container":{"kind":"project","id":"p"},"payload":{"value":{"body":"Which first?"}}}
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch {"container":{"kind":"project","id":"p"},"batch":[{"verb":"create","object":"utterance","payload":{}}]}
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__update {"container":{"kind":"project","id":"p"},"payload":{"blocks":{"m":{"type":"mention","user":"sam@example.com"}}}}
+ask mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__update {"container":{"kind":"project","id":"p"},"payload":"{\"blocks\":{\"m\":{\"user\":\"u1\",\"type\":\"Mention\"}}}"}
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-data-source {"data_source_id":"x","in_trash":true}
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-data-source {"data_source_id":"x","statements":"ADD COLUMN \"A\" DATE; drop  column \"Status\""}
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"replace_content","new_str":"x","allow_deleting_content":true}
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"update_properties","properties":{"Assignee":["5c1f"]}}
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"insert_content","content":"Over to <mention-user url=\"user://5c1f\"/>"}
+ask mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages {"pages":[{"properties":{"title":"T","Owner":["user://5c1f"]}}]}
+ask mcp__notion__API-patch-page {"page_id":"x","archived":true}
+ask mcp__3d9c448c-f777-441d-9b67-d69090571521__update_file {"fileId":"x","trashed":true}
+ask mcp__3d9c448c-f777-441d-9b67-d69090571521__update_file {"fileId":"x","parentId":"y"}
+ask mcp__3d9c448c-f777-441d-9b67-d69090571521__update_file {"fileId":"x","addParents":"y"}
+ask mcp__3d9c448c-f777-441d-9b67-d69090571521__update_file {"fileId":"x","writersCanShare":true}
+ask mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_spreadsheet {"spreadsheetId":"1T","requests":[{"deleteSheet":{"sheetId":1}}]}
+ask mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_spreadsheet {"spreadsheetId":"1T","requests":[{"addProtectedRange":{"protectedRange":{}}}]}
+ask mcp__x__create_event {"summary":"Sync","attendees":["sam@example.com"]}
+ask mcp__x__update_task {"id":"t","assignee":"sam@example.com"}
+ask mcp__x__do_thing {"action":"destroy"}
+ask mcp__x__do_thing {"verb":"delete "}
+ask mcp__x__do_thing {"operation":"archive","id":"x"}
+ask mcp__x__http_request {"method":"DELETE","url":"/pages/1"}
+allow mcp__x__http_call {"method":"POST","url":"/pages"}
+ask mcp__linear__update_issue {"id":"x","assigneeId":"5c1f"}
+ask mcp__linear__update_issue {"id":"x","subscriberIds":["5c1f"]}
+ask mcp__notion__API-patch-block-children {"children":[{"rich_text":[{"type":"mention","mention":{"type":"user","user":{"id":"5c1f"}}}]}]}
+ask mcp__x__update_page {"id":"x","public":true}
+ask mcp__github__update_gist {"gist_id":"x","files":{}}
+ask mcp__stripe__create_refund {"payment_intent":"pi_1","amount":100}
+ask mcp__vercel__create_deployment {"target":"production"}
+ask mcp__github__create_release {"tag_name":"v1"}
+ask mcp__calendar__update_event {"eventId":"e","sendUpdates":"all"}
+ask mcp__gmail__modify_message {"id":"m","addLabelIds":["TRASH"]}
+ask mcp__x__update_file {"fileId":"x","removeParents":"y"}
+ask mcp__x__set_location {"id":"x","parentId":"y"}
+ask mcp__x__update_file {"fileId":"x","folderId":"y"}
+allow mcp__x__create_file {"title":"T","folderId":"y"}
+ask mcp__x__update_store {"sql":"truncate users;"}
+ask mcp__x__update_store {"statement":"DELETE FROM users WHERE id = 1"}
+ask mcp__x__update_store {"statement":"drop index idx"}
+ask mcp__x__update_group {"RemoveMembers":["a@b.c"]}
+ask mcp__x__update_thing {"PURGE_ALL":true}
+ask mcp__x__rpc {"method":"publish"}
+ask mcp__x__update_task {"assignee":"Sam Smith"}
+allow mcp__x__update_task {"assignee":"me","autoAssign":false,"reviewerCount":0}
+allow mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_values {"spreadsheetId":"1T","range":"A1","values":[["Trash"]]}
+allow mcp__posthog__capture_event {"event":"signup"}
+allow mcp__aws__describe_deployments {}
+ask mcp__x__create_webhook {"url":"https://example.com"}
+ask mcp__stripe__finalize_invoice {"invoice":"in_1"}
+ask mcp__x__create_token {"scopes":["repo"]}
+ask mcp__gitlab__update_issue {"issue_iid":1,"assignee_id":42}
+ask mcp__x__do_thing {"action":"post","text":"hi"}
+ask mcp__wordpress__update_page {"id":1,"status":"trash"}
+ask mcp__outlook__update_message {"id":"m","destinationFolder":"Trash"}
+ask mcp__x__update_store {"sql":"TRUNCATE TABLE users, orders CASCADE"}
+ask mcp__x__update_store {"sql":"delete from public.users u where u.id = 1"}
+allow mcp__x__update_doc {"content":"Then delete from the cache list, and drop the index card."}
+ask mcp__x__update_store {"sql":"BEGIN; DELETE FROM users; COMMIT;"}
+ask mcp__google__update_event {"event_id":"e","send_updates":"all"}
+allow mcp__gitlab__update_issue {"issue_iid":1,"assignee_id":0}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages {"pages":[{"properties":{"title":"Trash"}}]}
+allow mcp__linear__create_issue {"title":"Truncate titles"}
+allow mcp__x__update_doc {"content":"Remember to delete from cache today, then drop table names over 30 chars."}
+ask mcp__x__update_store {"sql":"TRUNCATE TABLE users RESTART IDENTITY"}
+ask mcp__x__update_store {"sql":"truncate 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 then stop"}
+ask mcp__x__update_message {"id":"m","mailbox":"Trash"}
+ask mcp__stripe__check_payment_status {"id":"pi_1"}
+allow mcp__x__summarize_meeting {"id":"m"}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"apply_template","template_id":"t"}
+allow mcp__x__update_issue {"repo_owner":"octocat","remember_me":true,"owner_type":"User"}
+allow mcp__x__update_view {"query":"status:open -label:drop"}
+ask mcp__x__update_store {"sql":["DROP TABLE t"]}
+allow mcp__x__update_task {"people":["me"]}
+allow mcp__x__update_doc {"statement":"published"}
+ask mcp__github__rerequest_check_run {"check_run_id":1}
+ask mcp__vercel__promote_preview_deployment {"id":"d"}
+ask mcp__x__update_page {"id":1,"post_status":"trash"}
+ask mcp__x__update_message {"id":"m","target":"trash"}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"update_properties","properties":{"Status":"Published","State":"Archived"}}
+ask mcp__sqlite__write_query {"query":"DELETE FROM users"}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-data-source {"data_source_id":"x","statements":"ADD COLUMN \"Drop-off\" DATE"}
+allow mcp__x__update_doc {"statement":"We will delete the old flow next sprint"}
+ask mcp__x__update_file {"id":"f","owners":["bob@x.com"]}
+ask mcp__x__update_file {"id":"f","new_owner":"bob@x.com"}
+allow mcp__x__update_team {"members":[null],"assignees":[""]}
+ask mcp__x__update_team {"member_ids":["u1"]}
+ask mcp__x__update_doc {"owner_id":"u1"}
+ask mcp__x__update_task {"assignee_id":42}
+allow mcp__x__update_event {"max_attendees":10}
+allow mcp__x__update_task {"assignees":["me"],"assignee_id":0}
+ask mcp__x__update_store {"sql":"DROP VIEW v"}
+ask mcp__x__update_store {"statements":["ALTER TABLE t DROP CONSTRAINT c"]}
+ask mcp__x__unpublish_page {"id":"p"}
+ask mcp__x__deactivate_user {"id":"u"}
+ask mcp__x__update_file {"fileId":"x","new_parent":"y"}
+ask mcp__x__update_file {"fileId":"x","destination_folder_id":"y"}
+allow mcp__gmail__create_draft {"sender":"me@x.com"}
+allow mcp__x__create_reminder {"notifyAt":"2026-10-28T09:00"}
+allow mcp__x__update_doc {"items":[{"options":{"DROPDOWN":true}}]}
+ask mcp__x__update_doc {"payload":"\"{\\\"verb\\\":\\\"delete\\\"}\""}
+allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page {"page_id":"x","command":"update_properties","properties":{"Dropdown":"A","Archived":"__NO__"}}
+allow mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__update {"container":{"kind":"project","id":"p"},"payload":{"ops":[{"op":"insert","source":{"from":{"kind":"inline","content":"Delete from the list anything stale."}}}]}}
 # Reads pass.
 allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-fetch
 allow mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__get_values

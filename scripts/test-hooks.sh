@@ -215,17 +215,26 @@ run_case
 want="$(grep -c '^== ' "$cases")"
 [ "$count" -eq "$want" ] || bad "commands.cases: ran $count of $want cases"
 
-# mcp.cases: one "<expect> <tool name>" per line.
+# mcp.cases: one "<expect> <tool name> [<tool input>]" per line.
 count=0
-while IFS=' ' read -r expect tool; do
+while IFS=' ' read -r expect tool tool_input; do
   case "$expect" in deny | ask | allow) ;; *) continue ;; esac
-  hook_run pre-tool "$(jq -cn --arg t "$tool" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {}}')"
+  [ -n "$tool_input" ] || tool_input='{}'
+  if ! call="$(jq -cn --arg t "$tool" --argjson i "$tool_input" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: $i}' 2>/dev/null)"; then
+    bad "mcp.cases: the input for $tool is not JSON: $tool_input"
+    count=$((count + 1))
+    continue
+  fi
+  hook_run pre-tool "$call"
   got="$(verdict)"
-  [ "$got" = "$expect" ] || bad "pre-tool: got $got, want $expect, for $tool"
+  [ "$got" = "$expect" ] || bad "pre-tool: got $got, want $expect, for $tool $tool_input"
   count=$((count + 1))
 done < tests/hooks/pre-tool/mcp.cases
 want="$(grep -Ec '^(deny|ask|allow) ' tests/hooks/pre-tool/mcp.cases)"
 [ "$count" -eq "$want" ] || bad "mcp.cases: ran $count of $want cases"
+if [ -s "$data/eng-hook.log" ] && grep -q 'MCP input check' "$data/eng-hook.log"; then
+  bad "mcp.cases: the MCP input check failed and logged an error"
+fi
 
 # The terminal tool that runs a command is read as a shell command.
 terminal() {

@@ -64,17 +64,32 @@ post it, give the user the path, and say that is why. Reading stays open."
 WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)? ?in|prs?|pull[ -]requests?|merge[ -]requests?|mrs?|issues?|tickets?'
 
 # The words in an MCP tool's name that say what it does: it reads, it posts,
-# or it writes somewhere else.
-READS="read get list search fetch view retrieve query find lookup download"
+# or it writes somewhere else. A write either edits, which Claude Code's own
+# permission settings decide, or is risky, which the hook asks about every
+# time: it deletes, moves, shares, sends, publishes, merges, deploys, runs or
+# stops something, or changes who has access.
+READS="read get list search fetch view retrieve query find lookup download \
+describe count inspect show"
 POSTS="comment comments reply review reviews reaction reactions approve"
-WRITES="create update delete apply execute deploy merge upload set send post \
-publish share trash remove append insert clear move edit write submit add \
-assign close reopen archive unarchive push commit fork schedule save request \
-forward run invoke trigger dispatch duplicate restore generate batch upsert \
-patch rename drop cancel reset transition invite enable disable rerun copy \
-import revoke grant destroy terminate stop kill rollback restart scale reboot \
-shutdown convert modify reprioritize star unstar dismiss mark manage subscribe \
-unsubscribe follow unfollow"
+EDITS="create update set append insert edit write add save duplicate generate \
+batch upsert patch rename copy import convert modify reprioritize star unstar \
+dismiss mark transition"
+RISKY="delete apply execute deploy merge upload send post publish share unshare \
+trash remove clear move submit assign close reopen archive unarchive push \
+commit fork schedule request forward run invoke trigger dispatch restore drop \
+purge cancel reset invite enable disable rerun revoke grant destroy terminate \
+stop kill rollback restart scale reboot shutdown manage subscribe unsubscribe \
+follow unfollow"
+WRITES="$EDITS $RISKY"
+# The words in a name that ask like a risky verb, beside any verb not in
+# READS: access, money, deployments, releases, secrets, tokens, variables,
+# repos, webhooks and calendars, which reach other people or cost something
+# even when the verb only creates or updates.
+NOUNS="permission permissions access member members collaborator collaborators \
+role roles sharing refund refunds payment payments charge charges payout \
+payouts invoice invoices deployment deployments release releases secret \
+secrets gist gists repository repositories repo webhook webhooks calendar \
+meeting meetings transfer transfers token tokens variable variables"
 
 REVIEW_REMINDER="There are uncommitted changes that have not been reviewed since \
 they last changed. If this hands back finished work, run the review step in \
@@ -756,9 +771,103 @@ mcp_tool() {
         esac
       done ;;
   esac
-  for v in $WRITES; do
+  for v in $RISKY; do
     case "$words" in *" $v "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
   done
+  # A noun asks beside any verb not known as a read, so finalize_invoice
+  # asks while describe_deployments, a read, returned above.
+  for n in $NOUNS; do
+    case "$words" in *" $n "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+  done
+  # Any other tool, an edit or one whose name says nothing, asks only when its
+  # input does something risky. A tool whose name updates moves what it
+  # changes when it names a new parent, while one that creates or copies puts
+  # the new file there.
+  case "$words" in *" update "* | *" patch "* | *" modify "* | *" set "* | *" edit "*) moving=true ;; *) moving=false ;; esac
+  risky_input "$moving" && printf 'confirm %s\n' "$1"
+  return 0
+}
+
+# Succeeds when the tool input asks for something risky, whatever the tool is
+# called. jq reads the input as a tree, with a payload sent as a JSON string
+# decoded first, and looks for:
+# - a verb, action, command, operation or method that is one of the risky
+#   words, such as a Claude Docs batch member that deletes a tab or a whole
+#   doc, or an HTTP method of DELETE, though not POST, which mostly creates;
+# - a status, state, folder, mailbox, destination or label of trash, as Gmail
+#   and WordPress trash things;
+# - a key that deletes, trashes, archives or drops, set to true or to an
+#   object, such as Notion's in_trash or allow_deleting_content, Drive's
+#   trashed, or a Sheets deleteSheet request;
+# - a key about access or visibility, such as a permission, a protected range,
+#   sharing or public;
+# - a key about people: an assignee, reviewer, invitee, attendee, recipient,
+#   subscriber or delegate set to a list, an object, a numeric id, or a name
+#   or id other than me, or an owner, person or member set to a list, an object or an
+#   email address, which covers a Notion page assigned to someone through
+#   its people property;
+# - a key that sends a notification, such as a calendar's sendUpdates or a
+#   notify flag;
+# - a person named in content: a user:// link, or a mention of a user other
+#   than you;
+# - a comment made through a generic tool, such as a Claude Docs utterance;
+# - in a sql, query, statement or ddl key, a SQL drop of a column, table,
+#   database, schema or index, a truncate, or a delete from, such as
+#   Notion's DROP COLUMN, so prose that says the same words passes;
+# - with $1 true, a new parent or folder, which moves the file.
+# Deleting text inside a doc through an op such as Claude Docs' delete is
+# editing it, so a key named op is not read, though one named operation is. A jq failure is logged and
+# counts as nothing risky, as every check here fails open.
+risky_input() {
+  [ -n "$input" ] || return 1
+  # shellcheck disable=SC2016
+  printf '%s' "$input" | jq -e --argjson moving "$1" --arg risky "$RISKY" '
+    ($risky | split(" ") | map(select(. != ""))) as $words
+    | def lower: ascii_downcase;
+      def filled: . == true or ((type == "object" or type == "array") and length > 0);
+      def personal: filled or (type == "string" and test("@|user://"));
+      def set_: filled or (type == "string" and length > 0) or (type == "number");
+      def decode: walk(if type == "string" then (fromjson? // .) else . end);
+      def risky:
+        if type == "string" then
+          test("user://")
+        elif type == "object" then
+          ((.type | type) == "string" and (.type | lower) == "mention"
+            and ((has("user") and (.user | tostring | lower) != "me")
+              or (.mention | type) == "object" and (.mention.type // "" | tostring | lower) == "user"))
+          or any(to_entries[]; .key as $key | ($key | lower) as $k | .value as $v
+            | (($k | IN("verb", "action", "command", "operation", "method"))
+                and ($v | type) == "string"
+                and ($v | lower | gsub("^\\s+|\\s+$"; "") | IN($words[])
+                  and (. != "post" or $k != "method")))
+              or (($k | IN("sql", "query", "statement", "statements", "ddl"))
+                and ($v | type) == "string"
+                and ($v | test("\\b(drop\\s+(column|table|database|schema|index)|truncate|delete\\s+from)\\b"; "i")))
+              or (($k | test("status|state|folder|destination|location|mailbox|target|move"))
+                and ($v | type) == "string" and ($v | lower | gsub("^\\s+|\\s+$"; "")) == "trash")
+              or (($k | test("label")) and ($v | tostring | test("\\btrash\\b"; "i")))
+              or (($k | gsub("[_-]"; "") | test("^(send(updates|notifications?|notificationemails?|emails?|invites?|invitations?)|notify(users|recipients|people|attendees|followers)?)$"))
+                and ($v | set_) and ($v | tostring | lower | IN("none", "false", "0") | not))
+              or (($k | IN("object", "type")) and ($v | type) == "string"
+                and ($v | lower | IN("utterance", "comment", "reply")))
+              or ((($key | test("^((delete|remove|purge|destroy|drop|Delete|Remove|Purge|Destroy|Drop)([A-Z_-]|$)|(DELETE|REMOVE|PURGE|DESTROY|DROP)([_-]|$))"))
+                  or ($k | test("trash|archiv|delet")))
+                and ($v | filled))
+              or (($k | test("permission|protect|canshare|^(share|sharing|shared|access|accesslevel|role|roles|visibility|public|published|private|is_public)$"))
+                and ($v | set_ or . == false))
+              or (($k | test("assign|reviewer|collaborat|invite|attendee|recipient|subscriber|delegate"))
+                and ($v | filled or (type == "number" and . != 0 and ($k | test("ids?$"))) or (type == "string" and length > 0 and lower != "me")))
+              or (($k | test("owner|^(people|person|persons|members?)$")) and ($v | personal))
+              or ($moving and ($k | IN("parentid", "parent_id", "parent", "addparents", "removeparents", "newparent",
+                "new_parent_id", "newparentid", "folderid", "folder_id"))))
+        else false end;
+      any(.tool_input // {} | decode | decode | ..; risky)
+  ' > /dev/null 2>&1
+  case $? in
+    0) return 0 ;;
+    1) return 1 ;;
+    *) log "the MCP input check failed"; return 1 ;;
+  esac
 }
 
 # The guard on a code-review the model calls, under whatever namespace.

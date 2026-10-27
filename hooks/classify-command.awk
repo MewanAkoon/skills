@@ -376,7 +376,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
           else { sub(/^-[A-Za-z]*S/, "", w); queue[++nq] = w " " rest(s, i + 1) }
           return
         }
-        if (w ~ /^-/) { i++; if (has(wrapvalue[cmd], w)) i++; continue }
+        if (w ~ /^-/) { i++; if (has(wrapvalue[cmd] "", w)) i++; continue }
         break
       }
       # watch joins its words and hands them to sh -c.

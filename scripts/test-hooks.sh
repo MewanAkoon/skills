@@ -177,6 +177,8 @@ expect_bash() {
   local got
   got="$(verdict)"
   [ "$status" -eq 0 ] || bad "pre-tool exited $status on: $3"
+  # The hook fails open when the classifier fails, so a crash reads as allow.
+  ! grep -q 'the command parser failed' "$scratch/err" || bad "pre-tool: the command parser failed on: $3"
   [ "$got" = "$2" ] || { bad "pre-tool: got $got, want $2, for: $3"; return; }
   if [ -n "${4:-}" ]; then
     jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$4" \
@@ -214,11 +216,6 @@ done < "$cases"
 run_case
 want="$(grep -c '^== ' "$cases")"
 [ "$count" -eq "$want" ] || bad "commands.cases: ran $count of $want cases"
-# The hook fails open when the classifier fails, so a crash would pass every
-# case that expects allow. Its log says so.
-if [ -s "$data/eng-hook.log" ] && grep -q 'the command parser failed' "$data/eng-hook.log"; then
-  bad "commands.cases: the command parser failed on a case"
-fi
 
 # mcp.cases: one "<expect> <tool name> [<tool input>]" per line.
 count=0

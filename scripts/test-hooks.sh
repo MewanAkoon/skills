@@ -214,6 +214,11 @@ done < "$cases"
 run_case
 want="$(grep -c '^== ' "$cases")"
 [ "$count" -eq "$want" ] || bad "commands.cases: ran $count of $want cases"
+# The hook fails open when the classifier fails, so a crash would pass every
+# case that expects allow. Its log says so.
+if [ -s "$data/eng-hook.log" ] && grep -q 'the command parser failed' "$data/eng-hook.log"; then
+  bad "commands.cases: the command parser failed on a case"
+fi
 
 # mcp.cases: one "<expect> <tool name> [<tool input>]" per line.
 count=0

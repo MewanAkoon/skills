@@ -277,7 +277,7 @@ condition ("let me review first"), the hook lets run, and the skills hold it
 back: `eng:commit`, `eng:pr` and `eng:issue` read what you meant and act only
 on what you asked for. A subagent's report, a background task or a CI event is
 not your message, so it changes none of this. When the hook cannot read its
-state at all, it lets the write run, as every check here fails open.
+state at all, it lets the write run.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
 a shell splits them, so a quoted
@@ -290,7 +290,11 @@ page. The reminder to review the whole PR reads only the Bash tool. It misses
 a PR opened through an MCP tool or `glab api`, a push run in the background, a push to a URL
 rather than a named remote, a push from a clone that tracks only one
 branch, and a push run after a `cd` that leaves the directory the session started in or is outside git. It reads a short commit hash made only of digits as a PR number, counts a review of any PR by number or link, whichever PR it is, and counts no range as the whole PR on a remote whose default branch is unnamed and neither main nor master, or for a PR based on another branch, such as one in a stack. When the reminder cannot go out in the turn of the push, it goes out at the end of a later turn. It keeps one pushed commit per session, so of two branches pushed in one turn only the last gets a reminder, and `gt submit` counts as opening a PR even when it only updates one, which can bring a second reminder for the same commit. A PR opened with `--head` for another branch counts as one for the branch HEAD is on, when that branch is pushed. It checks only the repo the session is in at the stop, so a PR pushed from another repo gets no reminder once the session moves on, and it counts a review when the review starts, so one that is cancelled still counts. A hook that breaks fails open: it logs an error, which
-`./scripts/check.sh --doctor` reports, and the session carries on.
+`./scripts/check.sh --doctor` reports, and the session carries on. The
+exception is the command parser: when it fails on a shell command, the hook
+still denies what it found before it failed that it would deny anyway, such
+as a post, and otherwise asks before the command runs, because it cannot tell
+whether the command posts or writes.
 
 ## Skills
 

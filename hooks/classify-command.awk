@@ -202,8 +202,10 @@ function substitution(str, i, n,    k) {
   return k
 }
 
+# Each line goes out as soon as it is found, so the hook still reads it when
+# awk dies on a signal later in the command.
 function emit(line) {
-  if (!(line in seen)) { seen[line] = 1; print line }
+  if (!(line in seen)) { seen[line] = 1; print line; fflush() }
 }
 
 # Ends the word being built, if any, and adds it to the current segment.

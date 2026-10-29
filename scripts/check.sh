@@ -487,8 +487,9 @@ sh -n hooks/eng-hook || bad "hooks/eng-hook: does not parse"
 awk -f hooks/classify-command.awk < /dev/null > /dev/null || bad "hooks/classify-command.awk: does not load"
 
 # The hooks run at every session start and around every command, and a broken
-# one fails open by design, so their fixtures run here as well as in CI. The
-# script holds the 5,000-byte budget for the block the session hook sends.
+# check fails open by design, all but the command parser, so their fixtures
+# run here as well as in CI. The script holds the 5,000-byte budget for the
+# block the session hook sends.
 ./scripts/test-hooks.sh >/dev/null || bad "scripts/test-hooks.sh failed; run it for the details"
 
 # scripts/stats.mjs reads transcripts that only a machine with a Claude Code
@@ -657,9 +658,10 @@ if [ "$doctor" = yes ]; then
     done
   fi
 
-  # The hooks fail open, so a broken one only shows in their log. Claude
-  # Code names the data directory after the plugin id, with every character
-  # other than a letter, a digit, _ or - turned into -.
+  # The hooks fail open, all but the command parser, so a broken one mostly
+  # shows only in their log. Claude Code names the data directory after the
+  # plugin id, with every character other than a letter, a digit, _ or -
+  # turned into -.
   data_root="${CLAUDE_CODE_PLUGIN_CACHE_DIR:-$config/plugins}/data"
   hook_log="$data_root/$(printf '%s' "$id" | sed 's/[^A-Za-z0-9_-]/-/g')/eng-hook.log"
   if [ -s "$hook_log" ]; then

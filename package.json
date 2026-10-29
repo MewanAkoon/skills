@@ -9,6 +9,7 @@
     "doctor": "./scripts/check.sh --doctor",
     "validate": "./scripts/validate-plugin.sh",
     "test:hooks": "./scripts/test-hooks.sh",
+    "test:cloud-setup": "./scripts/test-cloud-setup.sh",
     "stats": "node scripts/stats.mjs",
     "test:stats": "node --test tests/stats/*.test.mjs",
     "unlink": "./link.sh --unlink",

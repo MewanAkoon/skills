@@ -105,6 +105,45 @@ claude plugin update eng@mewanakoon
 A release is a new `version` in `.claude-plugin/plugin.json`. An install stays
 on the version it has until that string changes.
 
+### Cloud sessions
+
+A cloud session runs on a fresh VM and reads nothing from your machine: not
+`~/.claude/settings.json`, not your installed plugins, not
+`~/.claude/skills`. A cloud thread in a project also skips the repo's
+`.claude/settings.json` and its `.claude/skills/`. What a
+cloud session gets comes from three places:
+
+| Place | What it carries |
+|---|---|
+| Your claude.ai account | Plugins you add at claude.ai/customize/plugins, which load as `eng@synced`. Skills you upload there. Connectors. In a project, a plugin also has to be on under **Project settings > Plugins** |
+| The cloud environment | Environment variables, such as the git identity, and the setup script |
+| The repo | The root `CLAUDE.md`, which here imports `AGENTS.md`, and `.claude/rules/`. A project's cloud thread loads only the rules that set no `paths`, and this repo's one rule sets `paths` |
+
+So, for the cloud:
+
+1. At claude.ai/customize/plugins, add the marketplace from the GitHub repo
+   `MewanAkoon/skills` and install `eng`. In a project, turn it on under
+   **Project settings > Plugins** as well.
+2. On your own environment, not a shared one, paste
+   [scripts/cloud-setup.sh](scripts/cloud-setup.sh) in as the setup script.
+   It writes the `skillOverrides` entry from the setup above, and
+   `attribution` settings that drop the Co-Authored-By trailer, the PR line
+   and the session link, into the VM's `~/.claude/settings.json`. It writes
+   the same two as rules in the VM's `~/.claude/CLAUDE.md`. The docs say a
+   cloud session loads that `CLAUDE.md`. They say it reads no user settings,
+   meaning the ones on your machine, and not whether that covers a
+   `settings.json` written this way, so the rules are the layer to rely on.
+
+The docs say a synced plugin's hooks load in terminal sessions, but not
+whether they run in a project's cloud threads. If the workflow block from the
+session hook is missing from a new thread's first context, the hooks in
+[What the hooks enforce](#what-the-hooks-enforce) are not guarding it either.
+
+The environment caches the script's result for about seven days, and saving
+a changed script rebuilds the cache. The plugin is not part of that cache: a
+cloud session gets the version claude.ai holds. After a release, check that a
+new cloud session shows the new version.
+
 ### Moving from the old symlinks
 
 Before the plugin, `link.sh` symlinked each skill into `~/.claude/skills`.
@@ -370,8 +409,10 @@ and on every push to `main`, on Linux and on macOS, without `--doctor`, since
 a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
 including every command case under `tests/hooks/pre-tool/`, and checks what
-they send, and, where Node 18.1 or later is installed, the fixtures for
-`scripts/stats.mjs`. CI also runs the validator on a pinned Claude Code.
+they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
+against scratch homes, and, where Node 18.1 or later is installed, the
+fixtures for `scripts/stats.mjs`. CI also runs the validator on a pinned
+Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who

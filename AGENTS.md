@@ -6,7 +6,8 @@ For any agent working in this repo.
 
 A source of agent skills, not an application, shipped as one Claude Code
 plugin, `eng`. There is nothing to build. The tests that run are the
-fixtures `check.sh` runs for the hook and for `scripts/stats.mjs`.
+fixtures `check.sh` runs for the hook, for `scripts/cloud-setup.sh` and for
+`scripts/stats.mjs`.
 `tests/review-loop/` holds the setup for a check run by hand, and `evals/` the
 cases for `claude plugin eval`, also run by hand. Every
 `SKILL.md` loads into some other repo's session, so a change here changes how
@@ -19,7 +20,7 @@ carries its version; `.claude-plugin/marketplace.json` names the marketplace,
 the skills by its default scan of `skills/`. Inside the plugin each skill is
 `eng:<name>`, and that full name is how skills refer to each other.
 
-Five scripts and no build step: four in bash, and `scripts/stats.mjs` in
+Seven scripts and no build step: six in bash, and `scripts/stats.mjs` in
 Node. The commands they carry:
 
 | Command | What it does |
@@ -31,21 +32,25 @@ Node. The commands they carry:
 | `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node 18.1 or later is installed. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
+| `./scripts/test-cloud-setup.sh` | Runs `cloud-setup.sh` against scratch homes and checks what it writes and what it leaves alone. `check.sh` runs it. |
+| `scripts/cloud-setup.sh` | The setup script for a personal cloud environment, pasted in at claude.ai rather than run here. It writes the attribution and `skillOverrides` settings, and rules that carry them, into the cloud VM's `~/.claude`, and writes nothing unless it runs as root on Linux, the way a cloud VM runs it. `CLOUD_SETUP_HOME` points it at another home on any system, which is how `test-cloud-setup.sh` runs it against scratch ones. |
 
 None of them needs a package installed beyond `jq` and `git`, which macOS 15
 and the CI runners ship, `claude` for the validator and `--doctor`, and Node
-18.1 or later for `stats.mjs`. The hook needs the same two and `awk`. Without
+18.1 or later for `stats.mjs`. The hook needs the same two and `awk`, and
+`cloud-setup.sh` needs `jq` and `awk`. Without
 that Node, `check.sh` warns and skips the stats fixtures, unless
 `REQUIRE_NODE` is set, as CI sets it, and then it fails. Each bash script
-resolves its own path with `readlink -f`, and `check.sh` takes its file list
-from `git`.
+resolves its own path with `readlink -f`, apart from `cloud-setup.sh`, which
+runs from a text box with no repo beside it, and `check.sh` takes its file
+list from `git`.
 `scripts/legacy.sh` is not run on its own: `link.sh` and `--doctor` both
 source it for the old skill names and for resolving where a link points.
 
-`package.json` carries those as `npm run check`, `doctor`, `validate`,
-`test:hooks`, `stats`, and `unlink`, plus `npm run test:stats`, which runs
-the stats fixtures, and `npm run lint`, which runs shellcheck over every
-shell script and the hook.
+`package.json` carries the commands run here as `npm run check`, `doctor`,
+`validate`, `test:hooks`, `test:cloud-setup`, `stats`, and `unlink`, plus
+`npm run test:stats`, which runs the stats fixtures, and `npm run lint`, which
+runs shellcheck over every shell script and the hook.
 It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
 the wrapper in `package.json` and the binary it downloads with
 `SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.
@@ -92,8 +97,9 @@ Maintenance scripts run on one machine rather than in a session, so they may
 read a harness's own files: `link.sh --unlink` removes links under
 `~/.claude/skills` and the other directories an older install wrote to,
 `--doctor` reads Claude Code's plugin list, its settings, and the hook's log,
-and `stats.mjs` reads Claude Code's transcripts and the hook's log. Each says
-so where it does it.
+`stats.mjs` reads Claude Code's transcripts and the hook's log, and
+`cloud-setup.sh` writes Claude Code's settings and `CLAUDE.md` on a cloud VM
+before the session starts. Each says so where it does it.
 
 ## What an agent here never does
 
@@ -154,8 +160,9 @@ follows, and enforcing it is what this repo is for.
   parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
   parses under `sh -n`, which names a syntax error plainly,
   `hooks/classify-command.awk` loads in `awk`, and the hook's fixtures
-  pass. Where Node 18.1 or later is installed, `scripts/stats.mjs` parses under
-  `node --check` and its fixtures pass.
+  and `scripts/test-cloud-setup.sh`'s cases pass. Where Node 18.1 or later is
+  installed, `scripts/stats.mjs` parses under `node --check` and its fixtures
+  pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
   a `MAJOR.MINOR.PATCH` version.

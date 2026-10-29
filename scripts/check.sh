@@ -495,7 +495,7 @@ awk -f hooks/classify-command.awk < /dev/null > /dev/null || bad "hooks/classify
 # scripts/cloud-setup.sh runs only on a cloud VM, where nobody watches it, so
 # its cases run here against scratch homes, as the hook's fixtures do above.
 ./scripts/test-cloud-setup.sh >/dev/null \
-  || bad "scripts/test-cloud-setup.sh failed; run it for the details"
+  || bad "scripts/test-cloud-setup.sh failed; see the lines above"
 
 # scripts/stats.mjs reads transcripts that only a machine with a Claude Code
 # history has, so the fixtures under tests/stats stand in for them here and in

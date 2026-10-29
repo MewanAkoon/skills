@@ -16,6 +16,7 @@ bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 
 script=scripts/cloud-setup.sh
 begin='<!-- eng cloud-setup: begin -->'
+end='<!-- eng cloud-setup: end -->'
 # An empty home would send the script at the real one, so nothing runs
 # without a scratch directory.
 scratch="$(mktemp -d)" && [ -n "$scratch" ] || { bad "mktemp -d failed"; exit 1; }
@@ -52,12 +53,32 @@ jq -e '.theme == "dark" and .skillOverrides.x == "off"
 
 # A block from an older version of this script gets today's rules in its
 # place.
-printf '%s\n' 'top' "$begin" 'old rules' '<!-- eng cloud-setup: end -->' 'bottom' > "$rules"
+printf '%s\n' 'top' "$begin" 'old rules' "$end" 'bottom' > "$rules"
 run "older block"
 grep -qx 'old rules' "$rules" && bad "older block: its text is still there"
 grep -q 'eng:commit' "$rules" || bad "older block: today's rules are missing"
+[ "$(grep -c "$begin" "$rules")" = 1 ] || bad "older block: not exactly one rules block"
 [ "$(head -n 1 "$rules")" = top ] && [ "$(tail -n 1 "$rules")" = bottom ] \
   || bad "older block: the lines around it moved"
+
+# Two whole blocks, as a hand copy leaves them, are left as they are, since
+# the second may hold edits.
+printf '%s\n' 'top' "$begin" 'x' "$end" 'middle' "$begin" 'y' "$end" 'bottom' > "$rules"
+cp "$rules" "$scratch/before"
+run "two blocks"
+cmp -s "$scratch/before" "$rules" || bad "two blocks: CLAUDE.md changed"
+
+# A file saved with CRLF endings keeps them on every line, the block's too,
+# and a rerun leaves one block.
+printf 'mine\r\n' > "$rules"
+run "CRLF"
+run "CRLF rerun"
+[ "$(grep -c "$begin" "$rules")" = 1 ] || bad "CRLF: not exactly one rules block"
+[ "$(grep -c "$(printf '\r')\$" "$rules")" = "$(wc -l < "$rules" | tr -d ' ')" ] \
+  || bad "CRLF: some lines lost their carriage return"
+# The cases below start from a plain LF file again.
+rm -f "$rules"
+run "fresh CLAUDE.md"
 
 # A line and blank lines after the block stay where they are, so the block is
 # replaced in place, not moved to the end.
@@ -79,11 +100,11 @@ rm -f "$rules"
 
 # Markers that do not pair up, and settings that are not one JSON object,
 # are left as they were.
-for marker in begin end; do
-  printf '%s\n' 'top' "<!-- eng cloud-setup: $marker -->" 'keep me' > "$rules"
+for marker in "$begin" "$end"; do
+  printf '%s\n' 'top' "$marker" 'keep me' > "$rules"
   cp "$rules" "$scratch/before"
-  run "lone $marker marker"
-  cmp -s "$scratch/before" "$rules" || bad "lone $marker marker: CLAUDE.md changed"
+  run "lone marker $marker"
+  cmp -s "$scratch/before" "$rules" || bad "lone marker $marker: CLAUDE.md changed"
 done
 for text in '[1]' '{} {}' 'not json'; do
   printf '%s\n' "$text" > "$settings"
@@ -102,14 +123,17 @@ for text in missing blank; do
   [ "$(head -n 1 "$rules")" = "$begin" ] || bad "$text CLAUDE.md: it does not start with the block"
 done
 
-# Off a cloud VM, with no CLOUD_SETUP_HOME, it writes nothing to HOME. Root
-# on Linux counts as a cloud VM, so that case says it was skipped there.
+# Off a cloud VM, with CLOUD_SETUP_HOME unset or empty, it writes nothing to
+# HOME. Root on Linux counts as a cloud VM, so there the case says it was
+# skipped.
 if [ "$(uname -s)" = Linux ] && [ "$(id -u)" = 0 ]; then
-  printf 'skip  not a cloud VM: running as root on Linux\n' >&2
+  printf 'test-cloud-setup: skip  not a cloud VM, since this runs as root on Linux\n' >&2
 else
   mkdir -p "$scratch/real"
   env -u CLOUD_SETUP_HOME HOME="$scratch/real" "$script" 2>/dev/null \
     || bad "not a cloud VM: exited non-zero"
+  CLOUD_SETUP_HOME='' HOME="$scratch/real" "$script" 2>/dev/null \
+    || bad "not a cloud VM, empty CLOUD_SETUP_HOME: exited non-zero"
   [ -z "$(ls -A "$scratch/real")" ] || bad "not a cloud VM: it wrote to HOME"
 fi
 

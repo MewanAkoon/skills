@@ -48,9 +48,9 @@ list from `git`.
 source it for the old skill names and for resolving where a link points.
 
 `package.json` carries the commands run here as `npm run check`, `doctor`,
-`validate`, `test:hooks`, `test:cloud-setup`, `stats`, and `unlink`, plus `npm run test:stats`, which runs
-the stats fixtures, and `npm run lint`, which runs shellcheck over every
-shell script and the hook.
+`validate`, `test:hooks`, `test:cloud-setup`, `stats`, and `unlink`, plus
+`npm run test:stats`, which runs the stats fixtures, and `npm run lint`, which
+runs shellcheck over every shell script and the hook.
 It declares no dependencies. `lint` fetches shellcheck through `npx`, pinning
 the wrapper in `package.json` and the binary it downloads with
 `SHELLCHECKJS_RELEASE`, because the wrapper takes the latest binary otherwise.

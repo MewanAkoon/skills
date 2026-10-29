@@ -68,7 +68,8 @@ mkdir -p "$dir" || { warn "cannot create $dir"; exit 0; }
 # it stands and keeps everything else the file holds. A file without the
 # markers gets the block at the end. A file whose markers do not pair up is
 # left alone, because cutting from a lone begin marker would take the rest of
-# the file with it.
+# the file with it, and so is a file with more than one block, because the
+# second may hold edits nobody should lose.
 rules="$dir/CLAUDE.md"
 # The quotes in the text are text, not shell quoting, so the lint warning
 # about quotes in a variable does not apply here.
@@ -85,20 +86,31 @@ These stand in for settings a cloud session does not read from your machine.
 source_file=/dev/null
 [ -f "$rules" ] && source_file="$rules"
 # Comparison ignores a trailing carriage return, so a file saved with CRLF
-# endings still matches its markers. The exit status is set only in END,
-# because awks differ on what an exit in the main rules leaves for it. The
-# block comes in through ENVIRON, which every POSIX awk has, because -v would
-# read its backslashes as escapes.
+# endings still matches its markers. awk reads the file twice, and the first pass
+# counts its line endings, so the lines this writes end in CRLF when most of
+# the file's lines do. The exit status is set only in END, because awks differ
+# on what an exit in the main rules leaves for it. The block comes in through
+# ENVIRON, which every POSIX awk has, because -v would read its backslashes as
+# escapes.
 if text="$(awk '
+  function out(s) { printf "%s%s\n", s, cr }
+  function block(   i, count, part) {
+    out(b)
+    count = split(ENVIRON["CLOUD_SETUP_RULES"], part, "\n")
+    for (i = 1; i <= count; i++) out(part[i])
+    out(e)
+  }
   BEGIN {
     b = "<!-- eng cloud-setup: begin -->"
     e = "<!-- eng cloud-setup: end -->"
   }
+  FNR == NR { lines++; if (/\r$/) crlf++; next }
+  FNR == 1 && crlf * 2 > lines { cr = "\r" }
   { line = $0; sub(/\r$/, "", line) }
   line == b {
     if (skip || done) bad = 1
+    block()
     skip = 1; done = 1
-    print b; print ENVIRON["CLOUD_SETUP_RULES"]; print e
     next
   }
   line == e { if (!skip) bad = 1; skip = 0; next }
@@ -106,44 +118,40 @@ if text="$(awk '
   END {
     if (bad || skip) exit 2
     if (!done) {
-      if (n) print ""
-      print b; print ENVIRON["CLOUD_SETUP_RULES"]; print e
+      if (n) out("")
+      block()
     }
     print "."
-  }' "$source_file")"; then
+  }' "$source_file" "$source_file")"; then
   # The last line, a dot, keeps $( ) from stripping the file's trailing
   # blank lines, and comes off here.
   printf '%s' "${text%.}" | put "$rules" || warn "cannot write $rules"
 else
-  warn "$rules has unpaired cloud-setup markers, or could not be read, so it was left alone"
+  warn "$rules has unpaired cloud-setup markers or more than one block, or could not be read, so it was left alone"
 fi
 
 # The three-key form of attribution rather than `false`, because Claude Code
 # before 2.1.281 rejects `false` and skips the whole file. A missing file, or
-# one holding only blank space, merges as an empty object. The merge runs
-# before anything is written, so a failed jq leaves the old file as it was. A
-# deep merge keeps every other key and every other skillOverrides entry.
+# one holding only blank space, slurps to an empty list and gets the keys as
+# they are. The merge runs before anything is written, so a failed jq leaves the
+# old file as it was. A deep merge keeps every other key and every other
+# skillOverrides entry.
 settings="$dir/settings.json"
 add='{
   "attribution": { "commit": "", "pr": "", "sessionUrl": false },
   "skillOverrides": { "commit": "off", "pr": "off" }
 }'
-current='{}'
-if [ -f "$settings" ]; then
-  current="$(cat "$settings")"
-  case "$current" in
-    *[![:space:]]*) ;;
-    *) current='{}' ;;
-  esac
-fi
+settings_source=/dev/null
+[ -f "$settings" ] && settings_source="$settings"
 if ! command -v jq >/dev/null 2>&1; then
   warn "jq not found, so $settings was left alone"
-elif merged="$(printf '%s' "$current" | jq -s --argjson add "$add" '
-    if length == 1 and (.[0] | type) == "object" then .[0] * $add
-    else error("not one JSON object") end' 2>/dev/null)"; then
+elif merged="$(jq -s --argjson add "$add" '
+    if length == 0 then $add
+    elif length == 1 and (.[0] | type) == "object" then .[0] * $add
+    else error("not one JSON object") end' "$settings_source" 2>/dev/null)"; then
   printf '%s\n' "$merged" | put "$settings" || warn "cannot write $settings"
 else
-  warn "$settings is not one JSON object, so it was left alone"
+  warn "$settings is not one JSON object, or could not be read, so it was left alone"
 fi
 
 exit 0

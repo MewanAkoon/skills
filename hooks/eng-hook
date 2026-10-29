@@ -40,11 +40,14 @@
 # cannot be read, the write gate allows.
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
-# fails open and lets the tool run, except the command parser: on a shell
-# command it fails on, what it found before it failed is still denied as
-# usual, and anything else asks, because the command may post or write. A
-# failure is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which
-# check.sh --doctor reads.
+# fails open and lets the tool run, except the command parser. When it fails
+# on a shell command, the hook reads what the parser printed before it failed:
+# a post there is still denied, and so is a write the gate refuses. Anything
+# else asks, because the command may post or write. A command the parser takes
+# longer than the hook's timeout in hooks/hooks.json to read is the gap: Claude
+# Code stops the hook, logs nothing here, and runs the command through its own
+# permission check. A failure is written to eng-hook.log in
+# ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor reads.
 # Needs jq. Without it the session block goes out as plain text, which Claude
 # Code also takes as context, and every other mode does nothing.
 

@@ -750,3 +750,7 @@ git push -o tag origin main
 docker-compose --log-level DEBUG push
 == ask docker compose alpha publish
 docker compose -f a.yml alpha publish r/app
+== deny a shell given only options runs a comment from stdin
+printf 'gh pr comment 1 -b x' | bash -e -o pipefail
+== deny a dot with no script before a comment
+. ; gh pr comment 5 -b x

@@ -16,11 +16,12 @@ concurrency:
   group: check-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
-# Every Ubuntu job is pinned to 24.04, because ubuntu-latest moved to 26.04 on
-# its own and the hook cases in tests/hooks/pre-tool/commands.cases that pipe
-# a command into sh, such as `echo "gh pr comment 5 -b x" | sh`, failed there
-# with no change here. Until the hook passes on 26.04, those cases run on
-# macOS and 24.04 only. Moving to 26.04 is its own change.
+# Every Ubuntu job is pinned to a release, because ubuntu-latest moves on its
+# own: its move to 26.04 brought GNU awk 5.3, which stopped the hook's command
+# classifier with an internal error until hooks/classify-command.awk passed
+# words to base() as values. The check job runs on 24.04 and 26.04, so both
+# the older and the newer Linux awk stay covered. The plugin and shellcheck
+# jobs stay on 24.04, and moving them is its own change.
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
@@ -29,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, ubuntu-26.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       # Pinned to a commit, because a moving tag on the only gate this repo

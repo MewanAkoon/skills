@@ -155,7 +155,7 @@ function stdin_text(s,    w) {
   if (s in hdbody) return hdbody[s]
   if (!(s in piped)) return ""
   if (piped[s] in hdbody) return hdbody[piped[s]]
-  if (base(segw[piped[s], 1]) ~ /^(echo|printf)$/) {
+  if (base(segw[piped[s], 1] "") ~ /^(echo|printf)$/) {
     # printf turns \n into a line break, and so does echo in dash and zsh, so
     # both are read that way.
     w = rest(piped[s], 2)
@@ -322,6 +322,10 @@ function split_command(str,    i, n, c, nx, q, j) {
   end_segment()
 }
 
+# The name a path ends in. Callers pass a word as a value, as in
+# base(segw[s, j] ""), because gawk 5.3 stops with an internal error when an
+# array element that does not exist, such as the word after the last one, is
+# passed to a function and then read again.
 function base(w) {
   sub(/.*\//, "", w)
   return w
@@ -344,7 +348,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
   # prisma can sit behind npx, pnpm, yarn, bunx and their options, so look
   # past those, but not past a word such as echo.
   for (j = 1; j + 2 <= n; j++) {
-    if (base(segw[s, j]) == "prisma") {
+    if (base(segw[s, j] "") == "prisma") {
       if (segw[s, j + 1] == "migrate" && segw[s, j + 2] == "deploy") emit("confirm prisma migrate deploy")
       break
     }
@@ -372,7 +376,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
           else { sub(/^-[A-Za-z]*S/, "", w); queue[++nq] = w " " rest(s, i + 1) }
           return
         }
-        if (w ~ /^-/) { i++; if (has(wrapvalue[cmd], w)) i++; continue }
+        if (w ~ /^-/) { i++; if (has(wrapvalue[cmd] "", w)) i++; continue }
         break
       }
       # watch joins its words and hands them to sh -c.
@@ -387,7 +391,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
     break
   }
   if (i > n) return
-  cmd = base(segw[s, i])
+  cmd = base(segw[s, i] "")
   if (has(shells, cmd)) {
     for (j = i + 1; j < n; j++)
       if (segw[s, j] ~ /^-[A-Za-z]*c[A-Za-z]*$/) { queue[++nq] = segw[s, j + 1]; return }
@@ -396,7 +400,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
       if (segw[s, j] ~ /^<<</) { queue[++nq] = substr(segw[s, j], 4); return }
     }
     for (j = i + 1; j <= n && segw[s, j] ~ /^[-+]/; j++) if (has(shellvalue, segw[s, j])) j++
-    if (base(segw[s, j]) ~ /^deploy.*\.sh$/) emit("confirm a deploy")
+    if (base(segw[s, j] "") ~ /^deploy.*\.sh$/) emit("confirm a deploy")
     if (segw[s, j] == "/dev/stdin" || segw[s, j] == "-") j = n + 1
     # No script to run, so the shell runs what reaches its stdin: its own
     # heredoc, or one piped from the command before it.
@@ -408,7 +412,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
   }
   if (cmd == "eval") { queue[++nq] = rest(s, i + 1); return }
   # source and . run a script in this shell.
-  if ((cmd == "source" || cmd == ".") && base(segw[s, i + 1]) ~ /^deploy.*\.sh$/) { emit("confirm a deploy"); return }
+  if ((cmd == "source" || cmd == ".") && base(segw[s, i + 1] "") ~ /^deploy.*\.sh$/) { emit("confirm a deploy"); return }
   # A nested Claude Code run of a review that posts.
   if (cmd == "claude" && rest(s, i + 1) ~ /\/(code-)?review/ && rest(s, i + 1) ~ /--(comment|post)/) { emit("post a code-review run with --comment or --post"); return }
   # Tracker CLIs that comment or approve.
@@ -687,7 +691,7 @@ function api_command(s, i,    j, n, w, method, body, path) {
 }
 
 function http_command(s, i,    j, n, w, method, body, url, cmd, get, hook) {
-  cmd = base(segw[s, i])
+  cmd = base(segw[s, i] "")
   n = segn[s]
   method = ""; body = 0; url = ""
   for (j = i + 1; j <= n; j++) {

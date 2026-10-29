@@ -177,6 +177,8 @@ expect_bash() {
   local got
   got="$(verdict)"
   [ "$status" -eq 0 ] || bad "pre-tool exited $status on: $3"
+  # The hook fails open when the classifier fails, so a crash reads as allow.
+  ! grep -q 'the command parser failed' "$scratch/err" || bad "pre-tool: the command parser failed on: $3"
   [ "$got" = "$2" ] || { bad "pre-tool: got $got, want $2, for: $3"; return; }
   if [ -n "${4:-}" ]; then
     jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$4" \

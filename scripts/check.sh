@@ -5,8 +5,9 @@
 # --doctor adds the checks CI cannot run, because a fresh runner has no
 # Claude Code install to inspect: whether Claude Code is new enough, whether
 # the plugin is installed at user scope at this version, whether bare copies
-# of its skills are still loading beside it, whether the skillOverrides entry
-# the README asks for is in place, and whether the plugin's hooks logged errors.
+# of its skills are still loading beside it, whether the skillOverrides and
+# attribution entries the README asks for are in place, and whether the
+# plugin's hooks logged errors.
 
 set -uo pipefail
 
@@ -668,9 +669,9 @@ if [ "$doctor" = yes ]; then
     fix "the plugin's hooks logged $(wc -l < "$hook_log" | tr -d ' ') error(s) in $hook_log, the latest: $(tail -1 "$hook_log"). Fix the cause, then delete the log"
   fi
 
-  # The README's skillOverrides entry. Without it a bare commit or pr, from
-  # Claude Code itself or from a project, can take a request meant for the
-  # plugin's.
+  # The README's settings: the skillOverrides entry, without which a bare
+  # commit or pr, from Claude Code itself or from a project, can take a request
+  # meant for the plugin's, and the attribution entry below.
   settings="$config/settings.json"
   if [ -f "$settings" ] && ! jq empty "$settings" >/dev/null 2>&1; then
     fix "$settings is not valid JSON, so Claude Code cannot read it either"
@@ -681,6 +682,15 @@ if [ "$doctor" = yes ]; then
       [ "$value" = off ] \
         || fix "$settings does not set skillOverrides.$name to \"off\", so a bare $name can load beside $plugin_name:$name"
     done
+    # The README's attribution entry. Without it Claude Code tells the model
+    # to add a Co-Authored-By trailer and a PR footer, and from a Remote
+    # Control session a session link, which the skills then have to keep out.
+    # false hides all three on 2.1.281 and later.
+    if ! jq -e '.attribution == false or
+        (.attribution | type == "object" and .commit == "" and .pr == "" and .sessionUrl == false)' \
+        "$settings" >/dev/null 2>&1; then
+      fix "$settings does not turn attribution off, so Claude Code asks for an AI credit line on commits and PRs. Set attribution to {\"commit\": \"\", \"pr\": \"\", \"sessionUrl\": false}"
+    fi
   fi
 
   # Anything to fix fails the run rather than printing a warning under an

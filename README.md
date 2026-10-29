@@ -55,7 +55,8 @@ machine. There is no clone to keep and no script to run.
 Then turn off the bare copies of two skills. A project may carry its own
 `commit` and `pr` skills, and those load beside the plugin's today and can take
 a request meant for it. Claude Code also reserves both names for built-in
-skills it keeps switched off for now and can switch on. Add this to
+skills it keeps switched off for now and can switch on. Then turn off the
+credit lines Claude Code adds to commits and PRs. Add this to
 `~/.claude/settings.json`:
 
 ```json
@@ -63,6 +64,11 @@ skills it keeps switched off for now and can switch on. Add this to
   "skillOverrides": {
     "commit": "off",
     "pr": "off"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
   }
 }
 ```
@@ -72,6 +78,17 @@ machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
 stay, and a team repo's own `commit` and `pr` stay for everyone else. On your
 machine `eng:commit` and `eng:pr` still read those files, and follow what they
 say about how a commit message or a PR should look.
+
+`attribution` is what Claude Code asks the model to add. An empty `commit`
+drops the `Co-Authored-By` trailer, an empty `pr` drops the "Generated with
+Claude Code" footer, and `sessionUrl: false` drops the claude.ai session link
+that a Remote Control session adds to both. `eng:commit` and `eng:pr` keep
+those lines out either way, but with the setting off nothing asks for them. On
+Claude Code 2.1.281 or later, `"attribution": false` does the same. Older
+versions reject that form and skip the whole file. A cloud session reads
+neither this file nor the plugin. One on a single repo, outside a project's
+threads, reads that repo's committed `.claude/settings.json`, where the same
+`attribution` entry turns the lines off.
 
 To confirm it worked from a clone of this repo:
 
@@ -90,8 +107,8 @@ ok
 It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
 when an old link or a personal copy of one of these skills is still loading,
-when the `skillOverrides` entry is missing, or when one of the plugin's hooks
-has logged an error.
+when the `skillOverrides` entry is missing, when `attribution` is not turned
+off, or when one of the plugin's hooks has logged an error.
 
 ### Updating
 
@@ -115,7 +132,8 @@ the plugin's copies. From the clone:
    anything else alone. If you linked with `SKILLS_DEST` set, run it with the
    same value. A `.skillsignore` in the clone no longer does anything, so
    delete it.
-2. Install the plugin and add the `skillOverrides` entry, as above.
+2. Install the plugin and add the `skillOverrides` and `attribution` entries,
+   as above.
 3. If your `~/.claude/CLAUDE.md`, or a hook of yours, names a path under
    `~/.claude/skills`, point it at the skill's full name instead, such as
    `eng:plain-writing`. Those paths no longer exist.
@@ -294,7 +312,10 @@ branch, and a push run after a `cd` that leaves the directory the session starte
 exception is the command parser: when it fails on a shell command, the hook
 still denies what it found before it failed that it would deny anyway, such
 as a post, and otherwise asks before the command runs, because it cannot tell
-whether the command posts or writes.
+whether the command posts or writes. A command the parser takes longer than
+the hook's 10 second timeout to read, such as one with thousands of nested
+`$( )` or a few hundred kilobytes of text, goes on to Claude Code's usual
+permission check unread.
 
 ## Skills
 

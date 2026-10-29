@@ -251,13 +251,17 @@ terminal all 'npm run dev'
 # A command parser that fails asks rather than allows, and what it found
 # before it stopped still counts. A stand-in classifier in a scratch plugin
 # root prints $1 and exits 2, as gawk 5.3 did with an internal error. The
-# tool is $3, or Bash.
+# tool is $3, or Bash, and the JSON object $4, when given, is merged into the
+# input.
 broken="$scratch/broken"
 mkdir -p "$broken/hooks"
 parser_fails() {
+  local extra="${4:-}"
+  [ -n "$extra" ] || extra='{}'
   printf 'BEGIN { %s exit 2 }\n' "$1" > "$broken/hooks/classify-command.awk"
   rm -f "$scratch/data-broken/eng-hook.log"
-  jq -cn --arg c "$2" --arg t "${3:-Bash}" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {command: $c}}' |
+  jq -cn --arg c "$2" --arg t "${3:-Bash}" --argjson x "$extra" \
+    '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {command: $c}} + $x' |
     env CLAUDE_PLUGIN_ROOT="$broken" CLAUDE_PLUGIN_DATA="$scratch/data-broken" "$hook" pre-tool > "$scratch/out" 2> /dev/null
   status=$?
   [ "$status" -eq 0 ] || bad "parser failure: exited $status on: $2"
@@ -276,6 +280,20 @@ reason="$(jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>
 case "$reason" in *"a deploy"*"parser failed"*) ;; *) bad "parser failure: the reason does not name both the deploy and the parser: $reason" ;; esac
 parser_fails '' 'ls' mcp__terminal__run_in_terminal
 [ "$(verdict)" = ask ] || bad "parser failure: a command through the terminal tool got $(verdict), want ask"
+# A write the gate refuses is still denied: a subagent's, and one in a session
+# whose latest message loaded no skill. One the gate allows, here because the
+# session has no state, still asks, and says why.
+parser_fails 'print "gate push";' 'git push origin x' Bash '{"agent_id": "a1"}'
+[ "$(verdict)" = deny ] || bad "parser failure: a subagent's push found before the failure got $(verdict), want deny"
+mkdir -p "$scratch/data-broken/sessions/noskill"
+printf 'push it\n' > "$scratch/data-broken/sessions/noskill/turn"
+: > "$scratch/data-broken/sessions/noskill/skills"
+parser_fails 'print "gate push";' 'git push origin x' Bash '{"session_id": "noskill"}'
+[ "$(verdict)" = deny ] || bad "parser failure: a push with no skill loaded got $(verdict), want deny"
+parser_fails 'print "gate push";' 'git push origin x'
+[ "$(verdict)" = ask ] || bad "parser failure: a push the gate allows got $(verdict), want ask"
+jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'parser failed' \
+  || bad "parser failure: the reason for a push the gate allows does not name the parser"
 
 # The write gate. A subagent is denied whatever the state.
 bash_call all 'git commit -m x' '{"agent_id": "a1", "agent_type": "general-purpose"}'

@@ -196,7 +196,8 @@ runner has no Claude Code install to inspect: that Claude Code is 2.1.293 or
 later; that `eng@mewanakoon` is installed at user scope, enabled and at this
 clone's version; that no old link or personal copy of one of these skills sits
 in `~/.claude/skills`; that `~/.claude/settings.json` is valid JSON and sets
-`skillOverrides` for `commit` and `pr` to `"off"`; and that the plugin's hooks
+`skillOverrides` for `commit` and `pr` to `"off"` and turns `attribution`
+off; and that the plugin's hooks
 have logged no error under `~/.claude/plugins/data/eng-mewanakoon/`.
 `CLAUDE_CONFIG_DIR` moves where it looks, as it does for Claude Code. Anything
 to fix fails the run, so a hook can gate on it.

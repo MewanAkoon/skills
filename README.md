@@ -85,10 +85,11 @@ Claude Code" footer, and `sessionUrl: false` drops the claude.ai session link
 that a Remote Control session adds to both. Setting `"attribution": false`
 instead drops all three. `eng:commit` and `eng:pr` keep the trailer and the
 footer out either way, but neither names the session link, so only the setting
-is sure to drop it. A cloud session reads neither this file nor the plugin.
+is sure to drop it. A cloud session reads neither this file nor the plugin
+installed on your machine.
 One on a single repo, outside a project's threads, reads that repo's committed
 `.claude/settings.json`, where the same `attribution` entry turns the lines
-off.
+off. [Cloud sessions](#cloud-sessions) covers the rest.
 
 To confirm it worked from a clone of this repo:
 
@@ -143,13 +144,12 @@ So, for the cloud:
    **Project settings > Plugins** as well.
 2. On your own environment, not a shared one, paste
    [scripts/cloud-setup.sh](scripts/cloud-setup.sh) in as the setup script.
-   It writes the `skillOverrides` entry from the setup above, and
-   `attribution` settings that drop the Co-Authored-By trailer, the PR line
-   and the session link, into the VM's `~/.claude/settings.json`. It writes
-   the same two as rules in the VM's `~/.claude/CLAUDE.md`. The docs say a
-   cloud session loads that `CLAUDE.md`. They say it reads no user settings,
-   meaning the ones on your machine, and not whether that covers a
-   `settings.json` written this way, so the rules are the layer to rely on.
+   It writes the `skillOverrides` and `attribution` entries from the setup
+   above into the VM's `~/.claude/settings.json`, and the same two as rules
+   in the VM's `~/.claude/CLAUDE.md`. The docs say a cloud session loads that
+   `CLAUDE.md`. They say it reads no user settings, meaning the ones on your
+   machine, and not whether that covers a `settings.json` written this way,
+   so the rules are the layer to rely on.
 
 The docs say a synced plugin's hooks load in terminal sessions, but not
 whether they run in a project's cloud threads. If the workflow block from the

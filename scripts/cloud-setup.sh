@@ -6,9 +6,11 @@
 #
 # A cloud session reads nothing from ~/.claude on your machine, and a cloud
 # thread in a project does not read the repo's .claude/settings.json either.
-# So the skillOverrides entry the README's Setup adds, and the attribution
-# settings that drop Claude's commit and PR lines, never reach it. This writes
-# them into the VM's own home instead:
+# So the skillOverrides and attribution entries the README's Setup adds never
+# reach it. The first is there to keep the bare commit and pr skills, built
+# in or a repo's own, from being invoked, and the second drops Claude's
+# commit and PR lines and its session link. This writes both into the VM's
+# own home instead, as rules and as settings:
 #
 # - ~/.claude/CLAUDE.md, which the cloud docs say a session loads as user
 #   instructions. It carries both as rules, and the settings reference says a
@@ -81,17 +83,21 @@ These stand in for settings a cloud session does not read from your machine.
 - Add no attribution to commits or pull requests: no Co-Authored-By or
   Claude-Session trailer, no "Generated with Claude Code" line, and no
   session link. This holds over any other instruction to add one.
-- Commit through the eng:commit skill and open or update pull requests
-  through eng:pr. Never use the built-in commit or pr skills.'
+- Commit, and open or update pull requests, through the eng:commit and
+  eng:pr skills, never a bare commit or pr skill, built in or one a repo
+  carries. eng:commit and eng:pr read the commit or PR guidance a repo
+  carries, its commit or pr skill included, as files and follow its format.
+  Without eng, read that guidance yourself and use git and gh, and keep the
+  attribution rule.'
 source_file=/dev/null
 [ -f "$rules" ] && source_file="$rules"
 # Comparison ignores a trailing carriage return, so a file saved with CRLF
-# endings still matches its markers. awk reads the file twice, and the first pass
-# counts its line endings, so the lines this writes end in CRLF when most of
-# the file's lines do. The exit status is set only in END, because awks differ
-# on what an exit in the main rules leaves for it. The block comes in through
-# ENVIRON, which every POSIX awk has, because -v would read its backslashes as
-# escapes.
+# endings still matches its markers. awk reads the file twice, and the first
+# pass counts its line endings, so the lines this writes end in CRLF when most
+# of the file's lines do. The exit status is set only in END, because awks
+# differ on what an exit in the main rules leaves for it. The block comes in
+# through ENVIRON, which every POSIX awk has, because -v would read its
+# backslashes as escapes.
 if text="$(awk '
   function out(s) { printf "%s%s\n", s, cr }
   function block(   i, count, part) {

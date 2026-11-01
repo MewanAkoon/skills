@@ -285,11 +285,15 @@ parser_fails '' 'ls' mcp__terminal__run_in_terminal
 # session has no state, still asks, and says why.
 parser_fails 'print "gate push";' 'git push origin x' Bash '{"agent_id": "a1"}'
 [ "$(verdict)" = deny ] || bad "parser failure: a subagent's push found before the failure got $(verdict), want deny"
+jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'A subagent never' \
+  || bad "parser failure: the deny for a subagent's push does not come from the write gate"
 mkdir -p "$scratch/data-broken/sessions/noskill"
 printf 'push it\n' > "$scratch/data-broken/sessions/noskill/turn"
 : > "$scratch/data-broken/sessions/noskill/skills"
 parser_fails 'print "gate push";' 'git push origin x' Bash '{"session_id": "noskill"}'
 [ "$(verdict)" = deny ] || bad "parser failure: a push with no skill loaded got $(verdict), want deny"
+jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'Load the eng:commit skill' \
+  || bad "parser failure: the deny for a push with no skill loaded does not come from the write gate"
 parser_fails 'print "gate push";' 'git push origin x'
 [ "$(verdict)" = ask ] || bad "parser failure: a push the gate allows got $(verdict), want ask"
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'parser failed' \

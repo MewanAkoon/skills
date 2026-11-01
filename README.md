@@ -55,8 +55,8 @@ machine. There is no clone to keep and no script to run.
 Then turn off the bare copies of two skills. A project may carry its own
 `commit` and `pr` skills, and those load beside the plugin's today and can take
 a request meant for it. Claude Code also reserves both names for built-in
-skills it keeps switched off for now and can switch on. Then turn off the
-credit lines Claude Code adds to commits and PRs. Add this to
+skills it keeps switched off for now and can switch on. Turn off the credit
+lines Claude Code adds to commits and PRs as well. Add this to
 `~/.claude/settings.json`:
 
 ```json
@@ -82,13 +82,13 @@ say about how a commit message or a PR should look.
 `attribution` is what Claude Code asks the model to add. An empty `commit`
 drops the `Co-Authored-By` trailer, an empty `pr` drops the "Generated with
 Claude Code" footer, and `sessionUrl: false` drops the claude.ai session link
-that a Remote Control session adds to both. `eng:commit` and `eng:pr` keep
-those lines out either way, but with the setting off nothing asks for them. On
-Claude Code 2.1.281 or later, `"attribution": false` does the same. Older
-versions reject that form and skip the whole file. A cloud session reads
-neither this file nor the plugin. One on a single repo, outside a project's
-threads, reads that repo's committed `.claude/settings.json`, where the same
-`attribution` entry turns the lines off.
+that a Remote Control session adds to both. Setting `"attribution": false`
+instead drops all three. `eng:commit` and `eng:pr` keep the trailer and the
+footer out either way, but neither names the session link, so only the setting
+is sure to drop it. A cloud session reads neither this file nor the plugin.
+One on a single repo, outside a project's threads, reads that repo's committed
+`.claude/settings.json`, where the same `attribution` entry turns the lines
+off.
 
 To confirm it worked from a clone of this repo:
 

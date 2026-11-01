@@ -32,8 +32,10 @@ Install the skills as the Claude Code plugin instead. In a Claude Code session:
   /plugin marketplace add MewanAkoon/skills
   /plugin install eng@mewanakoon
 
-The README covers updates, removal, working from this clone, and the
-skillOverrides entry that keeps bare copies of commit and pr out.
+The README covers updates, removal, working from this clone, the
+skillOverrides entry that keeps bare copies of commit and pr out, and the
+attribution entry that keeps AI credit lines and session links out of
+commits and PRs.
 STEPS
 }
 

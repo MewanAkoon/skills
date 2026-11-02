@@ -34,8 +34,10 @@ report="$(printf '%s\n' "$out" | grep -v '^Validating ' || true)"
 
 # The summary line counts the findings ("Found 1 warning"). Read the count
 # rather than a per-line marker, so a change to how lines are drawn cannot
-# hide a new one. The only finding allowed is the root CLAUDE.md warning.
-found="$(printf '%s\n' "$report" | sed -nE 's/.*Found ([0-9]+) (warning|error).*/\1 \2/p')"
+# hide a new one. Every count on such a line is read, so "Found 1 error and 2
+# warnings" adds up to 3. The only finding allowed is the root CLAUDE.md
+# warning.
+found="$(printf '%s\n' "$report" | grep -E 'Found [0-9]+ (warning|error)' | grep -oE '[0-9]+ (warning|error)' || true)"
 # There is one root CLAUDE.md, so it excuses one finding at most, however many
 # lines repeat its text.
 allowed=0

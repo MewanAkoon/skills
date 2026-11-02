@@ -35,21 +35,32 @@ set -u
 
 warn() { printf 'cloud-setup: %s\n' "$1" >&2; }
 
-# Replaces a file with its standard input in one step: a temporary file
-# beside the real one, then mv. The temporary file starts as a copy of the
-# real one, so the new file keeps its mode and owner. A symlink is followed
-# first, so the file it points at changes and the link stays. A hard link to
-# the old file keeps the old text.
-put() {
-  target="$1"
-  if [ -L "$target" ]; then
-    target="$(readlink -f "$target")" || return 1
+# Replaces a file in one step: stage makes a temporary file beside the real
+# one, the caller writes the new text into "$tmp", and finish moves it into
+# place, or removes it when the write failed. mktemp picks a name nobody can
+# guess ahead of time. The temporary file starts as a copy of the real one, so
+# the new file keeps its mode and owner, and a file that does not exist yet
+# gets the mode the umask gives, as a plain redirect would. A symlink is
+# followed first, so the file it points at changes and the link stays. A hard
+# link to the old file keeps the old text.
+stage() {
+  real="$1"
+  if [ -L "$real" ]; then
+    real="$(readlink -f "$real")" || return 1
   fi
-  tmp="$target.cloud-setup.$$"
-  if { [ ! -e "$target" ] || cp -p "$target" "$tmp"; } \
-    && cat > "$tmp" && mv "$tmp" "$target"; then
-    return 0
-  fi
+  tmp="$(mktemp "$(dirname "$real")/.cloud-setup.XXXXXX")" && [ -n "$tmp" ] || return 1
+  if [ -e "$real" ]; then
+    cp -p "$real" "$tmp"
+  else
+    chmod "$(printf '%o' $((0666 & ~0$(umask))))" "$tmp"
+  fi && return 0
+  rm -f "$tmp"
+  return 1
+}
+
+# $1 is the status of the write into "$tmp".
+finish() {
+  [ "$1" -eq 0 ] && mv "$tmp" "$real" && return 0
   rm -f "$tmp"
   return 1
 }
@@ -97,8 +108,11 @@ source_file=/dev/null
 # of the file's lines do. The exit status is set only in END, because awks
 # differ on what an exit in the main rules leaves for it. The block comes in
 # through ENVIRON, which every POSIX awk has, because -v would read its
-# backslashes as escapes.
-if text="$(awk '
+# backslashes as escapes. awk writes straight into the temporary file, and a
+# failed run leaves the real one as it was.
+if ! stage "$rules"; then
+  warn "cannot write $rules"
+elif awk '
   function out(s) { printf "%s%s\n", s, cr }
   function block(   i, count, part) {
     out(b)
@@ -127,20 +141,18 @@ if text="$(awk '
       if (n) out("")
       block()
     }
-    print "."
-  }' "$source_file" "$source_file")"; then
-  # The last line, a dot, keeps $( ) from stripping the file's trailing
-  # blank lines, and comes off here.
-  printf '%s' "${text%.}" | put "$rules" || warn "cannot write $rules"
+  }' "$source_file" "$source_file" > "$tmp"; then
+  finish 0 || warn "cannot write $rules"
 else
+  finish 1
   warn "$rules has unpaired cloud-setup markers or more than one block, or could not be read, so it was left alone"
 fi
 
 # The three-key form of attribution rather than `false`, because Claude Code
 # before 2.1.281 rejects `false` and skips the whole file. A missing file, or
 # one holding only blank space, slurps to an empty list and gets the keys as
-# they are. The merge runs before anything is written, so a failed jq leaves the
-# old file as it was. A deep merge keeps every other key and every other
+# they are. jq writes into the temporary file, so a failed merge leaves the old
+# file as it was. A deep merge keeps every other key and every other
 # skillOverrides entry.
 settings="$dir/settings.json"
 add='{
@@ -151,12 +163,15 @@ settings_source=/dev/null
 [ -f "$settings" ] && settings_source="$settings"
 if ! command -v jq >/dev/null 2>&1; then
   warn "jq not found, so $settings was left alone"
-elif merged="$(jq -s --argjson add "$add" '
+elif ! stage "$settings"; then
+  warn "cannot write $settings"
+elif jq -s --argjson add "$add" '
     if length == 0 then $add
     elif length == 1 and (.[0] | type) == "object" then .[0] * $add
-    else error("not one JSON object") end' "$settings_source" 2>/dev/null)"; then
-  printf '%s\n' "$merged" | put "$settings" || warn "cannot write $settings"
+    else error("not one JSON object") end' "$settings_source" > "$tmp" 2>/dev/null; then
+  finish 0 || warn "cannot write $settings"
 else
+  finish 1
   warn "$settings is not one JSON object, or could not be read, so it was left alone"
 fi
 

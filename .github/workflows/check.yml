@@ -16,13 +16,13 @@ concurrency:
   group: check-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
-# Every Ubuntu job is pinned to a release, because ubuntu-latest moves on its
-# own: its move to 26.04 brought GNU awk 5.3, which stopped the hook's command
-# classifier with an internal error until hooks/classify-command.awk passed
-# the words it gives base(), and the wrapper entry it gives has(), as values.
-# The check job runs on 24.04 and 26.04, so both the older and the newer Linux
-# awk stay covered. The plugin and shellcheck jobs stay on 24.04, and moving
-# them is its own change.
+# Every job is pinned to a runner release, because ubuntu-latest and
+# macos-latest move on their own: the move to Ubuntu 26.04 brought GNU awk
+# 5.3, which stopped the hook's command classifier with an internal error
+# until hooks/classify-command.awk passed the words it gives base(), and the
+# wrapper entry it gives has(), as values. The check job runs on Ubuntu 24.04
+# and 26.04, so both the older and the newer Linux awk stay covered, and on
+# macOS 15. The other jobs stay on 24.04, and moving them is its own change.
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-26.04, macos-latest]
+        os: [ubuntu-24.04, ubuntu-26.04, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       # Pinned to a commit, because a moving tag on the only gate this repo
@@ -55,6 +55,21 @@ jobs:
         env:
           REQUIRE_NODE: 1
           CHECK_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
+
+  # The check job runs the stats fixtures on whatever Node each runner image
+  # carries, which is newer than the floor. AGENTS.md states Node 18.1 as the
+  # floor for scripts/stats.mjs, because 18.1 is the first with node --test, so
+  # this runs them on exactly that.
+  stats-node-floor:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 18.1.0
+      - run: node --version
+      - run: node --check scripts/stats.mjs
+      - run: npm run test:stats
 
   plugin:
     runs-on: ubuntu-24.04

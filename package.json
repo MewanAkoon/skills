@@ -1,6 +1,5 @@
 {
   "name": "skills",
-  "version": "0.0.0",
   "private": true,
   "description": "Engineering skills for Claude Code, shipped as the plugin eng",
   "license": "MIT",

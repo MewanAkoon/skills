@@ -12,9 +12,10 @@
 //                    [--save <file>] [--compare <file>]
 //
 // It reads ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/*/<session>.jsonl, the
-// subagent files under <session>/subagents/, and
-// plugins/data/eng-mewanakoon/eng-hook.log. Nothing it prints or saves holds
-// message text, only counts.
+// subagent files under <session>/subagents/, and the hook's log at
+// ${CLAUDE_CODE_PLUGIN_CACHE_DIR:-<config>/plugins}/data/eng-mewanakoon/eng-hook.log,
+// the path check.sh --doctor reads. Nothing it prints or saves holds message
+// text, only counts.
 //
 // The counts are heuristics. A typed message's words decide whether a remote
 // write was asked for, and regular expressions over Bash commands and MCP
@@ -1360,6 +1361,17 @@ async function collect(files) {
   return { families, typed, turns, compactions, review, reviewRuns, unplaced };
 }
 
+// Where the hook writes its log. Claude Code keeps plugin data under
+// CLAUDE_CODE_PLUGIN_CACHE_DIR when that is set, and names the folder after
+// the plugin id with every character other than a letter, a digit, _ or -
+// turned into -, which is how check.sh --doctor finds it too.
+const PLUGIN_ID = 'eng@mewanakoon';
+
+function hookLogPath(config, env = process.env) {
+  const root = env.CLAUDE_CODE_PLUGIN_CACHE_DIR || path.join(config, 'plugins');
+  return path.join(root, 'data', PLUGIN_ID.replace(/[^A-Za-z0-9_-]/g, '-'), 'eng-hook.log');
+}
+
 function readHookErrors(log) {
   if (!fs.existsSync(log)) return [];
   return fs
@@ -1624,7 +1636,7 @@ async function main() {
 
   const files = transcriptFiles(projects, opts.project);
   const data = await collect(files);
-  const hookErrors = opts.project ? null : readHookErrors(path.join(config, 'plugins', 'data', 'eng-mewanakoon', 'eng-hook.log'));
+  const hookErrors = opts.project ? null : readHookErrors(hookLogPath(config));
   const { rows, total } = count(data, hookErrors, opts);
 
   const report = {
@@ -1658,7 +1670,7 @@ async function main() {
 
 // Run as a script, it reports. Imported, as the tests do, it only lends
 // bashCall and asksFor.
-export { asksFor, bashCall };
+export { asksFor, bashCall, hookLogPath };
 const runAsScript = () => {
   try {
     return fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);

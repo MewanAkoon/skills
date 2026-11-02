@@ -858,3 +858,7 @@ parallel parallel parallel parallel parallel parallel parallel parallel parallel
 env DATABASE_URL=x npx prisma migrate deploy
 == ask a prisma migration behind timeout
 timeout 600 npx prisma migrate deploy
+== allow a -c that belongs to the command script runs
+script -q /dev/null git -c user.name=x status
+== allow the inputs after parallel's ::: are not read as part of a push
+parallel git push ::: a b

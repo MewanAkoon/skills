@@ -325,12 +325,19 @@ parser_slow 'print "post gh pr comment";' 'gh pr comment 5 -b x'
 [ "$(verdict)" = deny ] || bad "slow parser: a post found before the limit got $(verdict), want deny"
 
 # A long command reads well inside the limit: a megabyte in one quoted
-# string, and a megabyte of heredoc, each with a post at the end.
+# string, and a megabyte of heredoc, each with a post at the end. jq reads
+# the command from a file, because Linux refuses one argument over 128 KiB.
 long="$scratch/long"
+long_post() {
+  hook_run pre-tool "$(jq -cn --rawfile c "$long" '{session_id: "all", cwd: "/tmp", tool_name: "Bash", tool_input: {command: $c}}')"
+  [ "$(verdict)" = deny ] || bad "long command: $1 got $(verdict), want deny"
+  jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'Posting' \
+    || bad "long command: $1 was not denied as a post"
+}
 awk 'BEGIN { printf "printf \"%s\" > f; gh pr comment 1 -b x", sprintf("%1000000s", "") }' > "$long"
-expect_bash all deny "$(cat "$long")" 'Posting'
+long_post "a megabyte quoted string"
 { printf 'cat > f <<EOF\n'; awk 'BEGIN { for (i = 0; i < 16000; i++) print "line " i " of a long heredoc body with some text in it" }'; printf 'EOF\ngh pr comment 1 -b x\n'; } > "$long"
-expect_bash all deny "$(cat "$long")" 'Posting'
+long_post "a long heredoc"
 
 # The write gate. A subagent is denied whatever the state.
 bash_call all 'git commit -m x' '{"agent_id": "a1", "agent_type": "general-purpose"}'
@@ -355,6 +362,7 @@ expect_bash none deny 'gh stack push' 'eng:'
 expect_bash none deny 'gh stack sync' 'eng:'
 expect_bash none deny 'uv run git commit -m x -- a.txt' 'eng:commit'
 expect_bash none deny 'dotenv -e a -e b -e c -e d -- git push' 'eng:'
+expect_bash none deny 'script -q /dev/null git -c user.name=x push origin main' 'eng:'
 expect_bash none deny 'gh pr lock 5' 'eng:pr'
 expect_bash none allow 'gh issue create --web=true'
 bash_call all 'gh stack submit' '{"agent_id": "a1"}'
@@ -1317,7 +1325,8 @@ while IFS= read -r name; do
 done < <(
   {
     grep -o 'cmd == "[a-z0-9._-]*"' hooks/classify-command.awk | sed 's/^cmd == "//; s/"$//'
-    # The runners, named in runner()'s patterns as cmd ~ /^(a|b)$/.
+    # The runners, named in the runner patterns as cmd ~ /^(a|b)$/. This
+    # comment holds no apostrophe, which bash 3.2 cannot parse inside <( ).
     grep -oE 'cmd ~ /\^\([a-z0-9|?-]*\)\$/' hooks/classify-command.awk |
       sed -E 's/^cmd ~ \/\^\(//; s/\)\$\/$//; s/4\?//' | tr '|' '\n'
   } | sort -u

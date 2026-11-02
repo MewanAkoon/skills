@@ -54,10 +54,11 @@
 
 set -u
 
-# The tree hash's temp files go when the hook ends, and also when Claude Code
-# stops it at its timeout. A hash run inside $( ) sets these in a subshell,
-# where the trap cannot see them, so session start also removes any left
-# behind for over a day.
+# The tree hash's temp files go when the hook ends, and when Claude Code stops
+# it with TERM, once the git command running then has finished. A hook killed
+# outright, or a hash run inside $( ), which sets these in a subshell where
+# the trap cannot see them, can leave files behind, so session start also
+# removes any over a day old.
 ts_list="" wt_index=""
 trap 'rm -f "$ts_list" "$wt_index"' EXIT
 trap 'exit 143' TERM INT HUP

@@ -387,7 +387,7 @@ if ! command -v jq >/dev/null 2>&1 || ! jq empty "$hooks_json" 2>/dev/null; then
 elif [ -z "$parse_seconds" ]; then
   bad "hooks/eng-hook sets no PARSE_SECONDS=<seconds> line, so the parser limit was not checked against the PreToolUse timeout"
 else
-  pre_timeout="$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select(.command | test("eng-hook pre-tool")) | .timeout] | min // empty' "$hooks_json")"
+  pre_timeout="$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select((.command // "") | test("eng-hook pre-tool")) | .timeout] | min // empty' "$hooks_json")"
   if [ -z "$pre_timeout" ]; then
     bad "$hooks_json: the pre-tool hook sets no timeout, so the parser limit of $parse_seconds s cannot be checked against it"
   elif ! awk -v t="$pre_timeout" -v p="$parse_seconds" 'BEGIN { exit !(t + 0 >= p + 3) }'; then

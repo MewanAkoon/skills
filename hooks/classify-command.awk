@@ -456,8 +456,10 @@ function runner(s, i,    cmd, n, j, k, tries, b) {
   else if (cmd ~ /^(dotenv|parallel|unshare|firejail|proxychains4?|torsocks)$/) j = i + 1
   else if (cmd == "su" || cmd == "script") {
     # su and script -c take the command as one string, which a shell runs.
-    # -c may sit among other one-letter switches, as in su -lc.
-    for (k = i + 1; k <= n; k++) {
+    # -c may sit among other one-letter switches, as in su -lc. su takes its
+    # options either side of the user, while script's stop at its first
+    # other word, so a -c after that belongs to the command it runs.
+    for (k = i + 1; k <= n && (cmd == "su" || segw[s, k] ~ /^-/); k++) {
       if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
       if (k < n && segw[s, k] ~ /^(-[A-Za-z]*c[A-Za-z]*|--command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
     }
@@ -465,6 +467,11 @@ function runner(s, i,    cmd, n, j, k, tries, b) {
     j = i + 1
   }
   if (!j) return 0
+  # parallel takes its inputs after :::, which are not part of the command.
+  if (cmd == "parallel") {
+    for (k = j; k <= n; k++) if (segw[s, k] ~ /^:::+$/) break
+    if (k <= n) { s = copyseg(s); segn[s] = k - 1; n = k - 1 }
+  }
   if (depth >= 50) { emit("confirm a command behind too many runners"); return 1 }
   depth++
   for (k = j; k <= n; k++) if (segw[s, k] == "--") { classify(s, k + 1); break }

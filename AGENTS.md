@@ -29,7 +29,7 @@ Node. The commands they carry:
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
 | `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
-| `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node 18.1 or later is installed. |
+| `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node 18.1 or later is installed, and CI also runs them on Node 18.1 itself. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
 | `./scripts/test-cloud-setup.sh` | Runs `cloud-setup.sh` against scratch homes and checks what it writes and what it leaves alone. `check.sh` runs it. |
@@ -128,9 +128,10 @@ follows, and enforcing it is what this repo is for.
 - Every skill has a row in the `README.md` table, under the heading matching
   its invocation mode and not under the other one.
 - Every `README.md` table row points at a skill that exists.
-- Every relative markdown link in a tracked or new markdown file resolves to a
-  file that exists, ignoring the ones inside fenced code blocks, which are
-  templates.
+- Every relative link in a tracked or new markdown file resolves to a file or
+  folder that exists, whatever kind of file it names. Web and mail links,
+  links to a heading in the same file, and links inside fenced code blocks,
+  which are templates, are left out.
 - The two rules files close their frontmatter, carry a body that is not empty,
   and carry the same body. An unclosed fence reads as an empty body, and two
   empty bodies compare equal.
@@ -165,7 +166,14 @@ follows, and enforcing it is what this repo is for.
   pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
   name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
-  a `MAJOR.MINOR.PATCH` version.
+  a `MAJOR.MINOR.PATCH` version. Both give the plugin the same description.
+- The PreToolUse timeout in `hooks/hooks.json` is at least 3 seconds more than
+  the command parser's time limit, which `hooks/eng-hook` sets as `PARSE_SECONDS` on a line
+  of its own, so the hook stops a slow parser and asks before Claude Code stops
+  the hook and runs the command unread.
+- `README.md`, `AGENTS.md` and `.github/workflows/check.yml` each state the
+  oldest Claude Code these skills support, and state the same one as `cc_min`
+  in `scripts/check.sh`.
 - When anything the plugin loads changed since the branch left `origin/main`
   (`skills/`, `standards/`, `hooks/` and `plugin.json` today; `agents/`,
   `commands/`, `output-styles/`, `themes/`, `monitors/`, `workflows/`, `bin/`,
@@ -205,9 +213,12 @@ clone's version; that no old link or personal copy of one of these skills sits
 in `~/.claude/skills`; that `~/.claude/settings.json` is valid JSON and sets
 `skillOverrides` for `commit` and `pr` to `"off"` and turns `attribution`
 off; and that the plugin's hooks have logged no error under
-`~/.claude/plugins/data/eng-mewanakoon/`.
-`CLAUDE_CONFIG_DIR` moves where it looks, as it does for Claude Code. Anything
-to fix fails the run, so a hook can gate on it.
+`~/.claude/plugins/data/eng-mewanakoon/`; and that this clone's own
+`.claude/settings.json` and `.claude/settings.local.json`, where present, are
+valid JSON and turn no AI credit line or session link back on.
+`CLAUDE_CONFIG_DIR` moves where it looks, as it does for Claude Code, and
+`CLAUDE_CODE_PLUGIN_CACHE_DIR` moves where it reads the hook's log, for
+`stats.mjs` too. Anything to fix fails the run, so a hook can gate on it.
 
 ## When a change makes a claim false
 

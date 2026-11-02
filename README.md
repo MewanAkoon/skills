@@ -83,10 +83,11 @@ say about how a commit message or a PR should look.
 drops the `Co-Authored-By` trailer, an empty `pr` drops the "Generated with
 Claude Code" footer, and `sessionUrl: false` drops the claude.ai session link
 that a Remote Control session adds to both. Setting `"attribution": false`
-instead drops all three. `eng:commit` and `eng:pr` keep the trailer and the
-footer out either way, but neither names the session link, so only the setting
-is sure to drop it. A cloud session reads neither this file nor the plugin
-installed on your machine.
+instead drops all three. `eng:commit` and `eng:pr` keep all three out either
+way, and a `Claude-Session` trailer too, so the setting is the second lock. A
+repo's own `.claude/settings.json` or `.claude/settings.local.json` beats this
+file, so one that sets `attribution` can turn the lines back on there. A cloud
+session reads neither this file nor the plugin installed on your machine.
 One on a single repo, outside a project's threads, reads that repo's committed
 `.claude/settings.json`, where the same `attribution` entry turns the lines
 off. [Cloud sessions](#cloud-sessions) covers the rest.
@@ -100,8 +101,8 @@ To confirm it worked from a clone of this repo:
 A good run ends like this:
 
 ```
-doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it
-15 skills, 12 model-invoked
+doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it, the settings it needs, and no hook errors logged
+<n> skills, <m> model-invoked
 ok
 ```
 
@@ -109,7 +110,9 @@ It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
 when an old link or a personal copy of one of these skills is still loading,
 when the `skillOverrides` entry is missing, when `attribution` is not turned
-off, or when one of the plugin's hooks has logged an error.
+off, when this clone's own `.claude/settings.json` or `settings.local.json`
+turns it back on, or when one of the plugin's hooks has logged an error. It
+reads no other repo's settings.
 
 ### Updating
 
@@ -120,8 +123,9 @@ it on once in `/plugin`, under Marketplaces, or update by hand:
 claude plugin update eng@mewanakoon
 ```
 
-A release is a new `version` in `.claude-plugin/plugin.json`. An install stays
-on the version it has until that string changes.
+A release is a new `version` in `.claude-plugin/plugin.json`, with its entry in
+[CHANGELOG.md](CHANGELOG.md) and a `vX.Y.Z` tag on the commit that brought it
+to `main`. An install stays on the version it has until that string changes.
 
 ### Cloud sessions
 
@@ -263,7 +267,7 @@ claude plugin marketplace remove mewanakoon
 ```
 
 Remove the `skillOverrides` entry too if you want Claude Code's own `commit`
-and `pr` back.
+and `pr` back, and the `attribution` entry if you want its credit lines back.
 
 ## The workflow
 
@@ -300,9 +304,9 @@ every session and inside subagents. They run in Claude Code only.
 
 | Action | What happens |
 |---|---|
-| A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post` | Denied, with a note to write the draft to a file |
-| A `git commit` or push, a PR create, edit or ready, an issue or label write, and a GitHub MCP tool that writes files or pushes | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes |
-| A PR merge, close or reopen, a release, a workflow run or rerun, a repo, gist, project, secret or variable write, a push that forces, deletes or sends tags, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [hooks/eng-hook](hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
+| A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post` | Denied, with a note to write the draft to a file |
+| A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync or submit, `gt submit`, and a GitHub MCP tool that writes files or pushes | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes |
+| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [hooks/eng-hook](hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
 | Any other MCP write, one that only creates or changes something, such as a doc, page, sheet or issue edit through Claude Docs, Notion, Google Drive, Sheets, Linear or any other server | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
@@ -337,9 +341,14 @@ not your message, so it changes none of this. When the hook cannot read its
 state at all, it lets the write run.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
-a shell splits them, so a quoted
+a POSIX shell splits them, so a quoted
 `gh pr comment` in a grep or a heredoc stays allowed, while a command inside
-`$( )`, or a heredoc fed to a shell, is read too. They cannot see git aliases or push settings, a tag pushed
+`$( )`, a heredoc fed to a shell, or a command behind `npm exec` or a runner
+such as `op run`, `uv run` or `direnv exec` is read too. For a runner that is
+the words after its `--`, its first four words, and any later word that names
+a command the hook has a rule for, and a chain of more than 50 runners asks. A PowerShell
+command is read by those same rules, so its own quoting and escapes, and a
+command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings, a tag pushed
 by its bare name, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name and input both hide what it does, or a browser posting through a web
@@ -351,9 +360,14 @@ branch, and a push run after a `cd` that leaves the directory the session starte
 exception is the command parser: when it fails on a shell command, the hook
 still denies what it found before it failed that it would deny anyway, such
 as a post, and otherwise asks before the command runs, because it cannot tell
-whether the command posts or writes. A command the parser takes longer than
-the hook's 10 second timeout to read, such as one with thousands of nested
-`$( )` or a few hundred kilobytes of text, goes on to Claude Code's usual
+whether the command posts or writes. The parser has a time limit,
+`PARSE_SECONDS` in [hooks/eng-hook](hooks/eng-hook), set below the hook's
+timeout in [hooks/hooks.json](hooks/hooks.json). A command it cannot read in
+time, such as one with a thousand nested `$( )`, is handled the same way, so
+it asks, and a post the parser found before it stopped is still denied. A
+megabyte in a quoted string or a heredoc reads in about a second. Only a hook run
+that outlasts that timeout as a whole, such as on a machine too loaded to run
+it, goes on to Claude Code's usual
 permission check unread.
 
 ## Skills
@@ -400,9 +414,9 @@ Only fire when typed. Zero context cost.
 | [handoff](skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
 | [wayfinder](skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.claude/plans/` |
 
-To see a change working in the running app, Claude Code's built-in `/verify`
-runs it, `/run` drives it, and `/run-skill-generator` writes the per-project
-skill both follow.
+To see a change working in the running app, Claude Code's built-in `/run`
+launches and drives it, and `eng:implement`'s review names it when a change
+alters what the app does.
 
 Type the full name. A bare name is not sure to reach the plugin's skill:
 `commit` and `pr` are names Claude Code keeps for skills of its own.
@@ -433,7 +447,7 @@ including every command case under `tests/hooks/pre-tool/`, and checks what
 they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
 against scratch homes, and, where Node 18.1 or later is installed, the
 fixtures for `scripts/stats.mjs`. CI also runs the validator on a pinned
-Claude Code.
+Claude Code, and the stats fixtures on Node 18.1, the oldest they support.
 
 A change to anything the plugin loads needs a new `version` in
 `.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
@@ -444,7 +458,7 @@ requests that picked the same version fail there.
 ### Evals
 
 `evals/` holds cases for `claude plugin eval`: each workflow skill loads at its
-moment, `eng:issue` stays out of "look into issue 42", the contract is in
+moment, a request to open a PR among them, `eng:issue` stays out of "look into issue 42", the contract is in
 context at the start, looking into a repo commits nothing, a commit waits for
 `eng:commit`, and an unreviewed hand-back gets the review gate's reminder. Every run is a
 model call on your account, so they stay out of CI. Run them before a release:

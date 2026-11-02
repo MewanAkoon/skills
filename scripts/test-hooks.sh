@@ -299,6 +299,39 @@ parser_fails 'print "gate push";' 'git push origin x'
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'parser failed' \
   || bad "parser failure: the reason for a push the gate allows does not name the parser"
 
+# A parser still running at its time limit is stopped, and the hook asks
+# rather than letting Claude Code stop the hook and run the command unread.
+# A stand-in that prints $1 and then never ends stands for a slow parser,
+# under a one-second limit. A timeout is not a fault, so nothing is logged.
+parser_slow() {
+  printf 'BEGIN { %s fflush(); while (1) n++ }\n' "$1" > "$broken/hooks/classify-command.awk"
+  rm -f "$scratch/data-broken/eng-hook.log"
+  local started ended
+  started="$(date +%s)"
+  jq -cn --arg c "$2" '{session_id: "all", cwd: "/tmp", tool_name: "Bash", tool_input: {command: $c}}' |
+    env CLAUDE_PLUGIN_ROOT="$broken" CLAUDE_PLUGIN_DATA="$scratch/data-broken" ENG_HOOK_PARSE_SECONDS=1 \
+      "$hook" pre-tool > "$scratch/out" 2> /dev/null
+  status=$?
+  ended="$(date +%s)"
+  [ "$status" -eq 0 ] || bad "slow parser: exited $status on: $2"
+  [ $((ended - started)) -le 4 ] || bad "slow parser: the hook took $((ended - started)) s under a 1 s limit"
+  [ ! -s "$scratch/data-broken/eng-hook.log" ] || bad "slow parser: a timeout was logged as an error"
+}
+parser_slow '' 'ls'
+[ "$(verdict)" = ask ] || bad "slow parser: a command with nothing found got $(verdict), want ask"
+jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'time limit' \
+  || bad "slow parser: the reason does not name the time limit"
+parser_slow 'print "post gh pr comment";' 'gh pr comment 5 -b x'
+[ "$(verdict)" = deny ] || bad "slow parser: a post found before the limit got $(verdict), want deny"
+
+# A long command reads well inside the limit: a megabyte in one quoted
+# string, and a megabyte of heredoc, each with a post at the end.
+long="$scratch/long"
+awk 'BEGIN { printf "printf \"%s\" > f; gh pr comment 1 -b x", sprintf("%1000000s", "") }' > "$long"
+expect_bash all deny "$(cat "$long")" 'Posting'
+{ printf 'cat > f <<EOF\n'; awk 'BEGIN { for (i = 0; i < 16000; i++) print "line " i " of a long heredoc body with some text in it" }'; printf 'EOF\ngh pr comment 1 -b x\n'; } > "$long"
+expect_bash all deny "$(cat "$long")" 'Posting'
+
 # The write gate. A subagent is denied whatever the state.
 bash_call all 'git commit -m x' '{"agent_id": "a1", "agent_type": "general-purpose"}'
 [ "$(verdict)" = deny ] || bad "write gate: a subagent's commit was not denied"
@@ -317,6 +350,15 @@ expect_bash none allow 'git commit -e --dry-run'
 expect_bash none deny 'git commit -am -h' 'eng:commit'
 expect_bash none deny 'git commit -am --help' 'eng:commit'
 expect_bash none deny 'git push -onotify origin x' 'eng:'
+expect_bash none deny 'gh stack submit' 'eng:'
+expect_bash none deny 'gh stack push' 'eng:'
+expect_bash none deny 'gh stack sync' 'eng:'
+expect_bash none deny 'uv run git commit -m x -- a.txt' 'eng:commit'
+expect_bash none deny 'dotenv -e a -e b -e c -e d -- git push' 'eng:'
+expect_bash none deny 'gh pr lock 5' 'eng:pr'
+expect_bash none allow 'gh issue create --web=true'
+bash_call all 'gh stack submit' '{"agent_id": "a1"}'
+[ "$(verdict)" = deny ] || bad "write gate: a subagent's gh stack submit was not denied"
 # Your latest message. A write runs unless that message says not to, so these
 # all pass, including messages from real sessions that once asked.
 said_allows() { # message, skills, then command pairs: verdict command
@@ -367,6 +409,7 @@ said_allows "commit it, push it later" commit allow 'git commit -m x' deny 'git 
 said_allows "commit it, I'll push it myself" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "commit, and leave the push to me" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "just commit, hold off on pushing" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "commit, but stop pushing" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "commit without pushing" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "No need to commit, just push" commit deny 'git commit -m x' allow 'git push origin x'
 said_allows "commit and push, no PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
@@ -907,6 +950,8 @@ pr_bash() {
   hook_run pre-tool "$(jq -cn --arg d "$pr" --arg c "$1" --arg a "$agent" \
     '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}
       + (if $a == "" then {} else {agent_id: $a} end)')"
+  # The stub PATH is meant to stay inside this subshell.
+  # shellcheck disable=SC2030
   (cd "$pr" && PATH="$scratch/stub:$PATH" && eval "$1") > /dev/null 2>&1 || event=PostToolUseFailure
   hook_run post-tool "$(jq -cn --arg d "$pr" --arg c "$1" --arg e "$event" --arg a "$agent" \
     '{session_id: "pr", cwd: $d, hook_event_name: $e, tool_name: "Bash", tool_input: {command: $c}}
@@ -1154,6 +1199,91 @@ pr_hook post-tool 'git push -q' PostToolUse t1
 pr_stop
 pr_reminded || bad "pr reminder: a push run beside another push command got no reminder"
 
+# Monitor and PowerShell commands are read like Bash ones.
+for tool in Monitor PowerShell; do
+  hook_run pre-tool "$(jq -cn --arg t "$tool" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {command: "gh pr comment 5 -b x"}}')"
+  [ "$(verdict)" = deny ] || bad "pre-tool: a post through $tool got $(verdict), want deny"
+done
+
+# With no tool call id, a push keeps its state under the command's hash.
+hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "noid", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "git push -q"}}')"
+want="push-pending.$(printf '%s' 'git push -q' | git hash-object --stdin)"
+[ -f "$data/sessions/noid/$want" ] || bad "pr reminder: a push with no tool call id kept no state under its hash"
+
+# A resume keeps the changes the session started with, and a session's state
+# goes once it is 30 days old.
+hook_run session-start "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, source: "resume"}')"
+[ -f "$data/sessions/gate/start-hash" ] || bad "session start: a resume dropped start-hash"
+[ ! -f "$data/sessions/gate/start-pending" ] || bad "session start: a resume asked for a new start-hash"
+mkdir -p "$data/sessions/stale"
+touch -t 202001010000 "$data/sessions/stale"
+hook_run session-start "$(jq -cn --arg d "$repo" '{session_id: "fresh", cwd: $d, source: "startup"}')"
+[ ! -d "$data/sessions/stale" ] || bad "session start: a session 30 days old was kept"
+[ -d "$data/sessions/gate" ] || bad "session start: a recent session was removed"
+
+# Each skill that loads is one line of its own.
+for name in eng:commit eng:pr; do
+  hook_run post-tool "$(jq -cn --arg n "$name" '{session_id: "lines", cwd: "/tmp", hook_event_name: "PostToolUse", tool_name: "Skill", tool_input: {skill: $n}}')"
+done
+[ "$(cat "$data/sessions/lines/skills" 2>/dev/null)" = "$(printf 'commit\npr')" ] \
+  || bad "post-tool: the skills file is not one name per line: $(cat "$data/sessions/lines/skills" 2>/dev/null)"
+
+# The error log keeps its last 200 lines once it passes 400.
+mkdir -p "$scratch/data-log"
+awk 'BEGIN { for (i = 1; i <= 450; i++) print "old " i }' > "$scratch/data-log/eng-hook.log"
+env CLAUDE_PLUGIN_DATA="$scratch/data-log" "$hook" bogus < "$inputs/startup.json" > /dev/null 2>&1
+lines="$(wc -l < "$scratch/data-log/eng-hook.log" | tr -d ' ')"
+[ "$lines" -le 201 ] || bad "log: the error log kept $lines lines past 400"
+tail -1 "$scratch/data-log/eng-hook.log" | grep -q 'bogus' || bad "log: trimming dropped the newest line"
+
+# The first prompt saves your message before it hashes the tree, so a hash
+# slow enough to outlast the hook leaves the gate reading this message. A
+# stand-in git notes whether the message was there when the hash began.
+shims="$scratch/shims"
+mkdir -p "$shims"
+real_git="$(command -v git)"
+real_awk="$(command -v awk)"
+# The stand-ins' own $ expand when they run, not here.
+# shellcheck disable=SC2016
+printf '#!/bin/sh\ncase " $* " in *" ls-files "*) [ -f "$ORDER_TURN" ] && : > "$ORDER_SEEN" ;; esac\nexec "%s" "$@"\n' "$real_git" > "$shims/git"
+chmod +x "$shims/git"
+mkdir -p "$data/sessions/order"
+: > "$data/sessions/order/start-pending"
+rm -f "$scratch/order-seen"
+# The PATH set in the pr reminder's subshell above is not this one.
+# shellcheck disable=SC2031
+jq -cn --arg d "$repo" '{session_id: "order", cwd: $d, prompt: "commit it"}' |
+  env PATH="$shims:$PATH" ORDER_TURN="$data/sessions/order/turn" ORDER_SEEN="$scratch/order-seen" \
+    CLAUDE_PLUGIN_DATA="$data" "$hook" prompt > /dev/null 2>&1
+[ -f "$scratch/order-seen" ] || bad "prompt: the tree was hashed before the message was saved"
+rm -f "$shims/git"
+
+# A check of your message that fails lets the write run, as every check but
+# the parser fails open, and logs it. A stand-in awk fails only that check.
+# shellcheck disable=SC2016
+printf '#!/bin/sh\nfor a; do case "$a" in target=*) exit 2 ;; esac; done\nexec "%s" "$@"\n' "$real_awk" > "$shims/awk"
+chmod +x "$shims/awk"
+mkdir -p "$scratch/data-saidno/sessions/s"
+printf 'push it\n' > "$scratch/data-saidno/sessions/s/turn"
+printf 'commit\n' > "$scratch/data-saidno/sessions/s/skills"
+# shellcheck disable=SC2031
+jq -cn '{session_id: "s", cwd: "/tmp", tool_name: "Bash", tool_input: {command: "git push origin x"}}' |
+  env PATH="$shims:$PATH" CLAUDE_PLUGIN_DATA="$scratch/data-saidno" "$hook" pre-tool > "$scratch/out" 2> /dev/null
+[ "$(verdict)" = allow ] || bad "write gate: a failed check of the message got $(verdict), want allow"
+grep -q 'check of the latest message' "$scratch/data-saidno/eng-hook.log" 2>/dev/null \
+  || bad "write gate: a failed check of the message was not logged"
+rm -f "$shims/awk"
+
+# Session start sweeps up the tree hash's temp files once they are a day old.
+mkdir -p "$scratch/tmp"
+: > "$scratch/tmp/eng-hook-untracked.old"
+touch -t 202001010000 "$scratch/tmp/eng-hook-untracked.old"
+: > "$scratch/tmp/eng-hook-index.new"
+jq -cn --arg d "$repo" '{session_id: "sweep", cwd: $d, source: "startup"}' |
+  env TMPDIR="$scratch/tmp" CLAUDE_PLUGIN_DATA="$data" "$hook" session-start > /dev/null 2>&1
+[ ! -f "$scratch/tmp/eng-hook-untracked.old" ] || bad "session start: a day-old temp file was kept"
+[ -f "$scratch/tmp/eng-hook-index.new" ] || bad "session start: a new temp file was removed"
+
 # Without jq the gates do nothing, exit 0, and log it.
 run_nojq() {
   printf '%s' "$2" | env PATH="$nojq" CLAUDE_PLUGIN_DATA="$scratch/data-nojq-gates" "$hook" "$1" > "$scratch/out" 2>/dev/null
@@ -1176,6 +1306,22 @@ for event in UserPromptSubmit UserPromptExpansion PreToolUse PostToolUse PostToo
 done
 [ "$(jq -r '.hooks.PreToolUse[0].matcher' hooks/hooks.json)" = 'Bash|Monitor|PowerShell|Skill|mcp__.*' ] \
   || bad "hooks.json: PreToolUse does not match Bash, Monitor, PowerShell, Skill and MCP tools"
+
+# A runner's later words are read only when they name a command in the
+# classifier's known list, so every command a rule or a runner pattern names
+# must be in it.
+known="$(sed -nE 's/^  (wrappers|shells|known) = [a-z ]*"(.*)"$/\2/p' hooks/classify-command.awk | tr '\n' ' ')"
+[ -n "$known" ] || bad "classify-command.awk: no known list to check"
+while IFS= read -r name; do
+  case " $known " in *" $name "*) ;; *) bad "classify-command.awk: $name has a rule but is not in known" ;; esac
+done < <(
+  {
+    grep -o 'cmd == "[a-z0-9._-]*"' hooks/classify-command.awk | sed 's/^cmd == "//; s/"$//'
+    # The runners, named in runner()'s patterns as cmd ~ /^(a|b)$/.
+    grep -oE 'cmd ~ /\^\([a-z0-9|?-]*\)\$/' hooks/classify-command.awk |
+      sed -E 's/^cmd ~ \/\^\(//; s/\)\$\/$//; s/4\?//' | tr '|' '\n'
+  } | sort -u
+)
 
 [ "$fail" -eq 0 ] && printf 'hooks: ok\n'
 exit "$fail"

@@ -41,22 +41,37 @@
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
 # fails open and lets the tool run, except the command parser. When it fails
-# on a shell command, the hook reads what the parser printed before it failed:
-# a post there is still denied, and so is a write the gate refuses. Anything
-# else asks, because the command may post or write. A command the parser takes
-# longer than the hook's timeout in hooks/hooks.json to read is the gap: Claude
-# Code stops the hook, logs nothing here, and runs the command through its own
-# permission check. A failure is written to eng-hook.log in
-# ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor reads.
+# on a shell command, or runs past PARSE_SECONDS below, the hook reads what the
+# parser printed before it stopped: a post there is still denied, and so is a
+# write the gate refuses. Anything else asks, because the command may post or
+# write. The limit sits below the hook's timeout in hooks/hooks.json, so Claude
+# Code does not stop the hook first and run the command unread. A failure,
+# though not a timeout, is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA},
+# which check.sh --doctor reads, and cut to its last 200 lines once it passes
+# 400.
 # Needs jq. Without it the session block goes out as plain text, which Claude
 # Code also takes as context, and every other mode does nothing.
 
 set -u
 
+# The tree hash's temp files go when the hook ends, and also when Claude Code
+# stops it at its timeout. A hash run inside $( ) sets these in a subshell,
+# where the trap cannot see them, so session start also removes any left
+# behind for over a day.
+ts_list="" wt_index=""
+trap 'rm -f "$ts_list" "$wt_index"' EXIT
+trap 'exit 143' TERM INT HUP
+
 mode="${1:-}"
 root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 input=""
 state=""
+
+# The seconds the command parser may take, below the PreToolUse timeout in
+# hooks/hooks.json, which check.sh holds above it. Past this the hook stops
+# the parser and asks, rather than letting Claude Code stop the hook and run
+# the command unread. ENG_HOOK_PARSE_SECONDS can only lower it, for tests.
+PARSE_SECONDS=5
 
 # The code-review flags that post to a pull request.
 POST_FLAGS='--comment(=[^[:space:]]*)?|--post(=[^[:space:]]*)?'
@@ -117,6 +132,14 @@ log() {
   mkdir -p "$CLAUDE_PLUGIN_DATA" 2>/dev/null || return 0
   printf '%s %s error: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mode" "$1" \
     >> "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
+  # Once the log passes 400 lines it is cut to its last 200, so a fault that
+  # repeats cannot fill the disk. The copy is named for this process, so two
+  # hooks cutting at once do not write the same file.
+  if [ "$( (wc -l < "$CLAUDE_PLUGIN_DATA/eng-hook.log") 2>/dev/null || echo 0)" -gt 400 ]; then
+    tail -n 200 "$CLAUDE_PLUGIN_DATA/eng-hook.log" > "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" 2>/dev/null &&
+      mv "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
+    rm -f "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$"
+  fi
   return 0
 }
 
@@ -172,8 +195,8 @@ skill_name() {
 record_skill() {
   [ -n "$1" ] || return 0
   find_state || return 0
-  skill_name "$1" >> "$state/skills"
-  printf '\n' >> "$state/skills"
+  # One write per name, so two skills loading at once cannot run together.
+  printf '%s\n' "$(skill_name "$1")" >> "$state/skills"
 }
 
 # True when the words in $1 hold one matching the extended regex $2.
@@ -413,6 +436,8 @@ $rules"
     fi
     find "$CLAUDE_PLUGIN_DATA/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
       -exec rm -rf {} + 2>/dev/null
+    find "${TMPDIR:-/tmp}" -maxdepth 1 -type f -name 'eng-hook-*' -mtime +0 \
+      -exec rm -f {} + 2>/dev/null
   fi
   return 0
 }
@@ -429,11 +454,18 @@ request_text() {
     else . end' 2>/dev/null
 }
 
+# Your message is kept before the first prompt's tree is hashed, because the
+# hash can take long enough in a large repo for the hook to run out of time,
+# and the gate would then read the message before it.
 on_prompt() {
+  on_message
   if find_state && [ -f "$state/start-pending" ]; then
     tree_state "$f_cwd" > "$state/start-hash" 2>/dev/null || rm -f "$state/start-hash"
     rm -f "$state/start-pending"
   fi
+}
+
+on_message() {
   text="$(get .prompt)"
   lead="$(printf '%s\n' "$text" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;p;q;}')"
   # A background task or a subagent reporting back, a CI event, or another
@@ -522,10 +554,14 @@ gate() {
     reason="Load $via with the Skill tool first. It runs this $label, and checks that the user's latest message wants one."
     return 0
   fi
-  if said_no "$words"; then
-    verdict=deny
-    reason="The user's latest message says not to do this $label. Do not run it. Say why you stopped, and go on with the rest."
-  fi
+  said_no "$words"
+  case $? in
+    0)
+      verdict=deny
+      reason="The user's latest message says not to do this $label. Do not run it. Say why you stopped, and go on with the rest." ;;
+    1) ;;
+    *) log "the check of the latest message for a no failed" ;;
+  esac
 }
 
 # True when the user's latest message says not to do a write named by the
@@ -593,7 +629,7 @@ said_no() {
   tell="(you (can${q}t|cannot|can not|may not|must not)|don${q}t|won${q}t|shouldn${q}t|mustn${q}t|needn${q}t|dont|wont|shouldnt|mustnt|neednt|do not|never|avoid|refrain from)"
   # Words that drop the write, or keep it for yourself, reach it only across
   # small words, so "I'll leave it to you to push" asks for the push.
-  drop="(i${q}ll|i will|hold( off)?( on)?|leave|never ?mind( about)?|forget( about)?|scratch|scrap|cancel|drop|skip) +((the|a|an|my|your|our|any|this|that|these|those|it|do|handle|open|create|file|make|raise|submit|update|edit|close|reopen) +)*"
+  drop="(i${q}ll|i will|hold( off)?( on)?|leave|never ?mind( about)?|forget( about)?|scratch|scrap|cancel|drop|skip|stop|quit) +((the|a|an|my|your|our|any|this|that|these|those|it|do|handle|open|create|file|make|raise|submit|update|edit|close|reopen) +)*"
   # A list of writes is refused as a whole when it ends in "or" or "nor", as
   # in "don't stage, commit or push", or, after one of the $tell negations,
   # when it is joined by "and", as in "don't commit and push". So "skip the PR
@@ -774,6 +810,9 @@ mcp_tool() {
           *" issue "* | *" issues "* | *" label "* | *" labels "* | *" milestone "* | *" sub "*)
             printf 'gate issue\n'; return 0 ;;
           *" pull request "* | *" pr "*)
+            # Updating a branch merges the base into it, as gh pr
+            # update-branch does, which asks.
+            case "$words" in *" branch "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
             case "$v" in create | update | edit | convert) printf 'gate pr\n'; return 0 ;; esac ;;
         esac
       done ;;
@@ -799,8 +838,9 @@ mcp_tool() {
 # called. jq reads the input as a tree, with a payload sent as a JSON string
 # decoded first, and looks for:
 # - a verb, action, command, operation or method that is one of the risky
-#   words, such as a Claude Docs batch member that deletes a tab or a whole
-#   doc, or an HTTP method of DELETE, though not POST, which mostly creates;
+#   words or has one among its first three words before an option, such as a Claude Docs batch member
+#   that deletes a tab or a whole doc, PostHog's "feature-flag delete 12", or
+#   an HTTP method of DELETE, though not POST, which mostly creates;
 # - a status, state, folder, mailbox, destination, location, target or move
 #   key set to trash, trashed or deleted, and a label of trash, as Gmail and
 #   WordPress trash things;
@@ -858,8 +898,22 @@ risky_input() {
           or any(to_entries[]; .key as $key | ($key | lower) as $k | .value as $v
             | (($k | IN("verb", "action", "command", "operation", "method"))
                 and ($v | type) == "string"
-                and ($v | lower | gsub("^\\s+|\\s+$"; "")
-                  | IN($words[]) and (. != "post" or $k != "method")))
+                and ($v | lower | [splits("\\s+") | select(. != "")]
+                  # In a value of several words, such as "feature-flag delete
+                  # 12" or "gh repo delete x", the words before the first
+                  # option, up to three, name the command and its verb. run,
+                  # execute and invoke among them do not count, since a
+                  # command line such as "npm run test" names them to read.
+                  # Options before the first word are passed over, and words
+                  # after a later option are its arguments.
+                  | (if length > 1 then
+                      ((map(startswith("-")) | index(false)) // 0) as $start
+                      | .[$start:]
+                      | (map(startswith("-")) | index(true)) as $opt
+                      | .[0:([($opt // length), 3] | min)]
+                      | map(select(IN("run", "execute", "invoke") | not))
+                    else . end)
+                  | any(.[]; IN($words[]) and (. != "post" or $k != "method"))))
               or (($k | IN("sql", "query", "queries", "statement", "statements", "ddl"))
                 and ($v | if type == "array" then map(tostring) | join(";") else tostring end
                   | test("\\b(drop\\s+(table|column|database|schema|index|view|function|constraint|trigger)|truncate(\\s+table)?\\s+\\w+|delete\\s+from)\\b"; "i")))
@@ -908,6 +962,33 @@ skill_call() {
   fi
 }
 
+# Runs the command parser on $1 and prints what it found. A parser still
+# running after the time limit is stopped and the function returns 143, the
+# status of a process stopped by TERM. What it printed before it stopped is
+# kept, though a parser stopped while it was still splitting the command has
+# printed nothing. The timer is stopped as soon as the parser ends, and its
+# output goes nowhere, so the $( ) around this call does not wait for it.
+parse_command() {
+  limit="$PARSE_SECONDS"
+  case "${ENG_HOOK_PARSE_SECONDS:-}" in
+    '' | *[!0-9]*) ;;
+    *) [ "$ENG_HOOK_PARSE_SECONDS" -gt 0 ] && [ "$ENG_HOOK_PARSE_SECONDS" -lt "$limit" ] && limit="$ENG_HOOK_PARSE_SECONDS" ;;
+  esac
+  printf '%s' "$1" | awk -f "$root/hooks/classify-command.awk" &
+  parser=$!
+  (
+    trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+    sleep "$limit" &
+    nap=$!
+    wait "$nap" && kill "$parser"
+  ) > /dev/null 2>&1 &
+  timer=$!
+  wait "$parser" 2>/dev/null
+  parsed=$?
+  kill "$timer" 2>/dev/null
+  return "$parsed"
+}
+
 on_pre_tool() {
   tool="$f_tool"
   failed=""
@@ -919,9 +1000,14 @@ on_pre_tool() {
       # allows, because a command it could not read may post or write. What
       # it printed before it stopped still counts, so a post it found, or a
       # write the gate refuses, is still denied.
-      found="$(printf '%s' "$command" | awk -f "$root/hooks/classify-command.awk")" || {
-        log "the command parser failed with exit status $?"
-        failed="The hook's command parser failed, so it cannot tell whether this command posts or writes outside this machine. Check it before it runs."
+      found="$(parse_command "$command")" || {
+        status=$?
+        if [ "$status" -eq 143 ]; then
+          failed="The hook's command parser could not read this command within its time limit, so it cannot tell whether it posts or writes outside this machine. Check it before it runs."
+        else
+          log "the command parser failed with exit status $status"
+          failed="The hook's command parser failed, so it cannot tell whether this command posts or writes outside this machine. Check it before it runs."
+        fi
       } ;;
     Skill) skill_call; return 0 ;;
     mcp__*) found="$(mcp_tool "$tool")" ;;

@@ -756,3 +756,105 @@ printf 'gh pr comment 1 -b x' | bash -e -o pipefail
 . ; gh pr comment 5 -b x
 == deny a comment behind time -p, a wrapper with no options that take a value
 time -p gh pr comment 1 -b x
+== deny a discussion comment posts
+gh discussion comment 5 -b hi
+== ask a discussion create
+gh discussion create --title x --body y
+== ask a stack merge
+gh stack merge
+== ask a Graphite merge
+gt merge
+== deny a comment behind op run
+op run -- gh pr comment 1 -b x
+== deny a comment behind npm exec
+npm exec -- gh pr comment 1 -b x
+== deny a comment behind pnpm exec
+pnpm exec gh pr comment 1 -b x
+== deny a comment behind direnv exec and its directory
+direnv exec . gh pr comment 1 -b x
+== deny a comment behind mise exec
+mise exec -- gh pr comment 1 -b x
+== deny a comment behind uv run
+uv run gh pr comment 1 -b x
+== deny a comment behind doppler run
+doppler run -- gh pr comment 1 -b x
+== deny a comment behind dotenv and its options
+dotenv -e .env -- gh pr comment 1 -b x
+== deny a comment in su -c
+su me -c 'gh pr comment 1 -b x'
+== deny a comment behind script
+script -q /dev/null gh pr comment 1 -b x
+== deny a comment behind parallel
+parallel gh pr comment ::: 1
+== allow a runner whose words only quote a comment
+uv run --with x pytest -k "gh pr comment"
+== ask a package publish behind npm exec
+npm exec --yes changeset publish
+== ask a secret removed by gh's own alias for delete
+gh secret remove FOO
+== ask a variable removed by gh's own alias for delete
+gh variable remove FOO
+== ask a deploy key added
+gh repo deploy-key add key.pub
+== ask an autolink created
+gh repo autolink create JIRA- https://x/browse/<num>
+== ask an SSH key added
+gh ssh-key add key.pub
+== ask a GPG key deleted
+gh gpg-key delete ABC
+== ask a codespace deleted
+gh codespace delete --all
+== ask a gh alias, which can name a post
+gh alias set pc 'pr comment'
+== deny a message to Discord's versioned API
+curl -X POST -d x https://discord.com/api/v10/channels/1/messages
+== deny a Teams workflow through Power Automate
+curl -X POST -d x https://default1.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/abc
+== deny a comment through gh.exe, as PowerShell runs it
+gh.exe pr comment 1 -b x
+== deny a post after the segment cap is still denied
+true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; gh pr comment 1 -b x
+== ask a command past the segment cap with no post
+true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; true; ls
+== deny pnpm's shell mode reads the words after -c
+pnpm exec -c gh pr comment 1 -b x
+== deny npm exec --package takes a value before the command
+npm exec --package foo gh pr comment 1 -b x
+== deny npx -p takes a value before the command
+npx -p foo gh pr comment 1 -b x
+== deny npx --call runs its string
+npx --call="gh pr comment 1 -b x"
+== deny a runner's options with values before --
+aws-vault exec prof --duration 1h --region x --mfa-token y -- gh pr comment 1 -b x
+== deny runners chained with -- are each read
+op run -- doppler run -- infisical run -- uv run gh pr comment 1 -b x
+== deny su with -c among other switches
+su -lc 'gh pr comment 1 -b x' me
+== deny script -qc
+script -qc 'gh pr comment 1' /dev/null
+== allow a runner's subcommand that runs nothing
+parallel parallel parallel uv pip install x
+== deny a post behind many runners and a trailing -- is read
+parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel gh pr comment 1 -b x -- y
+== allow runners chained with -- read in time
+dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- dotenv -- gh status
+== deny a runner whose options take values hides no command
+uv run --with a --with b --with c --with d --with e gh pr comment 1 -b x
+== deny a post behind runners whose options take values
+op run --env-file a -- doppler run -p x -- infisical run --env y -- uv run --with z --with w -- gh pr comment 1 -b x
+== deny a gh -R before the post does not hide the words after it
+uv run gh -R o/r -- echo hi gh pr comment 1 -b x
+== ask a runner's later word that names a deploy script, as the command it may be
+uv run --with a --with b --with c --with d --with e ./deploy-prod.sh
+== deny flock -c behind a runner's options
+uv run --with a --with b --with c --with d --with e flock /tmp/l -c "gh pr comment 1 -b x"
+== ask a deploy through firebase-tools behind a runner's options
+uv run --with a --with b --with c --with d --with e firebase-tools deploy
+== ask a migration through prisma behind a runner
+op run -- npx prisma migrate deploy
+== ask a chain of more than 50 runners
+parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel parallel echo hi
+== ask a prisma migration behind env
+env DATABASE_URL=x npx prisma migrate deploy
+== ask a prisma migration behind timeout
+timeout 600 npx prisma migrate deploy

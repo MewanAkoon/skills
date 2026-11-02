@@ -45,14 +45,14 @@ nodes{isResolved isOutdated path line
 comments(first:100){totalCount nodes{databaseId author{login} body url}}}}}}}'
 ```
 
-A `totalCount` over 100 means only that thread's first 100 comments came
-back: say so in the report.
+A `totalCount` over 100 means that thread came back cut at 100 comments: say
+so in the report.
 
 Confirm the checked-out branch is the PR's `headRefName` and contains
 `headRefOid` (`git merge-base --is-ancestor <headRefOid> HEAD`), because
 judging and fixing read the code on disk. Local commits ahead of the PR are
 fine, and a comment they answer is "already addressed". On another branch,
-stop and ask the user to switch, such as with `gh pr checkout <n>`. When the
+stop and ask the user to switch, such as `gh pr checkout <n>`. When the
 link points at one comment, still read every thread, and lead with that one.
 
 **Done when:** every unresolved thread, review body, and issue comment is
@@ -96,9 +96,9 @@ that does not hold: the evidence, in one or two sentences. Leave out thanks,
 
 Write them all to `pr-<n>-replies.md` in the scratchpad directory your system
 prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none. Under each
-reply, put the command that posts it once the user copies the text: `pbpaste`
-on macOS, `wl-paste` or `xclip -o` elsewhere. A reply in a review thread,
-where `<databaseId>` is the thread's first comment:
+reply, put the command that posts it from the clipboard: `pbpaste` on macOS,
+`wl-paste` or `xclip -selection clipboard -o` elsewhere. A reply in a review
+thread, where `<databaseId>` is the thread's first comment:
 
 ```bash
 pbpaste | gh api repos/<owner>/<repo>/pulls/<n>/comments/<databaseId>/replies -F body=@-

@@ -14,9 +14,11 @@ Current summary:  <first line of existing body, or "(none)">
 Proposed summary: <new summary>
 ```
 
-Ask "Apply these updates to the PR? (yes / no)" and stop on no.
+When the user's latest message asked for this update, send it with no second
+prompt. Otherwise ask "Apply these updates to the PR? (yes / no)" and stop on
+no.
 
-On yes, write the title and body files as step 6 of `SKILL.md` says, then:
+To send it, write the title and body files as step 6 of `SKILL.md` says, then:
 
 ```bash
 gh pr edit --title "$(cat "<title path>")" --body-file "<body path>"

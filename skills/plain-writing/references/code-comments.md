@@ -83,21 +83,23 @@ git diff -z --name-only --diff-filter=d HEAD \
     "§|\.plan\.md|the .* review|round-[0-9]|\bPR-[0-9]|#[0-9]{3}"
 ```
 
-`git diff HEAD` covers both halves of a change: tracked files you edited, and
-new files you have already staged. `--diff-filter=d` drops the ones you
-deleted so grep is never handed a path that no longer exists. The `-z` and
-`-0` pair carries filenames with spaces through intact, `-H` prints the file
-name even when xargs hands grep a single path, `-I` skips binaries, and `-r`
-stays quiet when there is nothing to grep.
+`git diff HEAD` covers the tracked files you edited. `--diff-filter=d` drops
+the ones you deleted so grep is never handed a path that no longer exists. The
+`-z` and `-0` pair carries filenames with spaces through intact, `-H` prints
+the file name even when xargs hands grep a single path, `-I` skips binaries,
+and `-r` stays quiet when there is nothing to grep.
 
-Stage the change before sweeping, or name the new paths yourself. An unstaged
-new file is indistinguishable from someone's unrelated scratch file, so
-asking git for every untracked path sweeps files this change never touched.
+A new file this change created is untracked, so that command misses it. List
+the untracked paths with `git ls-files --others --exclude-standard`, keep only
+the ones this change created, and pass those to the same `grep -HnIiE` by
+name. The list also holds scratch files the change never touched, which is
+why you pick from it by hand rather than sweeping all of it.
 
-Pass the paths yourself instead when the comments are already committed.
+Leave the index alone. `eng:commit` reads what is staged as the group the user
+chose, so staging here decides the commit before anyone asked for one.
 
-End condition: the change's new files are staged, or their paths were handed
-to grep by name, and every hit has been read, and no comment in the files you
-touched still points at something outside the repo. An unstaged new file that
-was never named was never swept, so the first clause is the one that makes
-the last one true.
+Pass the paths by name too when the comments are already committed.
+
+**Done when:** every edited file and every new file this change created was
+handed to grep, every hit has been read, and no comment in the files you
+touched still points at something outside the repo.

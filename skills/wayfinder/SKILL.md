@@ -77,7 +77,7 @@ answering it fits in one session. Each ticket is a file under `tickets/`,
 with the fields the template names.
 
 Every ticket is either HITL, worked live with the human, or AFK, driven by
-the agent alone. A HITL ticket resolves only through that live exchange, and
+the agent alone. An HITL ticket resolves only through that live exchange, and
 the human supplies every answer on their side of it. An agent that answers
 its own grilling questions has broken the ticket.
 
@@ -171,11 +171,11 @@ turned up no fog and the effort fits in one session.
    go to step 6. When open tickets remain, stop and name what holds them
    back: a blocker, a claim, or a `**Waits on:**` line.
 3. **Resolve it.** Work out who answers before anything else. Research runs
-   afk, prototype and grilling run hitl, and a task ticket carries its own
-   `Driver` field. An hitl ticket waits for the human on every question, an
-   afk ticket runs to its answer without one. Open closed tickets on demand when
-   you need the detail behind a decision, and use the skills the map's notes
-   name. Where the answer turns out to wait on something this session cannot
+   AFK, prototype and grilling run HITL, and a task ticket carries its own
+   `Driver` field. An HITL ticket waits for the human on every question, and
+   an AFK ticket runs to its answer without one. Open closed tickets on demand
+   when you need the detail behind a decision, and use the skills the map's
+   notes name. Where the answer turns out to wait on something this session cannot
    get, unclaim the ticket and add a `**Waits on:**` line naming it.
 4. **Record the answer** in the ticket file, mark it closed, and append one
    line of gist plus the link to the map's decisions.
@@ -191,7 +191,7 @@ turned up no fog and the effort fits in one session.
    produced: the destination, and the decisions that make the way to it
    clear.
 
-**Done when:** the ticket is closed with its answer written down and an hitl
+**Done when:** the ticket is closed with its answer written down and an HITL
 ticket's answers came from the human rather than from the agent, the map's
 decisions has one new line linking it, and each of step 5's four updates has a
 line saying what changed or that nothing did, or step 2 found every ticket

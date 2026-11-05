@@ -345,8 +345,9 @@ a POSIX shell splits them, so a quoted
 `gh pr comment` in a grep or a heredoc stays allowed, while a command inside
 `$( )`, a heredoc fed to a shell, or a command behind `npm exec` or a runner
 such as `op run`, `uv run` or `direnv exec` is read too. For a runner that is
-the words after its `--`, its first four words, and any later word that names
-a command the hook has a rule for, and a chain of more than 50 runners asks. A PowerShell
+the words after its `--`, and before it the first four words and any later
+word that names a command the hook has a rule for. A chain of more than 50
+runners asks. A PowerShell
 command is read by those same rules, so its own quoting and escapes, and a
 command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings, a tag pushed
 by its bare name, a commit made by anything but `git commit`, such as

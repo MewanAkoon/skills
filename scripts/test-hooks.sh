@@ -367,6 +367,10 @@ expect_bash none deny 'gh pr lock 5' 'eng:pr'
 expect_bash none allow 'gh issue create --web=true'
 bash_call all 'gh stack submit' '{"agent_id": "a1"}'
 [ "$(verdict)" = deny ] || bad "write gate: a subagent's gh stack submit was not denied"
+bash_call all "$(awk 'BEGIN { for (i = 0; i < 520; i++) printf "true; "; print "git push origin x" }')" '{"agent_id": "a1"}'
+[ "$(verdict)" = deny ] || bad "write gate: a subagent's push past the segment cap was not denied"
+hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "agent_id": "a1", "tool_name": "mcp__github__update_pull_request_branch", "tool_input": {"pullNumber": 5}}'
+[ "$(verdict)" = deny ] || bad "write gate: a subagent's PR branch update through MCP was not denied"
 # Your latest message. A write runs unless that message says not to, so these
 # all pass, including messages from real sessions that once asked.
 said_allows() { # message, skills, then command pairs: verdict command
@@ -1236,12 +1240,12 @@ done
 [ "$(cat "$data/sessions/lines/skills" 2>/dev/null)" = "$(printf 'commit\npr')" ] \
   || bad "post-tool: the skills file is not one name per line: $(cat "$data/sessions/lines/skills" 2>/dev/null)"
 
-# The error log keeps its last 200 lines once it passes 400.
+# The error log keeps its last 1000 lines once it passes 2000.
 mkdir -p "$scratch/data-log"
-awk 'BEGIN { for (i = 1; i <= 450; i++) print "old " i }' > "$scratch/data-log/eng-hook.log"
+awk 'BEGIN { for (i = 1; i <= 2100; i++) print "old " i }' > "$scratch/data-log/eng-hook.log"
 env CLAUDE_PLUGIN_DATA="$scratch/data-log" "$hook" bogus < "$inputs/startup.json" > /dev/null 2>&1
 lines="$(wc -l < "$scratch/data-log/eng-hook.log" | tr -d ' ')"
-[ "$lines" -le 201 ] || bad "log: the error log kept $lines lines past 400"
+[ "$lines" -le 1001 ] || bad "log: the error log kept $lines lines past 2000"
 tail -1 "$scratch/data-log/eng-hook.log" | grep -q 'bogus' || bad "log: trimming dropped the newest line"
 
 # The first prompt saves your message before it hashes the tree, so a hash

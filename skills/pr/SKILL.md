@@ -303,7 +303,9 @@ hides them when it renders the page.
 
 Push the branch as the "Push" section of the `eng:commit` skill's
 [../commit/references/push.md](../commit/references/push.md) says, from its
-upstream read on, since step 1 ruled out the default branch.
+upstream read on, since step 1 ruled out the default branch. Skip the push when
+that read prints `$REMOTE/$CURRENT_BRANCH`, `git fetch $REMOTE $CURRENT_BRANCH`
+succeeds, and `git rev-list --count '@{u}..HEAD'` prints 0.
 
 Then write the title alone to `pr-title.txt` and the body alone to
 `pr-body.md`, replacing any earlier ones. Put both in the scratchpad directory

@@ -47,8 +47,8 @@
 # write. The limit sits below the hook's timeout in hooks/hooks.json, so Claude
 # Code does not stop the hook first and run the command unread. A failure,
 # though not a timeout, is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA},
-# which check.sh --doctor reads, and cut to its last 200 lines once it passes
-# 400.
+# which check.sh --doctor reads and stats.mjs counts, and cut to its last 1000
+# lines once it passes 2000. A hook stopped by a signal exits 143 instead.
 # Needs jq. Without it the session block goes out as plain text, which Claude
 # Code also takes as context, and every other mode does nothing.
 
@@ -133,11 +133,11 @@ log() {
   mkdir -p "$CLAUDE_PLUGIN_DATA" 2>/dev/null || return 0
   printf '%s %s error: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mode" "$1" \
     >> "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
-  # Once the log passes 400 lines it is cut to its last 200, so a fault that
+  # Once the log passes 2000 lines it is cut to its last 1000, so a fault that
   # repeats cannot fill the disk. The copy is named for this process, so two
   # hooks cutting at once do not write the same file.
-  if [ "$( (wc -l < "$CLAUDE_PLUGIN_DATA/eng-hook.log") 2>/dev/null || echo 0)" -gt 400 ]; then
-    tail -n 200 "$CLAUDE_PLUGIN_DATA/eng-hook.log" > "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" 2>/dev/null &&
+  if [ "$( (wc -l < "$CLAUDE_PLUGIN_DATA/eng-hook.log") 2>/dev/null || echo 0)" -gt 2000 ]; then
+    tail -n 1000 "$CLAUDE_PLUGIN_DATA/eng-hook.log" > "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" 2>/dev/null &&
       mv "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
     rm -f "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$"
   fi
@@ -813,7 +813,7 @@ mcp_tool() {
           *" pull request "* | *" pr "*)
             # Updating a branch merges the base into it, as gh pr
             # update-branch does, which asks.
-            case "$words" in *" branch "*) printf 'confirm %s\n' "$1"; return 0 ;; esac
+            case "$words" in *" branch "*) printf 'gate pr\nconfirm %s\n' "$1"; return 0 ;; esac
             case "$v" in create | update | edit | convert) printf 'gate pr\n'; return 0 ;; esac ;;
         esac
       done ;;

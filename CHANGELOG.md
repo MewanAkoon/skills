@@ -25,7 +25,7 @@ follow semantic versioning.
   command, such as `gh repo delete x`.
 - The hook saves your message before it hashes the tree, writes each loaded
   skill on its own line, logs a failed read of your message, sweeps up temp
-  files a stopped hook left, cuts its log to 200 lines once it passes 400,
+  files a stopped hook left, cuts its log to 1000 lines once it passes 2000,
   and reads "stop pushing" as a no.
 - `eng:pr` compares a fork's branch with the upstream base, and
   `eng:pr-feedback` pastes from the clipboard on Linux.

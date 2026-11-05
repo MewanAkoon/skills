@@ -843,7 +843,7 @@ uv run --with a --with b --with c --with d --with e gh pr comment 1 -b x
 == deny a post behind runners whose options take values
 op run --env-file a -- doppler run -p x -- infisical run --env y -- uv run --with z --with w -- gh pr comment 1 -b x
 == deny a gh -R before the post does not hide the words after it
-uv run gh -R o/r -- echo hi gh pr comment 1 -b x
+uv run gh -R o/r echo hi gh pr comment 1 -b x
 == ask a runner's later word that names a deploy script, as the command it may be
 uv run --with a --with b --with c --with d --with e ./deploy-prod.sh
 == deny flock -c behind a runner's options
@@ -862,3 +862,25 @@ timeout 600 npx prisma migrate deploy
 script -q /dev/null git -c user.name=x status
 == allow the inputs after parallel's ::: are not read as part of a push
 parallel git push ::: a b
+== deny a runner's own options before run
+uv --directory x run gh pr comment 1 -b x
+== deny a runner's option and value before run
+poetry -C x run gh pr comment 1 -b x
+== deny op with an option before run and --
+op --account me run -- gh pr comment 1 -b x
+== deny a comment behind uvx
+uvx gh pr comment 1 -b x
+== deny a comment behind runuser and --
+runuser -u me -- gh pr comment 1 -b x
+== deny a comment in runuser -c
+runuser -l me -c "gh pr comment 1 -b x"
+== deny a comment in nix-shell --run
+nix-shell --run "gh pr comment 1 -b x"
+== deny a comment behind conda run and its option
+conda run -n e gh pr comment 1 -b x
+== deny a comment behind pixi run
+pixi run gh pr comment 1 -b x
+== allow arguments of the command after a runner's -- are not commands
+op run -- echo gh pr comment 1 -b x
+== allow a tool that is not a runner here
+uv pip install x

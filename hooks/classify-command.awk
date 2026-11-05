@@ -20,8 +20,9 @@
 # eval is split and read the same way.
 #
 # Commands inside $( ) and backticks are read the same way, and so is one
-# behind a runner such as op run or uv run: the words after its --, its first
-# four words, and any later word that names a command a rule here covers.
+# behind a runner such as op run or uv run: the words after its --, and before
+# it the first four words and any later word that names a command a rule here
+# covers.
 #
 # What it cannot see: git aliases, push settings, a tag pushed by its bare
 # name, a command built at run time, and anything inside a script it calls.
@@ -48,7 +49,7 @@ BEGIN {
   # Every command a rule below names, wrappers and shells included. Past its
   # first four words, a runner's words are read only when they name one.
   # test-hooks.sh checks that each cmd == "<name>" below is listed here.
-  known = wrappers shells ". aws bun cargo changeset claude curl docker docker-compose eval find firebase firebase-tools fly flyctl gcloud gem gh git glab gt helm http https jira kubectl linear netlify npm npx pnpm pnpx poetry prisma serverless sls source su script terraform tofu twine vercel wget wrangler xh yarn op doppler infisical uv pipenv bundle mise rtx direnv aws-vault devbox hatch pdm rye dotenv parallel unshare firejail proxychains proxychains4 torsocks "
+  known = wrappers shells ". aws bun cargo changeset claude curl docker docker-compose eval find firebase firebase-tools fly flyctl gcloud gem gh git glab gt helm http https jira kubectl linear netlify npm npx pnpm pnpx poetry prisma conda pixi uvx runuser nix-shell serverless sls source su script terraform tofu twine vercel wget wrangler xh yarn op doppler infisical uv pipenv bundle mise rtx direnv aws-vault devbox hatch pdm rye dotenv parallel unshare firejail proxychains proxychains4 torsocks "
   composevalue = " -f --file -p --project-name --env-file --profile --project-directory --ansi --progress --parallel -H --host --log-level -c --context --tlscacert --tlscert --tlskey --workdir "
   # Each tool's options whose next word is a value, often free text, never a
   # flag. has_flag reads the list for the tool being read.
@@ -80,8 +81,8 @@ END {
     while (s > nseg && qi < nq) split_command(queue[++qi])
     if (s > nseg) break
     # A command this long is past reading in full, so it asks rather than
-    # passes, and from here on only a post is still looked for, so that
-    # length cannot turn a post into a prompt.
+    # passes, and from here on only a post or a gated write is still looked
+    # for, so that length cannot turn a deny into a prompt.
     if (s == 500) { emit("confirm a command too long to read"); postsonly = 1 }
     classify(s)
   }
@@ -290,7 +291,7 @@ function substitution(i, n,    k) {
 # Each line goes out as soon as it is found, so the hook still reads it when
 # awk dies on a signal later in the command.
 function emit(line) {
-  if (postsonly && line !~ /^post /) return
+  if (postsonly && line !~ /^(post|gate|open) /) return
   if (!(line in seen)) { seen[line] = 1; print line; fflush() }
 }
 
@@ -442,24 +443,36 @@ function rest(s, i,    part, k) {
 
 # Tools that run a command given after their own words, such as op run --
 # gh ..., and that take options of their own the hook cannot list. Returns 1
-# for one, after reading as the command the words after its first --, the
-# first four words past the tool's own that are not options, so a command
-# behind an option's value is still read, and past those, any word that
-# names a command in known or a deploy script. classify reads each start once, so
+# for one, after reading as the command the words after its first --, and
+# before that --, the first four words past the tool's own that are not
+# options, so a command behind an option's value is still read, and past
+# those, any word that names a command in known or a deploy script. classify reads each start once, so
 # runners behind runners do not read the same words again, and a chain of
 # more than 50 asks rather than going deeper.
-function runner(s, i,    cmd, n, j, k, tries, b) {
+function runner(s, i,    cmd, n, j, k, d, tries, b) {
   cmd = base(segw[s, i] "")
   n = segn[s]
   j = 0
-  if (cmd ~ /^(op|doppler|infisical|uv|poetry|pipenv|bundle|mise|rtx|direnv|aws-vault|devbox|hatch|pdm|rye)$/ && segw[s, i + 1] ~ /^(run|exec|x)$/) j = i + 2
-  else if (cmd ~ /^(dotenv|parallel|unshare|firejail|proxychains4?|torsocks)$/) j = i + 1
-  else if (cmd == "su" || cmd == "script") {
-    # su and script -c take the command as one string, which a shell runs.
-    # -c may sit among other one-letter switches, as in su -lc. su takes its
+  if (cmd ~ /^(op|doppler|infisical|uv|poetry|pipenv|bundle|mise|rtx|direnv|aws-vault|devbox|hatch|pdm|rye|conda|pixi)$/) {
+    # The tool's own options can come before run, each perhaps with a value,
+    # as in uv --directory x run.
+    k = i + 1
+    while (k <= n && segw[s, k] ~ /^-/) {
+      k += (segw[s, k] !~ /=/ && segw[s, k + 1] !~ /^(-.*|run|exec|x)$/) ? 2 : 1
+    }
+    if (segw[s, k] ~ /^(run|exec|x)$/) j = k + 1
+  }
+  else if (cmd ~ /^(dotenv|parallel|unshare|firejail|proxychains4?|torsocks|uvx)$/) j = i + 1
+  else if (cmd == "nix-shell") {
+    for (k = i + 1; k < n; k++) if (segw[s, k] ~ /^--(run|command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
+    return 1
+  }
+  else if (cmd == "su" || cmd == "runuser" || cmd == "script") {
+    # These take a command as one string after -c, which a shell runs. -c may
+    # sit among other one-letter switches, as in su -lc. su and runuser take
     # options either side of the user, while script's stop at its first
-    # other word, so a -c after that belongs to the command it runs.
-    for (k = i + 1; k <= n && (cmd == "su" || segw[s, k] ~ /^-/); k++) {
+    # other word. Past a --, or that word, a -c belongs to the command.
+    for (k = i + 1; k <= n && segw[s, k] != "--" && (cmd != "script" || segw[s, k] ~ /^-/); k++) {
       if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
       if (k < n && segw[s, k] ~ /^(-[A-Za-z]*c[A-Za-z]*|--command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
     }
@@ -474,8 +487,12 @@ function runner(s, i,    cmd, n, j, k, tries, b) {
   }
   if (depth >= 50) { emit("confirm a command behind too many runners"); return 1 }
   depth++
-  for (k = j; k <= n; k++) if (segw[s, k] == "--") { classify(s, k + 1); break }
-  for (k = j; k <= n; k++) {
+  # The words after the first -- are the command, and the words before it
+  # are read as well, because options with values can come first and the --
+  # can be the command's own, as in uv run git commit -- a.txt. Words after a
+  # -- that are arguments of that command are not read as commands.
+  for (d = j; d <= n; d++) if (segw[s, d] == "--") { classify(s, d + 1); break }
+  for (k = j; k < d; k++) {
     if (segw[s, k] ~ /^-/ || (s, k) in started) continue
     b = base(segw[s, k] "")
     if (tries < 4 || (b != "" && (has(known, b) || b ~ /^deploy.*\.sh$/))) classify(s, k)

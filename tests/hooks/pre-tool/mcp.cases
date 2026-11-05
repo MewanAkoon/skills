@@ -304,3 +304,6 @@ allow mcp__abc__exec {"command": "insight get 12"}
 ask mcp__abc__exec {"command": "gh repo delete x"}
 ask mcp__abc__exec {"command": "--yes delete project x"}
 allow mcp__abc__exec {"command": "feature-flag list --search delete"}
+ask mcp__abc__exec {"command": "kubectl -n prod delete pod x"}
+ask mcp__abc__exec {"command": "gh -R o/r repo delete x"}
+allow mcp__abc__exec {"command": "git log --grep merge"}

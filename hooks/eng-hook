@@ -437,7 +437,8 @@ $rules"
     fi
     find "$CLAUDE_PLUGIN_DATA/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
       -exec rm -rf {} + 2>/dev/null
-    find "${TMPDIR:-/tmp}" -maxdepth 1 -type f -name 'eng-hook-*' -mtime +0 \
+    # The slash follows /tmp where it is a link, as on macOS.
+    find "${TMPDIR:-/tmp}/" -maxdepth 1 -type f -name 'eng-hook-*' -mtime +0 \
       -exec rm -f {} + 2>/dev/null
   fi
   return 0
@@ -839,7 +840,7 @@ mcp_tool() {
 # called. jq reads the input as a tree, with a payload sent as a JSON string
 # decoded first, and looks for:
 # - a verb, action, command, operation or method that is one of the risky
-#   words or has one among its first three words before an option, such as a Claude Docs batch member
+#   words or has one among the words that name its command, such as a Claude Docs batch member
 #   that deletes a tab or a whole doc, PostHog's "feature-flag delete 12", or
 #   an HTTP method of DELETE, though not POST, which mostly creates;
 # - a status, state, folder, mailbox, destination, location, target or move
@@ -901,17 +902,24 @@ risky_input() {
                 and ($v | type) == "string"
                 and ($v | lower | [splits("\\s+") | select(. != "")]
                   # In a value of several words, such as "feature-flag delete
-                  # 12" or "gh repo delete x", the words before the first
-                  # option, up to three, name the command and its verb. run,
-                  # execute and invoke among them do not count, since a
-                  # command line such as "npm run test" names them to read.
-                  # Options before the first word are passed over, and words
-                  # after a later option are its arguments.
+                  # 12" or "gh repo delete x", up to three words name the
+                  # command and its verb. run, execute and invoke among them
+                  # do not count, since a command line such as "npm run test"
+                  # names them to read. An option before the verb is passed
+                  # over with its value, as in "kubectl -n prod delete pod x",
+                  # and one after it starts the arguments, as in
+                  # "feature-flag list --search delete".
                   | (if length > 1 then
-                      ((map(startswith("-")) | index(false)) // 0) as $start
+                      ((map(startswith("-")) | index(false)) // length) as $start
                       | .[$start:]
-                      | (map(startswith("-")) | index(true)) as $opt
-                      | .[0:([($opt // length), 3] | min)]
+                      | reduce (.[1:][]) as $w ({out: .[0:1], skip: false, done: false};
+                          if .done then .
+                          elif .skip then .skip = false
+                          elif ($w | startswith("-")) then
+                            if (.out | length) > 1 then .done = true
+                            else .skip = ($w | contains("=") | not) end
+                          else .out += [$w] | .done = ((.out | length) >= 3) end)
+                      | .out
                       | map(select(IN("run", "execute", "invoke") | not))
                     else . end)
                   | any(.[]; IN($words[]) and (. != "post" or $k != "method"))))

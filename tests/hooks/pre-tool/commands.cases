@@ -884,3 +884,45 @@ pixi run gh pr comment 1 -b x
 op run -- echo gh pr comment 1 -b x
 == allow a tool that is not a runner here
 uv pip install x
+== deny npm exec option values before --
+npm exec -w app -- gh pr comment 1 -b x
+== deny npm exec --workspace takes a value
+npm exec --workspace app gh pr comment 1 -b x
+== deny npm exec --registry takes a value
+npm exec --registry r gh pr comment 1 -b x
+== deny a command as one string to parallel
+parallel "gh pr comment {}" ::: 1 2
+== deny the inputs of parallel with no command are the commands
+parallel ::: "gh pr comment 1"
+== deny doppler run --command
+doppler run --command "gh pr comment 1"
+== deny infisical run --command=
+infisical run --command="gh pr comment 1"
+== deny find -exec keeps a string after sh -c whole
+find . -exec bash -c 'gh pr comment 1' \;
+== allow find -exec with text that names a command
+find . -name "*.txt" -exec grep gh {} +
+== deny uv tool run
+uv tool run gh pr comment 1 -b hi
+== deny pipx run
+pipx run gh pr comment 1
+== deny nix develop -c
+nix develop -c gh pr comment 1
+== deny nix shell -c
+nix shell nixpkgs#gh -c gh pr comment 1
+== deny npx -w takes a value
+npx -w app gh pr comment 1
+== deny bunx -p takes a value
+bunx -p foo gh pr comment 1
+== ask gt merge behind a global option
+gt --no-interactive merge
+== ask gh's alias for codespace
+gh cs delete x
+== ask uv publish
+uv publish
+== ask hatch publish
+hatch publish
+== ask pdm publish
+pdm publish
+== allow pdm publish --dry-run
+pdm publish --dry-run

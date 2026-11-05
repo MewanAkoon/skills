@@ -362,6 +362,11 @@ expect_bash none deny 'gh stack push' 'eng:'
 expect_bash none deny 'gh stack sync' 'eng:'
 expect_bash none deny 'uv run git commit -m x -- a.txt' 'eng:commit'
 expect_bash none deny 'dotenv -e a -e b -e c -e d -- git push' 'eng:'
+expect_bash none deny 'gt --no-interactive submit' 'eng:'
+expect_bash none deny 'gt stack submit' 'eng:'
+expect_bash none deny 'parallel "git push" ::: a' 'eng:'
+expect_bash none deny 'script -q out.log -c "git push"' 'eng:'
+expect_bash none deny "find . -name x -exec sh -c 'git push' \\;" 'eng:'
 expect_bash none deny 'script -q /dev/null git -c user.name=x push origin main' 'eng:'
 expect_bash none deny 'gh pr lock 5' 'eng:pr'
 expect_bash none allow 'gh issue create --web=true'
@@ -1295,6 +1300,13 @@ jq -cn --arg d "$repo" '{session_id: "sweep", cwd: $d, source: "startup"}' |
   env TMPDIR="$scratch/tmp" CLAUDE_PLUGIN_DATA="$data" "$hook" session-start > /dev/null 2>&1
 [ ! -f "$scratch/tmp/eng-hook-untracked.old" ] || bad "session start: a day-old temp file was kept"
 [ -f "$scratch/tmp/eng-hook-index.new" ] || bad "session start: a new temp file was removed"
+# The temp folder can be a link, as /tmp is on macOS.
+ln -s "$scratch/tmp" "$scratch/tmplink"
+: > "$scratch/tmp/eng-hook-untracked.old"
+touch -t 202001010000 "$scratch/tmp/eng-hook-untracked.old"
+jq -cn --arg d "$repo" '{session_id: "sweep2", cwd: $d, source: "startup"}' |
+  env TMPDIR="$scratch/tmplink" CLAUDE_PLUGIN_DATA="$data" "$hook" session-start > /dev/null 2>&1
+[ ! -f "$scratch/tmp/eng-hook-untracked.old" ] || bad "session start: a temp folder that is a link was not swept"
 
 # Without jq the gates do nothing, exit 0, and log it.
 run_nojq() {

@@ -43,13 +43,14 @@ BEGIN {
   wrapvalue["nice"] = " -n --adjustment "
   wrapvalue["stdbuf"] = " -i -o -e "
   wrapvalue["xargs"] = " -I -L -n -P -s -d -E -a "
-  wrapvalue["npx"] = " -p --package "
+  wrapvalue["npx"] = " -p --package -w --workspace "
   wrapvalue["pnpx"] = " -p --package "
+  wrapvalue["bunx"] = " -p --package "
   shells = " sh bash zsh dash ksh fish "
   # Every command a rule below names, wrappers and shells included. Past its
   # first four words, a runner's words are read only when they name one.
   # test-hooks.sh checks that each cmd == "<name>" below is listed here.
-  known = wrappers shells ". aws bun cargo changeset claude curl docker docker-compose eval find firebase firebase-tools fly flyctl gcloud gem gh git glab gt helm http https jira kubectl linear netlify npm npx pnpm pnpx poetry prisma conda pixi uvx runuser nix-shell serverless sls source su script terraform tofu twine vercel wget wrangler xh yarn op doppler infisical uv pipenv bundle mise rtx direnv aws-vault devbox hatch pdm rye dotenv parallel unshare firejail proxychains proxychains4 torsocks "
+  known = wrappers shells ". aws bun cargo changeset claude curl docker docker-compose eval find firebase firebase-tools fly flyctl gcloud gem gh git glab gt helm http https jira kubectl linear netlify npm npx pnpm pnpx poetry prisma conda pixi pipx uvx runuser nix nix-shell serverless sls source su script terraform tofu twine vercel wget wrangler xh yarn op doppler infisical uv pipenv bundle mise rtx direnv aws-vault devbox hatch pdm rye dotenv parallel unshare firejail proxychains proxychains4 torsocks "
   composevalue = " -f --file -p --project-name --env-file --profile --project-directory --ansi --progress --parallel -H --host --log-level -c --context --tlscacert --tlscert --tlskey --workdir "
   # Each tool's options whose next word is a value, often free text, never a
   # flag. has_flag reads the list for the tool being read.
@@ -453,14 +454,20 @@ function runner(s, i,    cmd, n, j, k, d, tries, b) {
   cmd = base(segw[s, i] "")
   n = segn[s]
   j = 0
-  if (cmd ~ /^(op|doppler|infisical|uv|poetry|pipenv|bundle|mise|rtx|direnv|aws-vault|devbox|hatch|pdm|rye|conda|pixi)$/) {
+  if (cmd ~ /^(op|doppler|infisical|uv|poetry|pipenv|bundle|mise|rtx|direnv|aws-vault|devbox|hatch|pdm|rye|conda|pixi|pipx)$/) {
     # The tool's own options can come before run, each perhaps with a value,
-    # as in uv --directory x run.
+    # as in uv --directory x run. uv tool run is uvx by its long name.
     k = i + 1
     while (k <= n && segw[s, k] ~ /^-/) {
       k += (segw[s, k] !~ /=/ && segw[s, k + 1] !~ /^(-.*|run|exec|x)$/) ? 2 : 1
     }
+    if (cmd == "uv" && segw[s, k] == "tool") k++
     if (segw[s, k] ~ /^(run|exec|x)$/) j = k + 1
+  }
+  # nix develop and nix shell run the words after -c.
+  else if (cmd == "nix" && segw[s, i + 1] ~ /^(develop|shell)$/) {
+    for (k = i + 2; k <= n; k++) if (segw[s, k] ~ /^(-c|--command)$/) { classify(s, k + 1); return 1 }
+    return 1
   }
   else if (cmd ~ /^(dotenv|parallel|unshare|firejail|proxychains4?|torsocks|uvx)$/) j = i + 1
   else if (cmd == "nix-shell") {
@@ -477,13 +484,27 @@ function runner(s, i,    cmd, n, j, k, d, tries, b) {
       if (k < n && segw[s, k] ~ /^(-[A-Za-z]*c[A-Za-z]*|--command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
     }
     if (cmd == "su") return 1
+    # On Linux script's -c can follow its file. A string with a space in it
+    # is a command, where git -c x=y, say, is an option of the command.
+    for (; k < n; k++) if (segw[s, k] ~ /^(-c|--command)$/ && segw[s, k + 1] ~ / /) { queue[++nq] = segw[s, k + 1]; return 1 }
     j = i + 1
   }
   if (!j) return 0
-  # parallel takes its inputs after :::, which are not part of the command.
+  # doppler and infisical take the command as one string in --command.
+  for (k = j; k <= n && segw[s, k] != "--"; k++) {
+    if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
+    if (segw[s, k] == "--command") { queue[++nq] = segw[s, k + 1]; return 1 }
+  }
+  # parallel takes its inputs after :::. A command may come as one string,
+  # which it hands to a shell, and with no command the inputs are the commands.
   if (cmd == "parallel") {
     for (k = j; k <= n; k++) if (segw[s, k] ~ /^:::+$/) break
-    if (k <= n) { s = copyseg(s); segn[s] = k - 1; n = k - 1 }
+    if (k <= n) {
+      for (d = j; d < k && segw[s, d] ~ /^-/; d++) ;
+      if (d == k) { for (d = k + 1; d <= n; d++) queue[++nq] = segw[s, d]; return 1 }
+      s = copyseg(s); segn[s] = k - 1; n = k - 1
+    }
+    if (segw[s, j] ~ / /) queue[++nq] = segw[s, j]
   }
   if (depth >= 50) { emit("confirm a command behind too many runners"); return 1 }
   depth++
@@ -637,9 +658,11 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
   if (cmd == "find") {
     for (j = i + 1; j <= n; j++) {
       if (segw[s, j] !~ /^-(exec|execdir|ok|okdir)$/) continue
-      w = ""
-      for (j++; j <= n && segw[s, j] != ";" && segw[s, j] != "+"; j++) w = w " " segw[s, j]
-      queue[++nq] = w
+      # The words go on as words, so a quoted string after sh -c stays whole.
+      for (k = ++j; j <= n && segw[s, j] != ";" && segw[s, j] != "+"; j++) ;
+      m = copyseg(s)
+      segn[m] = j - 1
+      classify(m, k)
     }
     return
   }
@@ -659,7 +682,7 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
         # shell, so both read the rest of the line.
         if (segw[s, j] ~ /^(-c|--call)$/) { queue[++nq] = rest(s, j + 1); return }
         if (segw[s, j] ~ /^--call=/) { queue[++nq] = substr(segw[s, j], 8) " " rest(s, j + 1); return }
-        if (segw[s, j] ~ /^(-p|--package)$/) j++
+        if (segw[s, j] ~ /^(-p|--package)$/ || has(list, segw[s, j])) j++
       }
       if (segw[s, j] == "--") j++
       classify(s, j)
@@ -670,10 +693,16 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
     if (segw[s, j] ~ /^(un)?publish$/ && !has_flag(s, j + 1, "^--dry-run$")) emit("confirm a package publish")
     return
   }
-  if ((cmd == "cargo" || cmd == "poetry") && segw[s, i + 1] == "publish") { if (!has_flag(s, i + 2, "^--dry-run$")) emit("confirm a package publish"); return }
+  if (cmd ~ /^(cargo|poetry|uv|hatch|pdm|rye)$/ && segw[s, i + 1] == "publish") { if (!has_flag(s, i + 2, "^--dry-run$")) emit("confirm a package publish"); return }
   # Graphite's submit pushes branches and opens pull requests.
-  if (cmd == "gt" && segw[s, i + 1] ~ /^(submit|ss)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, i + 2, "^--dry-run$")) emit("open pr"); return }
-  if (cmd == "gt" && segw[s, i + 1] == "merge") { emit("confirm gt merge"); return }
+  # Global options can come first, and a scope, as in gt stack submit.
+  if (cmd == "gt") {
+    for (j = i + 1; j <= n && segw[s, j] ~ /^-/; j++) ;
+    if (segw[s, j] ~ /^(stack|branch|upstack|downstack)$/) j++
+    if (segw[s, j] ~ /^(submit|ss)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, j + 1, "^--dry-run$")) emit("open pr") }
+    else if (segw[s, j] == "merge") emit("confirm gt merge")
+    return
+  }
   if (cmd == "twine" && segw[s, i + 1] == "upload") { emit("confirm a package publish"); return }
   if (cmd == "gem" && segw[s, i + 1] == "push") { emit("confirm a package publish"); return }
   if (cmd == "gcloud") {
@@ -781,6 +810,7 @@ function gh_command(s, i,    g, c, from, comment, at) {
   from = i + 3
   # gh's built-in aliases name the same commands.
   if (c == "new") c = "create"
+  if (g == "cs") g = "codespace"
   # Help writes nothing.
   valueflags = ghvalue
   if (segw[s, i + 3] ~ /^(-h|--help)$/) return

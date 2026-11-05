@@ -750,9 +750,9 @@ if [ "$doctor" = yes ]; then
         || fix "$settings does not set skillOverrides.$name to \"off\", so a bare $name can load beside $plugin_name:$name"
     done
     # The README's attribution entry. Without it Claude Code tells the model
-    # to add a Co-Authored-By trailer and a PR footer, which the skills keep
-    # out, and from a Remote Control session a session link, which neither
-    # skill names. false hides all three.
+    # to add a Co-Authored-By trailer, a PR footer and, from a Remote Control
+    # session, a session link. The skills keep all three out, so this is the
+    # second lock. false hides all three.
     if ! jq -e '.attribution == false or
         (.attribution | type == "object" and .commit == "" and .pr == "" and .sessionUrl == false)' \
         "$settings" >/dev/null 2>&1; then

@@ -605,7 +605,7 @@ gate() {
 said_no() {
   target="($1)"
   text="$(tr '[:upper:]' '[:lower:]' < "$state/turn" | tr '\n\t' '  ' |
-    sed -E "s/(don[^a-z ]{0,3}t|do not|never) forget( about)? (to |the |a |an )?/\\3/g; s/whether or not /whether /g" |
+    sed -E "s/(don[^a-z ]{0,3}t|do not|never) (forget( about)?|stop) (to |the |a |an )?/\\4/g; s/whether or not /whether /g" |
     awk '{ n = split($0, part, /[?]/); out = ""
       for (i = 1; i <= n; i++) {
         s = part[i]

@@ -12,8 +12,8 @@ follow semantic versioning.
 
 - A long command no longer gets past the hook unread. The command parser
   read a 500 KB string in 23 seconds on macOS, past the hook's 10 second
-  timeout, and now reads a megabyte of quoted string or heredoc in about a
-  second. It also stops after
+  timeout, and now reads a megabyte of quoted string or heredoc in a second
+  or two. It also stops after
   5 seconds and asks, and it keeps looking for a post past its 500-segment
   cap.
 - Posts and writes that ran with no prompt now meet the guard:

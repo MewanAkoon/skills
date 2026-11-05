@@ -338,6 +338,8 @@ awk 'BEGIN { printf "printf \"%s\" > f; gh pr comment 1 -b x", sprintf("%1000000
 long_post "a megabyte quoted string"
 { printf 'cat > f <<EOF\n'; awk 'BEGIN { for (i = 0; i < 16000; i++) print "line " i " of a long heredoc body with some text in it" }'; printf 'EOF\ngh pr comment 1 -b x\n'; } > "$long"
 long_post "a long heredoc"
+awk 'BEGIN { printf "printf \""; for (i = 0; i < 200000; i++) printf "ab\\\"c"; printf "\" > f; gh pr comment 1 -b x" }' > "$long"
+long_post "a quoted string cut up by escapes"
 
 # The write gate. A subagent is denied whatever the state.
 bash_call all 'git commit -m x' '{"agent_id": "a1", "agent_type": "general-purpose"}'
@@ -364,6 +366,11 @@ expect_bash none deny 'uv run git commit -m x -- a.txt' 'eng:commit'
 expect_bash none deny 'dotenv -e a -e b -e c -e d -- git push' 'eng:'
 expect_bash none deny 'gt --no-interactive submit' 'eng:'
 expect_bash none deny 'gt stack submit' 'eng:'
+expect_bash none deny 'gt --cwd /tmp/x submit' 'eng:'
+expect_bash none deny 'gt s' 'eng:'
+expect_bash none deny 'devbox run "git push origin x"' 'eng:'
+expect_bash none deny 'bun exec "git push"' 'eng:'
+expect_bash none deny 'hatch env run -- git push' 'eng:'
 expect_bash none deny 'parallel "git push" ::: a' 'eng:'
 expect_bash none deny 'script -q out.log -c "git push"' 'eng:'
 expect_bash none deny "find . -name x -exec sh -c 'git push' \\;" 'eng:'
@@ -427,6 +434,8 @@ said_allows "commit it, I'll push it myself" commit allow 'git commit -m x' deny
 said_allows "commit, and leave the push to me" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "just commit, hold off on pushing" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "commit, but stop pushing" commit allow 'git commit -m x' deny 'git push origin x'
+said_allows "keep going, don't stop pushing until CI is green" commit allow 'git push origin x'
+said_allows "fix it, and never stop the push" commit allow 'git push origin x'
 said_allows "commit without pushing" commit allow 'git commit -m x' deny 'git push origin x'
 said_allows "No need to commit, just push" commit deny 'git commit -m x' allow 'git push origin x'
 said_allows "commit and push, no PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'

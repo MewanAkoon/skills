@@ -24,8 +24,9 @@
 # it the first four words and any later word that names a command a rule here
 # covers.
 #
-# What it cannot see: git aliases, push settings, a tag pushed by its bare
-# name, a command built at run time, and anything inside a script it calls.
+# What it cannot see: git aliases, a gh alias set earlier, push settings, a tag
+# pushed by its bare name, a command built at run time, and anything inside a
+# script it calls.
 
 BEGIN {
   nseg = 0
@@ -315,7 +316,14 @@ function end_word() {
   quoted = 0
 }
 
+# Adds the pieces of a double-quoted string to the word.
+function dq_end() {
+  if (ndq) word = word joined(dq, ndq, "")
+  ndq = 0
+}
+
 function end_segment() {
+  dq_end()
   end_word()
   if (segn[nseg] > 0) { nseg++; segn[nseg] = 0 }
 }
@@ -342,11 +350,12 @@ function split_command(str,    i, n, c, nx, q, j, k) {
       continue
     }
     if (q == "\"") {
-      if (c == "\"") q = ""
-      else if ((c == "$" && nx == "(") || c == "`") i = substitution(i, n)
-      else if (c == "\\" && (nx == "\"" || nx == "\\" || nx == "$" || nx == "`")) { word = word nx; i++ }
+      # Pieces wait in dq, as escapes can cut a long string into thousands.
+      if (c == "\"") { dq_end(); q = "" }
+      else if ((c == "$" && nx == "(") || c == "`") { dq_end(); i = substitution(i, n) }
+      else if (c == "\\" && (nx == "\"" || nx == "\\" || nx == "$" || nx == "`")) { dq[++ndq] = nx; i++ }
       else if (c == "\\" && nx == "\n") i++
-      else { k = w_run(i, n, "\"$`\\"); word = word w_span("s", i, k); i = k }
+      else { k = w_run(i, n, "\"$`\\"); dq[++ndq] = w_span("s", i, k); i = k }
       continue
     }
     if (c == "\\") {
@@ -456,17 +465,19 @@ function runner(s, i,    cmd, n, j, k, d, tries, b) {
   j = 0
   if (cmd ~ /^(op|doppler|infisical|uv|poetry|pipenv|bundle|mise|rtx|direnv|aws-vault|devbox|hatch|pdm|rye|conda|pixi|pipx)$/) {
     # The tool's own options can come before run, each perhaps with a value,
-    # as in uv --directory x run. uv tool run is uvx by its long name.
+    # as in uv --directory x run.
     k = i + 1
     while (k <= n && segw[s, k] ~ /^-/) {
       k += (segw[s, k] !~ /=/ && segw[s, k + 1] !~ /^(-.*|run|exec|x)$/) ? 2 : 1
     }
-    if (cmd == "uv" && segw[s, k] == "tool") k++
+    # A group of subcommands can come first, as in uv tool run or hatch env
+    # run.
+    if (segw[s, k] !~ /^(run|exec|x)$/ && segw[s, k + 1] ~ /^(run|exec)$/) k++
     if (segw[s, k] ~ /^(run|exec|x)$/) j = k + 1
   }
   # nix develop and nix shell run the words after -c.
   else if (cmd == "nix" && segw[s, i + 1] ~ /^(develop|shell)$/) {
-    for (k = i + 2; k <= n; k++) if (segw[s, k] ~ /^(-c|--command)$/) { classify(s, k + 1); return 1 }
+    for (k = i + 2; k <= n; k++) if (segw[s, k] ~ /^(-c|--command)$/) { read_from(s, k + 1); return 1 }
     return 1
   }
   else if (cmd ~ /^(dotenv|parallel|unshare|firejail|proxychains4?|torsocks|uvx)$/) j = i + 1
@@ -476,12 +487,13 @@ function runner(s, i,    cmd, n, j, k, d, tries, b) {
   }
   else if (cmd == "su" || cmd == "runuser" || cmd == "script") {
     # These take a command as one string after -c, which a shell runs. -c may
-    # sit among other one-letter switches, as in su -lc. su and runuser take
-    # options either side of the user, while script's stop at its first
-    # other word. Past a --, or that word, a -c belongs to the command.
-    for (k = i + 1; k <= n && segw[s, k] != "--" && (cmd != "script" || segw[s, k] ~ /^-/); k++) {
-      if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
-      if (k < n && segw[s, k] ~ /^(-[A-Za-z]*c[A-Za-z]*|--command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
+    # sit among other one-letter switches, as in su -lc. su takes options
+    # either side of the user and hands those after a -- to the shell. For
+    # runuser a -c past a -- belongs to the command, and script's options
+    # stop at its first other word.
+    for (k = i + 1; k <= n && (cmd == "su" || segw[s, k] != "--") && (cmd != "script" || segw[s, k] ~ /^-/); k++) {
+      if (segw[s, k] ~ /^--(session-)?command=/) { b = segw[s, k]; sub(/^[^=]*=/, "", b); queue[++nq] = b; return 1 }
+      if (k < n && segw[s, k] ~ /^(-[A-Za-z]*c[A-Za-z]*|--(session-)?command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
     }
     if (cmd == "su") return 1
     # On Linux script's -c can follow its file. A string with a space in it
@@ -490,37 +502,59 @@ function runner(s, i,    cmd, n, j, k, d, tries, b) {
     j = i + 1
   }
   if (!j) return 0
-  # doppler and infisical take the command as one string in --command.
-  for (k = j; k <= n && segw[s, k] != "--"; k++) {
-    if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
-    if (segw[s, k] == "--command") { queue[++nq] = segw[s, k + 1]; return 1 }
+  if (depth >= 50) { emit("confirm a command behind too many runners"); return 1 }
+  # doppler, infisical and mise take the command as one string in --command.
+  if (cmd ~ /^(doppler|infisical|mise|rtx)$/) {
+    for (k = j; k <= n && segw[s, k] != "--"; k++) {
+      if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
+      if (segw[s, k] == "--command") { queue[++nq] = segw[s, k + 1]; return 1 }
+    }
   }
-  # parallel takes its inputs after :::. A command may come as one string,
-  # which it hands to a shell, and with no command the inputs are the commands.
+  # parallel takes its inputs after :::. With no command they are the
+  # commands, and an option's value can pass for one, so an input holding a
+  # space is read either way. Without ::: the inputs come on stdin.
   if (cmd == "parallel") {
     for (k = j; k <= n; k++) if (segw[s, k] ~ /^:::+$/) break
     if (k <= n) {
-      for (d = j; d < k && segw[s, d] ~ /^-/; d++) ;
+      for (d = k + 1; d <= n; d++) if (segw[s, d] ~ / /) queue[++nq] = segw[s, d]
+      for (d = j; d < k && segw[s, d] ~ /^(-.*|[0-9]+)$/; d++) ;
       if (d == k) { for (d = k + 1; d <= n; d++) queue[++nq] = segw[s, d]; return 1 }
       s = copyseg(s); segn[s] = k - 1; n = k - 1
+    } else {
+      # A bare number is an option's value, as in -j 4.
+      for (d = j; d <= n && segw[s, d] ~ /^(-.*|[0-9]+)$/; d++) ;
+      if (d > n) { b = stdin_text(s); if (b != "") queue[++nq] = b; return 1 }
     }
-    if (segw[s, j] ~ / /) queue[++nq] = segw[s, j]
+    # A command given as one string can follow an option's value.
+    for (d = j; d <= n; d++) if (segw[s, d] ~ / /) queue[++nq] = segw[s, d]
   }
-  if (depth >= 50) { emit("confirm a command behind too many runners"); return 1 }
-  depth++
   # The words after the first -- are the command, and the words before it
   # are read as well, because options with values can come first and the --
   # can be the command's own, as in uv run git commit -- a.txt. Words after a
   # -- that are arguments of that command are not read as commands.
-  for (d = j; d <= n; d++) if (segw[s, d] == "--") { classify(s, d + 1); break }
+  for (d = j; d <= n; d++) if (segw[s, d] == "--") {
+    if (segw[s, d + 1] ~ / /) queue[++nq] = segw[s, d + 1]
+    read_from(s, d + 1)
+    break
+  }
   for (k = j; k < d; k++) {
     if (segw[s, k] ~ /^-/ || (s, k) in started) continue
+    # A command given as one string, which the tool hands to a shell.
+    if (tries == 0 && segw[s, k] ~ / /) queue[++nq] = segw[s, k]
     b = base(segw[s, k] "")
-    if (tries < 4 || (b != "" && (has(known, b) || b ~ /^deploy.*\.sh$/))) classify(s, k)
+    if (tries < 4 || (b != "" && (has(known, b) || b ~ /^deploy.*\.sh$/))) read_from(s, k)
     tries++
   }
-  depth--
   return 1
+}
+
+# Reads segment s from word from, for a command behind another. A chain of
+# more than 50 asks, because awk runs out of stack on a long enough one.
+function read_from(s, from) {
+  if (depth >= 50) { emit("confirm a command behind too many runners"); return }
+  depth++
+  classify(s, from)
+  depth--
 }
 
 # Reads segment s from its first word, or from word from when given.
@@ -569,6 +603,8 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
         if (w ~ /^-/) { i++; if (has(wrapvalue[cmd] "", w)) i++; continue }
         break
       }
+      # npx hands a command given as one string to a shell.
+      if (cmd ~ /^(npx|pnpx|bunx)$/ && segw[s, i] ~ / /) { queue[++nq] = segw[s, i]; return }
       # watch joins its words and hands them to sh -c.
       if (cmd == "watch") { queue[++nq] = rest(s, i); return }
       # flock takes a lock file before the command, or runs -c's string.
@@ -662,7 +698,7 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
       for (k = ++j; j <= n && segw[s, j] != ";" && segw[s, j] != "+"; j++) ;
       m = copyseg(s)
       segn[m] = j - 1
-      classify(m, k)
+      read_from(m, k)
     }
     return
   }
@@ -685,7 +721,8 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
         if (segw[s, j] ~ /^(-p|--package)$/ || has(list, segw[s, j])) j++
       }
       if (segw[s, j] == "--") j++
-      classify(s, j)
+      if (segw[s, j] ~ / /) queue[++nq] = segw[s, j]
+      read_from(s, j)
       return
     }
     if (segw[s, j] == "changeset" && segw[s, j + 1] == "publish") { emit("confirm a package publish"); return }
@@ -697,9 +734,9 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
   # Graphite's submit pushes branches and opens pull requests.
   # Global options can come first, and a scope, as in gt stack submit.
   if (cmd == "gt") {
-    for (j = i + 1; j <= n && segw[s, j] ~ /^-/; j++) ;
+    for (j = i + 1; j <= n && segw[s, j] ~ /^-/; j++) if (segw[s, j] == "--cwd") j++
     if (segw[s, j] ~ /^(stack|branch|upstack|downstack)$/) j++
-    if (segw[s, j] ~ /^(submit|ss)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, j + 1, "^--dry-run$")) emit("open pr") }
+    if (segw[s, j] ~ /^(submit|ss|s)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, j + 1, "^--dry-run$")) emit("open pr") }
     else if (segw[s, j] == "merge") emit("confirm gt merge")
     return
   }

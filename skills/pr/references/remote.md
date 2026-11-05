@@ -74,10 +74,12 @@ gh repo view --json nameWithOwner --jq .nameWithOwner
 ```
 
 When the printed repository matches `$REMOTE` by the rule above, or `gh` is
-unusable or the command fails, `$BASE_REMOTE` is `$REMOTE`. Otherwise
-`$REMOTE` is a fork, and `$BASE_REMOTE` is the remote that matches the printed
-repository. When no remote matches, or more than one, say which repository
-the PR targets and stop.
+unusable or the command fails, `$BASE_REMOTE` is `$REMOTE`. When one other
+remote matches it, `$REMOTE` is a fork, and `$BASE_REMOTE` is that remote. When
+no remote matches, run the same `gh repo view` with `$REMOTE`'s URL as its
+argument. The same repository means it was renamed or moved, so `$BASE_REMOTE`
+is `$REMOTE`. When it differs, or more than one remote matches, say which
+repository the PR targets and stop.
 
 **Done when:** `$BASE_REMOTE` is named, or the run has stopped with the base
 repository named and no single remote for it.

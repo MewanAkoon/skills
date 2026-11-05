@@ -347,7 +347,7 @@ a POSIX shell splits them, so a quoted
 such as `op run`, `uv run` or `direnv exec` is read too. For a runner that is
 the words after its `--`, and before it the first four words and any later
 word that names a command the hook has a rule for. A chain of more than 50
-runners asks. A PowerShell
+commands behind one another asks. A PowerShell
 command is read by those same rules, so its own quoting and escapes, and a
 command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings, a tag pushed
 by its bare name, a commit made by anything but `git commit`, such as
@@ -364,9 +364,9 @@ as a post, and otherwise asks before the command runs, because it cannot tell
 whether the command posts or writes. The parser has a time limit,
 `PARSE_SECONDS` in [hooks/eng-hook](hooks/eng-hook), set below the hook's
 timeout in [hooks/hooks.json](hooks/hooks.json). A command it cannot read in
-time, such as one with a thousand nested `$( )`, is handled the same way, so
+time, such as one with a couple of thousand nested `$( )`, is handled the same way, so
 it asks, and a post the parser found before it stopped is still denied. A
-megabyte in a quoted string or a heredoc reads in about a second. Only a hook run
+megabyte in a quoted string or a heredoc reads in a second or two. Only a hook run
 that outlasts that timeout as a whole, such as on a machine too loaded to run
 it, goes on to Claude Code's usual
 permission check unread.

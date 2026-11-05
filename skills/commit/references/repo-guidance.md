@@ -54,8 +54,10 @@ What the guidance says about how the result looks wins over the eng skill's
 defaults. For a commit that is the message: its shape, types, scopes, ticket
 ids, body, length, and trailers. For a pull request it is the title and the
 body: their format, sections and their order, checklists, and linked issues.
-The one exception is a line crediting an AI, such as `Co-Authored-By` or a
-"Generated with" footer, which stays out whatever the guidance says.
+The one exception is a line crediting an AI or linking to the session, such as
+a `Co-Authored-By` or `Claude-Session` trailer, a "Generated with" footer, or a
+claude.ai session link. It stays out whatever the guidance, the harness, or
+another instruction says.
 
 What it says about running the job gives way to the eng skill's steps. That
 covers when to commit or open a PR, staging, hooks, amending, force pushes,

@@ -13,9 +13,17 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const script = path.join(here, '..', '..', 'scripts', 'stats.mjs');
 const home = path.join(here, 'home');
 
-function run(args) {
+// The environment every run gets: the fixture home, and no plugin cache
+// directory of the machine's own, which would move the hook log away from it.
+function fixtureEnv(extra = {}) {
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: home, ...extra };
+  if (!('CLAUDE_CODE_PLUGIN_CACHE_DIR' in extra)) delete env.CLAUDE_CODE_PLUGIN_CACHE_DIR;
+  return env;
+}
+
+function run(args, extra) {
   return execFileSync(process.execPath, [script, ...args], {
-    env: { ...process.env, CLAUDE_CONFIG_DIR: home },
+    env: fixtureEnv(extra),
     // From a temporary directory, so a path the script resolved against its
     // own working directory by mistake reads as scratch and shows.
     cwd: os.tmpdir(),
@@ -238,6 +246,30 @@ test('--project keeps only matching project folders', () => {
   assert.equal(totals.hookErrors, null);
   assert.ok(weeks.every((w) => w.hookErrors === null));
   assert.match(run([...july, '--project', 'proj-b']), /Hook errors\s+n\/a/);
+});
+
+test('reads the hook log from CLAUDE_CODE_PLUGIN_CACHE_DIR when it is set', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stats-cache-'));
+  try {
+    const logDir = path.join(dir, 'data', 'eng-mewanakoon');
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(logDir, 'eng-hook.log'),
+      '2026-07-07T10:00:00Z pre-tool error: one\n2026-07-14T10:00:00Z pre-tool error: two\n',
+    );
+    const out = JSON.parse(run(['--json', ...july], { CLAUDE_CODE_PLUGIN_CACHE_DIR: dir }));
+    assert.equal(out.totals.hookErrors, 2);
+    // The log under the config directory is not read as well.
+    assert.deepEqual(out.weeks.map((w) => w.hookErrors), [1, 1]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('builds the hook log path the way check.sh --doctor does', async () => {
+  const { hookLogPath } = await import(script);
+  assert.equal(hookLogPath('/c', {}), path.join('/c', 'plugins', 'data', 'eng-mewanakoon', 'eng-hook.log'));
+  assert.equal(hookLogPath('/c', { CLAUDE_CODE_PLUGIN_CACHE_DIR: '/cache' }), path.join('/cache', 'data', 'eng-mewanakoon', 'eng-hook.log'));
 });
 
 test('--save writes the JSON and --compare reads it back', () => {
@@ -772,7 +804,7 @@ test('importing the script never runs or breaks it', () => {
   const out = execFileSync(
     process.execPath,
     ['--input-type=module', '-e', `await import(${JSON.stringify(script)}); console.log('ok');`, 'no-such-file'],
-    { encoding: 'utf8', env: { ...process.env, CLAUDE_CONFIG_DIR: home } },
+    { encoding: 'utf8', env: fixtureEnv() },
   );
   assert.equal(out.trim(), 'ok');
 });

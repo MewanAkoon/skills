@@ -8,8 +8,7 @@ description: Use when the user approves a plan or names the exact change to make
 ## What this does
 
 It carries an agreed change into the code, tests what changed, corrects what
-the change made false, and reviews the result through `/code-review` until it
-is ready or the report says what is not.
+the change made false, and reviews the result through `/code-review`.
 
 ## When it runs
 
@@ -97,7 +96,7 @@ search found nothing that described the change.
 Read [references/review.md](references/review.md) first and follow it. It
 snapshots the tree, then calls the Skill tool with `code-review` and the
 arguments `high <parent>..<snapshot>`, with an intent check beside it. Never
-a bare level, and never `ultra`, `--comment`, or `--fix`.
+a bare level, `ultra`, `--comment`, or `--fix`.
 
 **Done when:** its report says ready, or not ready with each blocker named, or
 the review still runs in the background and the reply says so.
@@ -106,6 +105,8 @@ the review still runs in the background and the reply says so.
 
 What changed, by file. Every check run, with its result. Anything done outside
 the plan. The review report. What was not checked, and any risk.
+
+**Done when:** each of those is in the report, or marked none.
 
 ---
 

@@ -144,6 +144,8 @@ The draft's two paths, or the issue's URL. The labels as GitHub shows them. A
 duplicate found instead, with its link. What the user still has to do, such
 as filing in another tracker.
 
+**Done when:** each of those that applies to this run is in the reply.
+
 ---
 
 The duplicate check and the label rule follow the `dedupe` and

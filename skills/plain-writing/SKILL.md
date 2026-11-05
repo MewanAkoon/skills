@@ -36,8 +36,8 @@ sent, not after someone complains about it.
 ## Punctuation
 
 Never use em dashes. When a sentence reaches for one, split it into two
-sentences or use a comma. Do not swap in parentheses or en dashes instead,
-that trades one tell for another.
+sentences or use a comma. Do not swap in parentheses or en dashes instead.
+That trades one tell for another.
 
 Use colons before a list or an example. Not as a mid-sentence connector.
 

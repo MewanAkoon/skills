@@ -127,6 +127,19 @@ for text in missing blank; do
   [ "$(head -n 1 "$rules")" = "$begin" ] || bad "$text CLAUDE.md: it does not start with the block"
 done
 
+# A file that did not exist gets the mode the umask gives, as a plain
+# redirect would, rather than the private mode mktemp starts its file with.
+rm -f "$settings" "$rules"
+# The subshell keeps the umask to this run. Its failure is passed back by its
+# exit status, since a bad inside it cannot set fail here.
+(umask 022 && run "new files under umask 022" && [ "$fail" -eq 0 ]) || bad "new files under umask 022: the run failed"
+[ -n "$(find "$settings" -perm 644)" ] || bad "new files under umask 022: settings.json is not 644"
+[ -n "$(find "$rules" -perm 644)" ] || bad "new files under umask 022: CLAUDE.md is not 644"
+
+# No run, failed or not, leaves a temporary file beside the ones it writes.
+leftover="$(find "$scratch" -name '.cloud-setup.*')"
+[ -z "$leftover" ] || bad "a temporary file was left behind: $leftover"
+
 # Off a cloud VM, with CLOUD_SETUP_HOME unset or empty, it writes nothing to
 # HOME. Root on Linux counts as a cloud VM, so there the case says it was
 # skipped.

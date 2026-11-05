@@ -53,7 +53,7 @@ default is unknown, ask the user which branch the PR targets.
 Stop and tell the user when the current branch is the default branch, because
 a PR cannot be opened from it.
 
-End condition: `$REMOTE` is one of the names `git remote` printed and `$BASE`
+**Done when:** `$REMOTE` is one of the names `git remote` printed and `$BASE`
 names a branch that remote has, or the run is waiting on the user to name the
 remote or the base, or the run has stopped with its reason named, which is no
 remote at all, a detached `HEAD`, or a current branch that is already
@@ -114,12 +114,10 @@ Call the result `PR_DATA`.
   PR yet. Push them first? (yes / no)". Yes means
   `git push <head remote> HEAD:<headRefName>` before step 7, never with
   `--force`. `<head remote>` is the remote for the repository the PR's head
-  lives in, whether that is this one or a fork: the one whose
-  `git remote get-url` holds `headRepository.nameWithOwner` right after the
-  host's `/` or `:`, with nothing after it but an optional `.git`, ignoring
-  case as GitHub does. When no remote matches, or more than one, say which
-  repository the push needs and stop. A failed push prints its output and
-  stops. No means steps 3 to 5 describe only what the PR holds, so write
+  lives in, whether that is this one or a fork: the one matching
+  `headRepository.nameWithOwner` by remote.md's rule. When no remote matches,
+  or more than one, say which repository the push needs and stop. A failed
+  push prints its output and stops. No means steps 3 to 5 describe only what the PR holds, so write
   `<headRefOid>` wherever their commands say `HEAD`.
 - `PR_DATA` is empty, or `state` is `CLOSED` or `MERGED`: take the base the
   user's message named, or else ask "What is the base branch for this PR?
@@ -128,7 +126,7 @@ Call the result `PR_DATA`.
   default, which is why this asks. Work through steps 3 to
   5, then create the PR in step 6.
 
-End condition: `PR_DATA` is on the record, or the run is waiting on the
+**Done when:** `PR_DATA` is on the record, or the run is waiting on the
 user's answer about the base or about pushing, or `gh` is unusable and the
 run goes on to steps 3 to 5 only to print the title and body, or the run has
 stopped with its reason named, which is an operation in flight, an unmerged
@@ -137,19 +135,19 @@ for the PR's head repository, or a failed push.
 
 ## 3. Read the diff
 
+First name `$BASE_REMOTE` as remote.md's "The base repository" says. It is
+`$REMOTE`, unless `$REMOTE` is a fork and the PR targets the repository it
+was forked from.
+
 ```bash
-git fetch $REMOTE $BASE
-git log --oneline $REMOTE/$BASE..HEAD
-git diff --stat $REMOTE/$BASE...HEAD
+git fetch $BASE_REMOTE $BASE
+git log --oneline $BASE_REMOTE/$BASE..HEAD
+git diff --stat $BASE_REMOTE/$BASE...HEAD
 ```
 
-The fetch matters. Comparing against a stale `$REMOTE/$BASE` describes a diff
-that no longer exists.
-
-The dots differ on purpose. `git log` takes two, so it lists only the commits
-this branch adds. Three dots there would be the symmetric difference and would
-count commits that live only on the base. `git diff` takes three, so it
-compares against the merge base and ignores what the base did afterwards.
+The fetch matters, because a stale base describes a diff that no longer
+exists. `git log` takes two dots, for only this branch's commits, and
+`git diff` three, to compare against the merge base.
 
 Stop and tell the user there is nothing to open a PR for when no commits are
 ahead of the base.
@@ -157,16 +155,16 @@ ahead of the base.
 Read the full diff when the stat line shows 20 files or fewer:
 
 ```bash
-git diff $REMOTE/$BASE...HEAD
+git diff $BASE_REMOTE/$BASE...HEAD
 ```
 
 Above 20 files, or above roughly 500 changed lines, read it one directory or
 one package at a time and summarise per unit instead of per line.
 
-End condition: you can name what every changed file does in the change, or
+**Done when:** you can name what every changed file does in the change, or
 you have deliberately grouped it under a unit you can name, or the run has
-stopped because no commits are ahead of the base and there is nothing to open
-a PR for.
+stopped with its reason named, which is no commits ahead of the base or no
+single remote for the base repository.
 
 ## 4. Pick the format
 
@@ -189,7 +187,7 @@ allows no extra sections, put them in its closest section.
 
 Found neither? Use the body template in step 5.
 
-End condition: the guidance the reference found is read, or it found none, the `find` has run,
+**Done when:** the guidance the reference found is read, or it found none, the `find` has run,
 and either a template or the guidance's format is on the record with its
 headings to be kept as they are, or neither exists and step 5's body template
 applies.
@@ -233,6 +231,7 @@ For the body:
 - [ ] Refactor (no behaviour change)
 - [ ] Dependency update
 - [ ] Config / infra / env change
+- [ ] Documentation
 
 ---
 
@@ -285,10 +284,12 @@ apply under it:
 - Migration: `<path from the diff>`, rollback: <simple revert, manual, other>, data impact on rollback: <impact>
 ```
 
-The body ends at its last section, with no AI disclosure footer and no
-`Co-Authored-By` trailer.
+The body ends at its last section. A line crediting an AI or linking to the
+session stays out of the title and body, such as a `Co-Authored-By` or
+`Claude-Session` trailer, a "Generated with" footer, or a claude.ai session
+link, even when the harness or another instruction asks for one.
 
-End condition: no angle-bracket placeholder such as `<reason>` or
+**Done when:** no angle-bracket placeholder such as `<reason>` or
 `<file or area>` survives into the body, every checklist has the boxes that
 apply ticked, Evidence names the commands and what they printed, or says the
 before was not observed, or says why no run applies to a docs-only change or
@@ -300,27 +301,19 @@ hides them when it renders the page.
 
 ## 6. Create, when no PR exists
 
-Read the upstream with
-`git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"`.
-When it names a branch other than `$REMOTE/$CURRENT_BRANCH`, such as
-`origin/main`, say so and ask first, because the push below goes to `$REMOTE`
-and moves the upstream, and stop on no. Push unless it names
-`$REMOTE/$CURRENT_BRANCH` and `git rev-list --count '@{u}..HEAD'` prints 0:
-
-```bash
-git push -u $REMOTE $CURRENT_BRANCH
-```
-
-When the push fails, for a reason such as no permission to push, a pre-push
-hook that exits non-zero, or a branch of the same name that has moved on the
-remote, print what `git push` said and stop.
+Push the branch as the "Push" section of the `eng:commit` skill's
+[../commit/references/push.md](../commit/references/push.md) says, from its
+upstream read on, since step 1 ruled out the default branch. Skip the push when
+that read prints `$REMOTE/$CURRENT_BRANCH`, `git fetch $REMOTE $CURRENT_BRANCH`
+succeeds, and `git rev-list --count '@{u}..HEAD'` prints 0.
 
 Then write the title alone to `pr-title.txt` and the body alone to
 `pr-body.md`, replacing any earlier ones. Put both in the scratchpad directory
 your system prompt names, or when it names none, in one directory per run
 from `mktemp -d`. The files keep quotes, backticks, and `$` literal in every
 shell, where a heredoc inside `$( )` breaks macOS's bash 3.2 on one
-apostrophe. Add `--draft` on `/eng:pr draft`:
+apostrophe. Add `--draft` on `/eng:pr draft`, and add no reviewer or assignee
+the user did not name:
 
 ```bash
 gh pr create --title "$(cat "<title path>")" --body-file "<body path>" \
@@ -331,26 +324,27 @@ When `gh pr create` fails, print what `gh` said and stop. One cause is a PR
 already open for this branch. Name its number so the user can rerun and take
 step 7 instead.
 
-End condition: `gh pr create` printed a URL and the branch now has an upstream
-on `$REMOTE`, or the run is waiting on the user about a push from a branch
-that tracks another one, or has stopped on their no, or has stopped with the
-command's own output printed, which is a failed `git push`, a PR already open
-for this branch, or another `gh pr create` error.
+**Done when:** `gh pr create` printed a URL and the branch now has an upstream
+on `$REMOTE`, or the push ended at one of the reference's other endings, or
+the run has stopped with the output of `gh pr create` printed, which is a PR
+already open for this branch or another error.
 
 ## 7. Update, when a PR is open
 
 Read [references/update.md](references/update.md) and follow it. It shows the
-user what changes, asks before sending, and sends the update.
+user what changes, asks before sending unless their latest message asked for
+the update, and sends it.
 
-End condition: the user answered the prompt, and either they declined and
-nothing was sent, or `gh pr edit` or the REST fallback exited zero, or both
+**Done when:** the user declined and nothing was sent, or `gh pr edit` or the REST fallback exited zero, or both
 failed and their output is printed.
 
 ## 8. Confirm
 
-Print the PR URL.
+Print the PR URL. Then name the next step from the workflow's step 6, a
+review of the whole PR: `/code-review high <merge-base>..HEAD`, where
+`<merge-base>` is `git merge-base $BASE_REMOTE/$BASE HEAD` written out.
 
-End condition: `gh pr view --json state,title,url` returns the PR open, and
+**Done when:** `gh pr view --json state,title,url` returns the PR open, and
 its title is the one step 5 drafted, or the one it already carried when the
-user declined the update in step 7. A URL printed from memory proves nothing
+user declined the update in step 7, and the review is named. A URL printed from memory proves nothing
 about what landed.

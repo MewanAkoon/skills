@@ -43,8 +43,8 @@ them extra. It edits, commits, and posts nothing, starts no subagents, and
 writes only under `R`.
 
 **Done when:** the review's result and the intent check's are in. When
-`code-review` runs in the background, as in the terminal, and the turn must end
-first, say it is still running, and carry on from section 3 when it reports.
+`code-review` runs in the background and the turn must end first, say so,
+and carry on from section 3 when it reports.
 
 ## 3. Triage
 
@@ -70,8 +70,8 @@ intent check ran in every round, and the last review saw the final tree.
 Otherwise not ready, with each reason. List what was fixed, each finding left
 and why, each claim beside its evidence, and what was not checked.
 Name `/security-review` when the diff touches authentication, payments, secrets,
-or cryptography, and `/verify`, or `/run-skill-generator` first, when the change
-has a runtime surface.
+or cryptography, and `/run` when the change alters what the running app does.
+Where `/run` is missing, give the commands that show the change running.
 
 **Done when:** the report says ready or not ready, and why.
 

@@ -19,10 +19,14 @@
 # that only quotes `gh pr comment` is not. A string passed to sh -c, bash -c or
 # eval is split and read the same way.
 #
-# Commands inside $( ) and backticks are read the same way.
+# Commands inside $( ) and backticks are read the same way, and so is one
+# behind a runner such as op run or uv run: the words after its --, and before
+# it the first four words and any later word that names a command a rule here
+# covers.
 #
-# What it cannot see: git aliases, push settings, a tag pushed by its bare
-# name, a command built at run time, and anything inside a script it calls.
+# What it cannot see: git aliases, a gh alias set earlier, push settings, a tag
+# pushed by its bare name, a command built at run time, and anything inside a
+# script it calls.
 
 BEGIN {
   nseg = 0
@@ -40,7 +44,14 @@ BEGIN {
   wrapvalue["nice"] = " -n --adjustment "
   wrapvalue["stdbuf"] = " -i -o -e "
   wrapvalue["xargs"] = " -I -L -n -P -s -d -E -a "
+  wrapvalue["npx"] = " -p --package -w --workspace "
+  wrapvalue["pnpx"] = " -p --package "
+  wrapvalue["bunx"] = " -p --package "
   shells = " sh bash zsh dash ksh fish "
+  # Every command a rule below names, wrappers and shells included. Past its
+  # first four words, a runner's words are read only when they name one.
+  # test-hooks.sh checks that each cmd == "<name>" below is listed here.
+  known = wrappers shells ". aws bun cargo changeset claude curl docker docker-compose eval find firebase firebase-tools fly flyctl gcloud gem gh git glab gt helm http https jira kubectl linear netlify npm npx pnpm pnpx poetry prisma conda pixi pipx uvx runuser nix nix-shell serverless sls source su script terraform tofu twine vercel wget wrangler xh yarn op doppler infisical uv pipenv bundle mise rtx direnv aws-vault devbox hatch pdm rye dotenv parallel unshare firejail proxychains proxychains4 torsocks "
   composevalue = " -f --file -p --project-name --env-file --profile --project-directory --ansi --progress --parallel -H --host --log-level -c --context --tlscacert --tlscert --tlskey --workdir "
   # Each tool's options whose next word is a value, often free text, never a
   # flag. has_flag reads the list for the tool being read.
@@ -59,71 +70,129 @@ BEGIN {
   apivalue = " -X --method -f -F --field --raw-field --input -H --header -q --jq -t --template --hostname --cache -p --preview "
 }
 
-{ buf = (NR > 1) ? buf "\n" $0 : $0 }
+# Lines are kept apart and joined once at the end, because adding each line to
+# one growing string copies it again every time, and a long command took
+# longer than the hook's timeout that way.
+{ input[NR] = $0 }
 
 END {
-  split_command(buf)
+  split_command(joined(input, NR, "\n"))
   # A command substitution, or a string handed to sh -c or eval, waits in the
   # queue and is split once the segments before it are read.
   for (s = 1; ; s++) {
     while (s > nseg && qi < nq) split_command(queue[++qi])
     if (s > nseg) break
-    # A command this long is past reading, so it asks rather than passes.
-    if (s >= 500) { emit("confirm a command too long to read"); break }
+    # A command this long is past reading in full, so it asks rather than
+    # passes, and from here on only a post or a gated write is still looked
+    # for, so that length cannot turn a deny into a prompt.
+    if (s == 500) { emit("confirm a command too long to read"); postsonly = 1 }
     classify(s)
   }
 }
 
-# Skips a heredoc body. Position i ends the line that opened it, and d is its
-# delimiter, with a leading dash when tabs before the closing line are
-# stripped. Returns the position that ends the delimiter line, and leaves the
-# body in `body`.
-function skip_body(str, i, n, d,    strip, k, line) {
-  strip = (substr(d, 1, 1) == "-")
-  if (strip) d = substr(d, 2)
-  body = ""
-  while (i < n) {
-    k = index(substr(str, i + 1), "\n")
-    line = (k > 0) ? substr(str, i + 1, k - 1) : substr(str, i + 1)
-    i += (k > 0) ? k : length(line)
-    if (strip) sub(/^\t+/, "", line)
-    if (line == d) break
-    body = body line "\n"
+# Joins a[1] to a[n] with sep between, pairing neighbours in rounds, so each
+# byte is copied a few times rather than once per piece. It empties a.
+function joined(a, n, sep,    i, k) {
+  if (n == 0) return ""
+  while (n > 1) {
+    k = 0
+    for (i = 1; i <= n; i += 2) a[++k] = (i < n) ? a[i] sep a[i + 1] : a[i]
+    n = k
   }
+  return a[1]
+}
+
+# Reading a long command one character at a time took longer than the hook's
+# timeout, because some awks, macOS's among them, copy the whole string for
+# each substr and for each function call that passes it. So the string is
+# read through a window w: w_open(w, str) keeps the string once, w_at(w, i)
+# reads one character from a copy of 4096 of them that moves on when the
+# reader passes its end, w_span(w, i, k) copies characters i to k, and
+# w_find(w, i, n, c) is the first position from i to n that holds c, or 0.
+# Code that reads the same string shares its window, and never passes the
+# string itself.
+function w_open(w, str) { wsrc[w] = str; wbase[w] = -8192 }
+
+function w_at(w, i) {
+  if (i < wbase[w] || i >= wbase[w] + 4096) { wbase[w] = i; wtext[w] = substr(wsrc[w], i, 4096) }
+  return substr(wtext[w], i - wbase[w] + 1, 1)
+}
+
+function w_span(w, i, k) {
+  if (i >= wbase[w] && k < wbase[w] + 4096) return substr(wtext[w], i - wbase[w] + 1, k - i + 1)
+  return substr(wsrc[w], i, k - i + 1)
+}
+
+function w_find(w, i, n, c) {
+  for (; i <= n; i++) if (w_at(w, i) == c) return i
+  return 0
+}
+
+# The position of the last character, from i on, that is none of the
+# characters in stop. A word takes that run in one copy, because adding one
+# character at a time copies the word again for each.
+function w_run(i, n, stop) {
+  while (i < n && index(stop, w_at("s", i + 1)) == 0) i++
   return i
 }
 
-# The position of the parenthesis that closes the one at position i. A heredoc
-# inside is skipped whole, since an apostrophe or a parenthesis in its body is
-# text. Inside (( )) a << is a shift, and <<< is a here-string, so neither
-# starts one.
-function closing(str, i, n,    depth, arith, c, q, d, k) {
+# Skips a heredoc body in the string window w reads. Position i ends the line
+# that opened it, and d is its delimiter, with a leading dash when tabs
+# before the closing line are stripped. Returns the position that ends the
+# delimiter line, and leaves the body in `body`.
+function skip_body(w, i, n, d,    strip, k, start, end, line) {
+  strip = (substr(d, 1, 1) == "-")
+  if (strip) d = substr(d, 2)
+  start = i + 1
+  end = n
+  while (i < n) {
+    k = w_find(w, i + 1, n, "\n")
+    if (k == 0) k = n + 1
+    line = w_span(w, i + 1, k - 1)
+    if (strip) sub(/^\t+/, "", line)
+    if (line == d) { end = i; i = (k <= n) ? k : n; break }
+    i = (k <= n) ? k : n
+  }
+  # The body is the lines before the delimiter, each ending in a newline,
+  # taken in one copy, with the tabs <<- strips taken off in one pass.
+  body = w_span(w, start, end)
+  if (body != "" && substr(body, length(body), 1) != "\n") body = body "\n"
+  if (strip) { body = "\n" body; gsub(/\n\t+/, "\n", body); body = substr(body, 2) }
+  return i
+}
+
+# The position of the parenthesis that closes the one at position i of the
+# string window w reads. A heredoc inside is skipped whole, since an
+# apostrophe or a parenthesis in its body is text. Inside (( )) a << is a
+# shift, and <<< is a here-string, so neither starts one.
+function closing(w, i, n,    depth, arith, c, q, d, k) {
   depth = 0
   arith = 0
   q = ""
   for (; i <= n; i++) {
-    c = substr(str, i, 1)
+    c = w_at(w, i)
     if (q != "") {
       if (c == q) q = ""
       else if (c == "\\" && q == "\"") i++
       continue
     }
-    if (!arith && c == "<" && substr(str, i + 1, 1) == "<" && substr(str, i + 2, 1) != "<" && substr(str, i - 1, 1) != "<") {
-      d = substr(str, i + 2)
+    if (!arith && c == "<" && w_at(w, i + 1) == "<" && w_at(w, i + 2) != "<" && (i == 1 || w_at(w, i - 1) != "<")) {
+      # A delimiter is a short word, so the next 4096 characters hold it.
+      d = w_span(w, i + 2, i + 4097)
       sub(/^[ \t]*/, "", d)
       if (!match(d, /^-?[ \t]*['"]?[A-Za-z0-9_.-]+/)) continue
       d = substr(d, 1, RLENGTH)
       gsub(/['" \t]/, "", d)
-      k = index(substr(str, i), "\n")
+      k = w_find(w, i, n, "\n")
       if (k == 0) continue
-      i = skip_body(str, i + k - 1, n, d)
+      i = skip_body(w, k, n, d)
       continue
     }
     if (c == "'" || c == "\"") { q = c; continue }
     if (c == "\\") { i++; continue }
     if (c == "(") {
       depth++
-      if (!arith && substr(str, i + 1, 1) == "(") arith = depth
+      if (!arith && w_at(w, i + 1) == "(") arith = depth
     } else if (c == ")") {
       if (arith == depth) arith = 0
       if (--depth == 0) return i
@@ -149,6 +218,23 @@ function drop_repo(s, i, values,    j, k, isvalue) {
   segn[s] = k
 }
 
+# A copy of segment s under a new name, for a reader that removes words, so
+# the positions of the words in s stay as other readers found them.
+function copyseg(s,    t, j) {
+  t = "copy" (++ncopy)
+  segn[t] = segn[s]
+  for (j = 1; j <= segn[s]; j++) segw[t, j] = segw[s, j]
+  if (s in piped) piped[t] = piped[s]
+  if (s in hdbody) hdbody[t] = hdbody[s]
+  return t
+}
+
+# True when segment s names a repo with -R or --repo from position i on.
+function has_repo(s, i) {
+  for (; i <= segn[s]; i++) if (segw[s, i] ~ /^(-R|--repo)/) return 1
+  return 0
+}
+
 # What reaches segment s on stdin, when it can be read: its own heredoc, or a
 # heredoc or the words of echo or printf piped from the command before it.
 function stdin_text(s,    w) {
@@ -169,33 +255,35 @@ function stdin_text(s,    w) {
 # characters, as in a heredoc body.
 function live_substitutions(text,    n, i, c, k) {
   n = length(text)
+  w_open("l", text)
   for (i = 1; i <= n; i++) {
-    c = substr(text, i, 1)
+    c = w_at("l", i)
     if (c == "\\") { i++; continue }
     if (c == "`") {
-      k = index(substr(text, i + 1), "`")
+      k = w_find("l", i + 1, n, "`")
       if (k == 0) return
-      queue[++nq] = substr(text, i + 1, k - 1)
-      i += k
-    } else if (c == "$" && substr(text, i + 1, 1) == "(" && substr(text, i + 2, 1) != "(") {
-      k = closing(text, i + 1, n)
-      queue[++nq] = substr(text, i + 2, k - i - 2)
+      queue[++nq] = w_span("l", i + 1, k - 1)
+      i = k
+    } else if (c == "$" && w_at("l", i + 1) == "(" && w_at("l", i + 2) != "(") {
+      k = closing("l", i + 1, n)
+      queue[++nq] = w_span("l", i + 2, k - 1)
       i = k
     }
   }
 }
 
-# Queues the command inside $( ) or backticks starting at position i, adds a
-# placeholder to the word, and returns the position where it ends.
-function substitution(str, i, n,    k) {
-  if (substr(str, i, 1) == "`") {
-    k = index(substr(str, i + 1), "`")
-    k = (k > 0) ? i + k : n
-    queue[++nq] = substr(str, i + 1, k - i - 1)
+# Queues the command inside $( ) or backticks starting at position i of the
+# command split_command reads, adds a placeholder to the word, and returns
+# the position where it ends.
+function substitution(i, n,    k) {
+  if (w_at("s", i) == "`") {
+    k = w_find("s", i + 1, n, "`")
+    if (k == 0) k = n
+    queue[++nq] = w_span("s", i + 1, k - 1)
   } else {
-    k = closing(str, i + 1, n)
+    k = closing("s", i + 1, n)
     # $(( )) is arithmetic, not a command.
-    if (substr(str, i + 2, 1) != "(") queue[++nq] = substr(str, i + 2, k - i - 2)
+    if (w_at("s", i + 2) != "(") queue[++nq] = w_span("s", i + 2, k - 1)
   }
   word = word "$(...)"
   inword = 1
@@ -205,6 +293,7 @@ function substitution(str, i, n,    k) {
 # Each line goes out as soon as it is found, so the hook still reads it when
 # awk dies on a signal later in the command.
 function emit(line) {
+  if (postsonly && line !~ /^(post|gate|open) /) return
   if (!(line in seen)) { seen[line] = 1; print line; fflush() }
 }
 
@@ -227,36 +316,46 @@ function end_word() {
   quoted = 0
 }
 
+# Adds the pieces of a double-quoted string to the word.
+function dq_end() {
+  if (ndq) word = word joined(dq, ndq, "")
+  ndq = 0
+}
+
 function end_segment() {
+  dq_end()
   end_word()
   if (segn[nseg] > 0) { nseg++; segn[nseg] = 0 }
 }
 
-function split_command(str,    i, n, c, nx, q, j) {
+function split_command(str,    i, n, c, nx, q, j, k) {
   nseg++
   segn[nseg] = 0
   word = ""; inword = 0; q = ""; nhd = 0; wanthd = 0
   n = length(str)
+  w_open("s", str)
   for (i = 1; i <= n; i++) {
-    c = substr(str, i, 1)
-    nx = substr(str, i + 1, 1)
+    c = w_at("s", i)
+    nx = w_at("s", i + 1)
     if (q == "'") {
-      if (c == "'") q = ""; else word = word c
+      if (c == "'") q = ""
+      else { k = w_run(i, n, "'"); word = word w_span("s", i, k); i = k }
       continue
     }
     # $'...' takes backslash escapes, so \' does not end it.
     if (q == "a") {
       if (c == "\\") { word = word nx; i++ }
       else if (c == "'") q = ""
-      else word = word c
+      else { k = w_run(i, n, "\\'"); word = word w_span("s", i, k); i = k }
       continue
     }
     if (q == "\"") {
-      if (c == "\"") q = ""
-      else if ((c == "$" && nx == "(") || c == "`") i = substitution(str, i, n)
-      else if (c == "\\" && (nx == "\"" || nx == "\\" || nx == "$" || nx == "`")) { word = word nx; i++ }
+      # Pieces wait in dq, as escapes can cut a long string into thousands.
+      if (c == "\"") { dq_end(); q = "" }
+      else if ((c == "$" && nx == "(") || c == "`") { dq_end(); i = substitution(i, n) }
+      else if (c == "\\" && (nx == "\"" || nx == "\\" || nx == "$" || nx == "`")) { dq[++ndq] = nx; i++ }
       else if (c == "\\" && nx == "\n") i++
-      else word = word c
+      else { k = w_run(i, n, "\"$`\\"); dq[++ndq] = w_span("s", i, k); i = k }
       continue
     }
     if (c == "\\") {
@@ -266,16 +365,16 @@ function split_command(str,    i, n, c, nx, q, j) {
     }
     if (c == "$" && nx == "'") { q = "a"; inword = 1; i++; continue }
     if (c == "'" || c == "\"") { q = c; inword = 1; quoted = 1; continue }
-    if ((c == "$" && nx == "(") || c == "`") { i = substitution(str, i, n); continue }
+    if ((c == "$" && nx == "(") || c == "`") { i = substitution(i, n); continue }
     # (( )) is arithmetic, where << is a shift, so it stays one word.
     if (c == "(" && nx == "(" && !inword) {
-      i = closing(str, i, n)
+      i = closing("s", i, n)
       word = word "((...))"
       inword = 1
       continue
     }
     if (c == "#" && !inword) {
-      while (i < n && substr(str, i + 1, 1) != "\n") i++
+      while (i < n && w_at("s", i + 1) != "\n") i++
       continue
     }
     if (c == " " || c == "\t") { end_word(); continue }
@@ -283,7 +382,7 @@ function split_command(str,    i, n, c, nx, q, j) {
       end_segment()
       # Skip each pending heredoc body, in order, up to its delimiter line.
       for (j = 1; j <= nhd; j++) {
-        i = skip_body(str, i, n, hd[j])
+        i = skip_body("s", i, n, hd[j])
         hdbody[hdseg[j]] = hdbody[hdseg[j]] body
         # An unquoted delimiter leaves $( ) and backticks live in the body.
         if (!hdq[j]) live_substitutions(body)
@@ -291,7 +390,7 @@ function split_command(str,    i, n, c, nx, q, j) {
       nhd = 0
       continue
     }
-    if (c == "<" && nx == "<" && substr(str, i + 2, 1) == "<") {
+    if (c == "<" && nx == "<" && w_at("s", i + 2) == "<") {
       word = word "<<<"
       inword = 1
       i += 2
@@ -318,7 +417,10 @@ function split_command(str,    i, n, c, nx, q, j) {
     # A redirect glued to a word, as in git push>/dev/null, is not part of it,
     # but 2>&1 and the like keep their file descriptor number.
     if ((c == ">" || c == "<") && inword && word !~ /^[0-9]*&?$/ && word !~ /[<>]$/) end_word()
-    word = word c
+    # A # inside a word is text, so it does not end the run.
+    k = w_run(i, n, "\\$'\"`( \t\n<>&;|)")
+    word = word w_span("s", i, k)
+    i = k
     inword = 1
   }
   end_segment()
@@ -328,8 +430,12 @@ function split_command(str,    i, n, c, nx, q, j) {
 # base(segw[s, j] ""), because gawk 5.3 stops with an internal error when an
 # array element that does not exist, such as the word after the last one, is
 # passed to a function and then read again.
-function base(w) {
-  sub(/.*\//, "", w)
+function base(w,    n, part) {
+  # split rather than sub(/.*\//), whose match costs more the longer the word.
+  n = split(w, part, /[\/\\]/)
+  w = part[n]
+  # PowerShell runs gh.exe as gh.
+  sub(/\.exe$/, "", w)
   return w
 }
 
@@ -338,25 +444,137 @@ function has(list, w) {
 }
 
 # The segment's words from position i on, joined by spaces.
-function rest(s, i,    out) {
-  out = ""
-  for (; i <= segn[s]; i++) out = out (out == "" ? "" : " ") segw[s, i]
-  return out
+function rest(s, i,    part, k) {
+  # Empty words before the first that is not empty add nothing.
+  while (i <= segn[s] && segw[s, i] == "") i++
+  for (k = 0; i <= segn[s]; i++) part[++k] = segw[s, i]
+  return joined(part, k, " ")
 }
 
-function classify(s,    i, n, w, cmd, j, list, k, m) {
+# Tools that run a command given after their own words, such as op run --
+# gh ..., and that take options of their own the hook cannot list. Returns 1
+# for one, after reading as the command the words after its first --, and
+# before that --, the first four words past the tool's own that are not
+# options, so a command behind an option's value is still read, and past
+# those, any word that names a command in known or a deploy script. classify reads each start once, so
+# runners behind runners do not read the same words again, and a chain of
+# more than 50 asks rather than going deeper.
+function runner(s, i,    cmd, n, j, k, d, tries, b) {
+  cmd = base(segw[s, i] "")
+  n = segn[s]
+  j = 0
+  if (cmd ~ /^(op|doppler|infisical|uv|poetry|pipenv|bundle|mise|rtx|direnv|aws-vault|devbox|hatch|pdm|rye|conda|pixi|pipx)$/) {
+    # The tool's own options can come before run, each perhaps with a value,
+    # as in uv --directory x run.
+    k = i + 1
+    while (k <= n && segw[s, k] ~ /^-/) {
+      k += (segw[s, k] !~ /=/ && segw[s, k + 1] !~ /^(-.*|run|exec|x)$/) ? 2 : 1
+    }
+    # A group of subcommands can come first, as in uv tool run or hatch env
+    # run.
+    if (segw[s, k] !~ /^(run|exec|x)$/ && segw[s, k + 1] ~ /^(run|exec)$/) k++
+    if (segw[s, k] ~ /^(run|exec|x)$/) j = k + 1
+  }
+  # nix develop and nix shell run the words after -c.
+  else if (cmd == "nix" && segw[s, i + 1] ~ /^(develop|shell)$/) {
+    for (k = i + 2; k <= n; k++) if (segw[s, k] ~ /^(-c|--command)$/) { read_from(s, k + 1); return 1 }
+    return 1
+  }
+  else if (cmd ~ /^(dotenv|parallel|unshare|firejail|proxychains4?|torsocks|uvx)$/) j = i + 1
+  else if (cmd == "nix-shell") {
+    for (k = i + 1; k < n; k++) if (segw[s, k] ~ /^--(run|command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
+    return 1
+  }
+  else if (cmd == "su" || cmd == "runuser" || cmd == "script") {
+    # These take a command as one string after -c, which a shell runs. -c may
+    # sit among other one-letter switches, as in su -lc. su takes options
+    # either side of the user and hands those after a -- to the shell. For
+    # runuser a -c past a -- belongs to the command, and script's options
+    # stop at its first other word.
+    for (k = i + 1; k <= n && (cmd == "su" || segw[s, k] != "--") && (cmd != "script" || segw[s, k] ~ /^-/); k++) {
+      if (segw[s, k] ~ /^--(session-)?command=/) { b = segw[s, k]; sub(/^[^=]*=/, "", b); queue[++nq] = b; return 1 }
+      if (k < n && segw[s, k] ~ /^(-[A-Za-z]*c[A-Za-z]*|--(session-)?command)$/) { queue[++nq] = segw[s, k + 1]; return 1 }
+    }
+    if (cmd == "su") return 1
+    # On Linux script's -c can follow its file. A string with a space in it
+    # is a command, where git -c x=y, say, is an option of the command.
+    for (; k < n; k++) if (segw[s, k] ~ /^(-c|--command)$/ && segw[s, k + 1] ~ / /) { queue[++nq] = segw[s, k + 1]; return 1 }
+    j = i + 1
+  }
+  if (!j) return 0
+  if (depth >= 50) { emit("confirm a command behind too many runners"); return 1 }
+  # doppler, infisical and mise take the command as one string in --command.
+  if (cmd ~ /^(doppler|infisical|mise|rtx)$/) {
+    for (k = j; k <= n && segw[s, k] != "--"; k++) {
+      if (segw[s, k] ~ /^--command=/) { queue[++nq] = substr(segw[s, k], 11); return 1 }
+      if (segw[s, k] == "--command") { queue[++nq] = segw[s, k + 1]; return 1 }
+    }
+  }
+  # parallel takes its inputs after :::. With no command they are the
+  # commands, and an option's value can pass for one, so an input holding a
+  # space is read either way. Without ::: the inputs come on stdin.
+  if (cmd == "parallel") {
+    for (k = j; k <= n; k++) if (segw[s, k] ~ /^:::+$/) break
+    if (k <= n) {
+      for (d = k + 1; d <= n; d++) if (segw[s, d] ~ / /) queue[++nq] = segw[s, d]
+      for (d = j; d < k && segw[s, d] ~ /^(-.*|[0-9]+)$/; d++) ;
+      if (d == k) { for (d = k + 1; d <= n; d++) queue[++nq] = segw[s, d]; return 1 }
+      s = copyseg(s); segn[s] = k - 1; n = k - 1
+    } else {
+      # A bare number is an option's value, as in -j 4.
+      for (d = j; d <= n && segw[s, d] ~ /^(-.*|[0-9]+)$/; d++) ;
+      if (d > n) { b = stdin_text(s); if (b != "") queue[++nq] = b; return 1 }
+    }
+    # A command given as one string can follow an option's value.
+    for (d = j; d <= n; d++) if (segw[s, d] ~ / /) queue[++nq] = segw[s, d]
+  }
+  # The words after the first -- are the command, and the words before it
+  # are read as well, because options with values can come first and the --
+  # can be the command's own, as in uv run git commit -- a.txt. Words after a
+  # -- that are arguments of that command are not read as commands.
+  for (d = j; d <= n; d++) if (segw[s, d] == "--") {
+    if (segw[s, d + 1] ~ / /) queue[++nq] = segw[s, d + 1]
+    read_from(s, d + 1)
+    break
+  }
+  for (k = j; k < d; k++) {
+    if (segw[s, k] ~ /^-/ || (s, k) in started) continue
+    # A command given as one string, which the tool hands to a shell.
+    if (tries == 0 && segw[s, k] ~ / /) queue[++nq] = segw[s, k]
+    b = base(segw[s, k] "")
+    if (tries < 4 || (b != "" && (has(known, b) || b ~ /^deploy.*\.sh$/))) read_from(s, k)
+    tries++
+  }
+  return 1
+}
+
+# Reads segment s from word from, for a command behind another. A chain of
+# more than 50 asks, because awk runs out of stack on a long enough one.
+function read_from(s, from) {
+  if (depth >= 50) { emit("confirm a command behind too many runners"); return }
+  depth++
+  classify(s, from)
+  depth--
+}
+
+# Reads segment s from its first word, or from word from when given.
+function classify(s, from,    i, n, w, cmd, j, list, k, m) {
   n = segn[s]
   if (n == 0) return
+  if (from > 0) {
+    if ((s, from) in started) return
+    started[s, from] = 1
+  }
   # prisma can sit behind npx, pnpm, yarn, bunx and their options, so look
   # past those, but not past a word such as echo.
-  for (j = 1; j + 2 <= n; j++) {
+  for (j = (from > 0) ? from : 1; j + 2 <= n; j++) {
     if (base(segw[s, j] "") == "prisma") {
       if (segw[s, j + 1] == "migrate" && segw[s, j + 2] == "deploy") emit("confirm prisma migrate deploy")
       break
     }
     if (segw[s, j] !~ /^(npx|pnpx|bunx|pnpm|yarn|bun|exec|dlx|run|-.*|[A-Za-z_][A-Za-z0-9_]*=.*)$/) break
   }
-  i = 1
+  i = (from > 0) ? from : 1
   while (i <= n) {
     w = segw[s, i]
     if (w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { i++; continue }
@@ -378,9 +596,15 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
           else { sub(/^-[A-Za-z]*S/, "", w); queue[++nq] = w " " rest(s, i + 1) }
           return
         }
+        # npx -c runs its value as a command string, and pnpx -c the words
+        # after it in a shell, so both read the rest of the line.
+        if ((cmd == "npx" || cmd == "pnpx") && (w == "-c" || w == "--call")) { queue[++nq] = rest(s, i + 1); return }
+        if ((cmd == "npx" || cmd == "pnpx") && w ~ /^--call=/) { queue[++nq] = substr(w, 8) " " rest(s, i + 1); return }
         if (w ~ /^-/) { i++; if (has(wrapvalue[cmd] "", w)) i++; continue }
         break
       }
+      # npx hands a command given as one string to a shell.
+      if (cmd ~ /^(npx|pnpx|bunx)$/ && segw[s, i] ~ / /) { queue[++nq] = segw[s, i]; return }
       # watch joins its words and hands them to sh -c.
       if (cmd == "watch") { queue[++nq] = rest(s, i); return }
       # flock takes a lock file before the command, or runs -c's string.
@@ -394,6 +618,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
   }
   if (i > n) return
   cmd = base(segw[s, i] "")
+  if (runner(s, i)) return
   if (has(shells, cmd)) {
     for (j = i + 1; j < n; j++)
       if (segw[s, j] ~ /^-[A-Za-z]*c[A-Za-z]*$/) { queue[++nq] = segw[s, j + 1]; return }
@@ -413,6 +638,9 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
     return
   }
   if (cmd == "eval") { queue[++nq] = rest(s, i + 1); return }
+  # prisma behind a wrapper such as env or timeout, which the scan above
+  # stops at.
+  if (cmd == "prisma") { if (segw[s, i + 1] == "migrate" && segw[s, i + 2] == "deploy") emit("confirm prisma migrate deploy"); return }
   # source and . run a script in this shell.
   if ((cmd == "source" || cmd == ".") && base(segw[s, i + 1] "") ~ /^deploy.*\.sh$/) { emit("confirm a deploy"); return }
   # A nested Claude Code run of a review that posts.
@@ -420,7 +648,7 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
   # Tracker CLIs that comment or approve.
   valueflags = (cmd == "glab") ? glabvalue : pkgflags
   # glab takes -R or --repo anywhere, as gh does, so drop it and its value.
-  if (cmd == "glab") drop_repo(s, i + 1, glabvalue)
+  if (cmd == "glab" && has_repo(s, i + 1)) { s = copyseg(s); n = segn[s]; drop_repo(s, i + 1, glabvalue) }
   if (cmd == "glab" && has_flag(s, i + 1, "^(-h|--help)$")) return
   if (cmd == "glab" && segw[s, i + 1] ~ /^(mr|issue)$/ && segw[s, i + 2] ~ /^(note|comment|approve)$/) { emit("post glab " segw[s, i + 1] " " segw[s, i + 2]); return }
   if (cmd == "glab") {
@@ -466,9 +694,11 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
   if (cmd == "find") {
     for (j = i + 1; j <= n; j++) {
       if (segw[s, j] !~ /^-(exec|execdir|ok|okdir)$/) continue
-      w = ""
-      for (j++; j <= n && segw[s, j] != ";" && segw[s, j] != "+"; j++) w = w " " segw[s, j]
-      queue[++nq] = w
+      # The words go on as words, so a quoted string after sh -c stays whole.
+      for (k = ++j; j <= n && segw[s, j] != ";" && segw[s, j] != "+"; j++) ;
+      m = copyseg(s)
+      segn[m] = j - 1
+      read_from(m, k)
     }
     return
   }
@@ -480,15 +710,36 @@ function classify(s,    i, n, w, cmd, j, list, k, m) {
     for (j = i + 1; j <= n && segw[s, j] ~ /^-/; j++) if (has(list, segw[s, j])) j++
     # yarn workspace <name> <command>
     if (cmd == "yarn" && segw[s, j] == "workspace") for (j += 2; j <= n && segw[s, j] ~ /^-/; j++) ;
-    if (segw[s, j] ~ /^(exec|dlx)$/) j++
+    # exec, dlx and bun x run the command after their options, or after --.
+    if (segw[s, j] ~ /^(exec|dlx|x)$/) {
+      # --package takes a package name, and --call a command string.
+      for (j++; j <= n && segw[s, j] ~ /^-/ && segw[s, j] != "--"; j++) {
+        # npm's -c takes a string and pnpm's runs the words after it in a
+        # shell, so both read the rest of the line.
+        if (segw[s, j] ~ /^(-c|--call)$/) { queue[++nq] = rest(s, j + 1); return }
+        if (segw[s, j] ~ /^--call=/) { queue[++nq] = substr(segw[s, j], 8) " " rest(s, j + 1); return }
+        if (segw[s, j] ~ /^(-p|--package)$/ || has(list, segw[s, j])) j++
+      }
+      if (segw[s, j] == "--") j++
+      if (segw[s, j] ~ / /) queue[++nq] = segw[s, j]
+      read_from(s, j)
+      return
+    }
     if (segw[s, j] == "changeset" && segw[s, j + 1] == "publish") { emit("confirm a package publish"); return }
     if (segw[s, j] == "npm") for (j++; j <= n && segw[s, j] ~ /^-/; j++) if (has(npmvalue, segw[s, j])) j++
     if (segw[s, j] ~ /^(un)?publish$/ && !has_flag(s, j + 1, "^--dry-run$")) emit("confirm a package publish")
     return
   }
-  if ((cmd == "cargo" || cmd == "poetry") && segw[s, i + 1] == "publish") { if (!has_flag(s, i + 2, "^--dry-run$")) emit("confirm a package publish"); return }
+  if (cmd ~ /^(cargo|poetry|uv|hatch|pdm|rye)$/ && segw[s, i + 1] == "publish") { if (!has_flag(s, i + 2, "^--dry-run$")) emit("confirm a package publish"); return }
   # Graphite's submit pushes branches and opens pull requests.
-  if (cmd == "gt" && segw[s, i + 1] ~ /^(submit|ss)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, i + 2, "^--dry-run$")) emit("open pr"); return }
+  # Global options can come first, and a scope, as in gt stack submit.
+  if (cmd == "gt") {
+    for (j = i + 1; j <= n && segw[s, j] ~ /^-/; j++) if (segw[s, j] == "--cwd") j++
+    if (segw[s, j] ~ /^(stack|branch|upstack|downstack)$/) j++
+    if (segw[s, j] ~ /^(submit|ss|s)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, j + 1, "^--dry-run$")) emit("open pr") }
+    else if (segw[s, j] == "merge") emit("confirm gt merge")
+    return
+  }
   if (cmd == "twine" && segw[s, i + 1] == "upload") { emit("confirm a package publish"); return }
   if (cmd == "gem" && segw[s, i + 1] == "push") { emit("confirm a package publish"); return }
   if (cmd == "gcloud") {
@@ -586,14 +837,17 @@ function has_flag(s, from, re,    j) {
 }
 
 function gh_command(s, i,    g, c, from, comment, at) {
-  # gh takes -R or --repo anywhere, so drop it and its value first.
-  drop_repo(s, i + 1, ghvalue)
+  # gh takes -R or --repo anywhere, so drop it and its value first, from a
+  # copy, so a runner reading the same segment still finds its words where
+  # they were.
+  if (has_repo(s, i + 1)) { s = copyseg(s); drop_repo(s, i + 1, ghvalue) }
   g = segw[s, i + 1]
   c = segw[s, i + 2]
   at = i + 1
   from = i + 3
   # gh's built-in aliases name the same commands.
   if (c == "new") c = "create"
+  if (g == "cs") g = "codespace"
   # Help writes nothing.
   valueflags = ghvalue
   if (segw[s, i + 3] ~ /^(-h|--help)$/) return
@@ -607,14 +861,14 @@ function gh_command(s, i,    g, c, from, comment, at) {
       # -w may sit among the other switches that take no value, -d and -f.
       if (has_flag(s, from, "^(--web(=true)?|--dry-run(=true)?|-[df]*w[df]*)$")) emit("gate push"); else { emit("gate pr"); emit("open pr") }
     }
-    else if (c == "edit" || c == "ready") emit("gate pr")
+    else if (c ~ /^(edit|ready|lock|unlock)$/) emit("gate pr")
     else if (c ~ /^(merge|close|reopen|update-branch|revert)$/) emit("confirm gh pr " c)
     return
   }
   if (g == "issue") {
     if (c == "comment") emit("post gh issue comment")
     else if ((c == "close" || c == "reopen") && comment) emit("post gh issue " c " --comment")
-    else if (c == "create") { if (!has_flag(s, from, "^(--web|-w)$")) emit("gate issue") }
+    else if (c == "create") { if (!has_flag(s, from, "^(--web(=true)?|-w)$")) emit("gate issue") }
     else if (c ~ /^(edit|close|reopen|transfer|delete|lock|unlock|pin|unpin|develop)$/) emit("gate issue")
     return
   }
@@ -626,7 +880,26 @@ function gh_command(s, i,    g, c, from, comment, at) {
   if (g == "gist" && c ~ /^(create|new|edit|delete|rename)$/) { emit("confirm gh gist " c); return }
   if (g == "cache" && c == "delete") { emit("confirm gh cache delete"); return }
   if (g == "project" && c ~ /^(create|edit|delete|close|copy|link|unlink|mark-template|item-add|item-create|item-edit|item-delete|item-archive|field-create|field-delete)$/) { emit("confirm gh project " c); return }
-  if ((g == "secret" || g == "variable") && c ~ /^(set|delete)$/) { emit("confirm gh " g " " c); return }
+  # remove is gh's own name for delete there.
+  if ((g == "secret" || g == "variable") && c ~ /^(set|delete|remove)$/) { emit("confirm gh " g " " c); return }
+  if (g == "repo" && c ~ /^(deploy-key|autolink)$/ && segw[s, i + 3] ~ /^(add|create|delete|remove)$/) { emit("confirm gh repo " c " " segw[s, i + 3]); return }
+  if (g ~ /^(ssh-key|gpg-key)$/ && c ~ /^(add|delete|remove)$/) { emit("confirm gh " g " " c); return }
+  if (g == "codespace" && c ~ /^(create|delete|edit|stop|rebuild)$/) { emit("confirm gh codespace " c); return }
+  # An alias can name any command, so a later gh <alias> cannot be read.
+  if (g == "alias" && c ~ /^(set|import)$/) { emit("confirm gh alias " c); return }
+  if (g == "discussion") {
+    if (c == "comment") emit("post gh discussion comment")
+    else if (c ~ /^(create|edit|close|reopen|delete|lock|unlock|transfer)$/) emit("confirm gh discussion " c)
+    return
+  }
+  # The gh-stack extension: push and sync push the stack's branches, submit
+  # also opens its pull requests, and the rest change them on GitHub.
+  if (g == "stack") {
+    if (c ~ /^(push|sync)$/) emit("gate push")
+    else if (c == "submit") { emit("gate push"); emit("gate pr"); emit("open pr") }
+    else if (c ~ /^(merge|unstack|link)$/) emit("confirm gh stack " c)
+    return
+  }
 }
 
 # glab api: read like gh api, with GitLab's names for a comment.
@@ -721,7 +994,7 @@ function http_command(s, i,    j, n, w, method, body, url, cmd, get, hook) {
     # A chat webhook takes a POST as a message to a channel.
     # A field such as url=... is data, not where the request goes. A URL's own
     # query string is still the URL.
-    if (w !~ /^[A-Za-z_][A-Za-z0-9_.-]*:?=/ && w ~ /(hooks\.slack\.com|slack\.com\/api\/chat\.(post|schedule)|discord(app)?\.com\/api\/(webhooks|channels)|webhook\.office\.com|outlook\.office\.com\/webhook|logic\.azure\.com.*\/workflows|chat\.googleapis\.com)/) hook = 1
+    if (w !~ /^[A-Za-z_][A-Za-z0-9_.-]*:?=/ && w ~ /(hooks\.slack\.com|slack\.com\/api\/chat\.(post|schedule)|discord(app)?\.com\/api(\/v[0-9]+)?\/(webhooks|channels)|webhook\.office\.com|outlook\.office\.com\/webhook|logic\.azure\.com.*\/workflows|api\.powerplatform\.com.*\/workflows|chat\.googleapis\.com)/) hook = 1
     # A URL held in a variable named for a webhook, alone or after other
     # variables, as in "${BASE}${SLACK_WEBHOOK_PATH}".
     # A webhook variable that names an id, a secret or a token is not the URL,

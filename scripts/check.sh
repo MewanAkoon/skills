@@ -6,8 +6,9 @@
 # Claude Code install to inspect: whether Claude Code is new enough, whether
 # the plugin is installed at user scope at this version, whether bare copies
 # of its skills are still loading beside it, whether the skillOverrides and
-# attribution entries the README asks for are in place, and whether the
-# plugin's hooks logged errors.
+# attribution entries the README asks for are in place, whether this clone's
+# own settings turn attribution back on, and whether the plugin's hooks logged
+# errors.
 
 set -uo pipefail
 
@@ -28,6 +29,13 @@ for arg in "$@"; do
     *) printf 'usage: check.sh [--doctor]\n' >&2; exit 2 ;;
   esac
 done
+
+# The oldest Claude Code these skills support, and the one place it is set.
+# 2.1.292 closed a hole that let the model run a user-invoked skill after
+# compaction, and 2.1.293 is the first release every plugin check here ran
+# on, so nothing older is known to work. --doctor compares the install with
+# it, and the docs and CI that state the minimum are held to it below.
+cc_min=2.1.293
 
 fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
@@ -359,7 +367,50 @@ else
     || bad "$market_json: its plugin is not named $plugin_name, as $plugin_json says"
   [ "$(jq -r '.plugins[0].source // empty' "$market_json")" = ./ ] \
     || bad "$market_json: its plugin's source is not ./"
+
+  # Both manifests describe the plugin: plugin.json for the install, and the
+  # marketplace entry for the listing someone reads before installing. Two
+  # copies drift, so they have to say the same thing.
+  [ "$(jq -r '.description // empty' "$plugin_json")" = "$(jq -r '.plugins[0].description // empty' "$market_json")" ] \
+    || bad "$market_json: its plugin's description differs from the one in $plugin_json"
 fi
+
+# The hook stops its command parser after PARSE_SECONDS, so it can still
+# answer before Claude Code stops the hook at its PreToolUse timeout and runs
+# the command unread. The limit has to stay under the timeout with 3 seconds
+# to spare, for the hook's own reads of its input and state around the parse.
+# eng-hook sets it on a line of its own, as PARSE_SECONDS=<whole seconds>.
+hooks_json=hooks/hooks.json
+parse_seconds="$(sed -n 's/^PARSE_SECONDS=\([0-9][0-9]*\)$/\1/p' hooks/eng-hook 2>/dev/null | head -1)"
+if ! command -v jq >/dev/null 2>&1 || ! jq empty "$hooks_json" 2>/dev/null; then
+  bad "$hooks_json cannot be read, so the parser limit was not checked against its timeout"
+elif [ -z "$parse_seconds" ]; then
+  bad "hooks/eng-hook sets no PARSE_SECONDS=<seconds> line, so the parser limit was not checked against the PreToolUse timeout"
+else
+  pre_timeout="$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select((.command // "") | test("eng-hook pre-tool")) | .timeout] | min // empty' "$hooks_json")"
+  if [ -z "$pre_timeout" ]; then
+    bad "$hooks_json: the pre-tool hook sets no timeout, so the parser limit of $parse_seconds s cannot be checked against it"
+  elif ! awk -v t="$pre_timeout" -v p="$parse_seconds" 'BEGIN { exit !(t + 0 >= p + 3) }'; then
+    bad "$hooks_json: the pre-tool timeout is $pre_timeout s, which must be at least 3 s more than the parser limit of $parse_seconds s in hooks/eng-hook"
+  fi
+fi
+
+# Every place the docs and CI state the oldest Claude Code supported carries
+# cc_min. A sentence such as "Claude Code 2.1.293 or later" and a pinned
+# claude-code@2.1.293 both count, and so do phrasings across a line break. A
+# file where none is found fails, because a rewording would otherwise turn
+# the check off without a word.
+for f in README.md AGENTS.md .github/workflows/check.yml; do
+  stated="$(tr '\n' ' ' < "$f" | tr -s ' ' \
+    | grep -oE '(Claude Code (is )?(older than )?|claude-code@)[0-9]+\.[0-9]+\.[0-9]+' \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | sort -u)"
+  if [ -z "$stated" ]; then
+    bad "$f states no Claude Code minimum this check can read, so it was not checked against $cc_min"
+  fi
+  for v in $stated; do
+    [ "$v" = "$cc_min" ] || bad "$f names Claude Code $v, and the minimum in scripts/check.sh is $cc_min"
+  done
+done
 
 # A change to what the plugin loads needs a new version. Claude Code keeps an
 # install on the version it has until the string changes, so an edit without a
@@ -415,20 +466,28 @@ git rev-parse --git-dir >/dev/null 2>&1 \
 
 # Every relative markdown link resolves, in the root files as well as the
 # skills, because the root ones point at each other and nothing else catches a
-# rename. A link inside a fenced code block is a template rather than a link,
-# so the fence state is tracked and those are skipped.
+# rename. That holds for a link to a script or a folder as much as one to a
+# markdown file. A web or mail link is left alone, and so is a link to a
+# heading in the same file, whose #fragment is all it has. A link inside a
+# fenced code block is a template rather than a link, so the fence state is
+# tracked and those are skipped. Inline code spans are text, so they go
+# before the links are read, and a title after the target, as in
+# [x](a.md "Title"), is not part of it.
 while IFS=$'\t' read -r src link; do
-  [ -f "$(dirname "$src")/$link" ] || bad "$src links $link, which does not exist"
+  [ -e "$(dirname "$src")/$link" ] || bad "$src links $link, which does not exist"
 done < <(
   markdown | while IFS= read -r f; do
     awk -v F="$f" '
       /^```/ { fence = !fence; next }
       {
         line = $0
-        while (match(line, /\]\([^)]*\.md[^)]*\)/)) {
+        gsub(/`[^`]*`/, "", line)
+        while (match(line, /\]\([^)]*\)/)) {
           L = substr(line, RSTART + 2, RLENGTH - 3)
+          sub(/^ +/, "", L)
+          sub(/ .*$/, "", L)
           sub(/#.*$/, "", L)
-          if (!fence && L !~ /^https?:/ && L != "") printf "%s\t%s\n", F, L
+          if (!fence && L !~ /^(https?|mailto):/ && L != "") printf "%s\t%s\n", F, L
           line = substr(line, RSTART + RLENGTH)
         }
       }' "$f"
@@ -529,10 +588,15 @@ fi
 # refuse a block that only mentions it, and README.md holds two that do.
 if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
   export CHECK_SH_RUNNING_BLOCKS=1
-  blocks="$(mktemp -d)"
-  trap 'rm -rf "$blocks"' EXIT
+  # Without a scratch directory every block would be written to /block.sh, or
+  # not at all, and read back as a failure that has nothing to do with it.
+  if ! blocks="$(mktemp -d)" || [ -z "$blocks" ]; then
+    bad "mktemp -d failed, so the command blocks marked checked did not run"
+    blocks=""
+  fi
+  trap '[ -z "$blocks" ] || rm -rf "$blocks"' EXIT
 
-  while IFS= read -r f; do
+  [ -z "$blocks" ] || while IFS= read -r f; do
     count="$(grep -c '^```bash checked$' "$f")"
     [ "$count" -gt 0 ] || continue
 
@@ -556,7 +620,7 @@ if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
     done
   done < <(tracked_markdown)
 
-  rm -rf "$blocks"
+  [ -z "$blocks" ] || rm -rf "$blocks"
   unset CHECK_SH_RUNNING_BLOCKS
 fi
 
@@ -603,14 +667,12 @@ if [ "$doctor" = yes ]; then
   elif ! command -v jq >/dev/null 2>&1; then
     fix "jq is not installed, so the plugin list cannot be read"
   else
-    # The README's minimum. 2.1.292 closed a hole that let the model run a
-    # user-invoked skill after compaction, and 2.1.293 is the first release
-    # every plugin check here ran on, so nothing older is known to work.
+    # cc_min, set at the top, is the README's minimum.
     cc="$(claude --version 2>/dev/null | sed -nE 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)"
     if [ -z "$cc" ]; then
-      fix "claude --version printed no version, so the 2.1.293 minimum cannot be checked"
-    elif newer 2.1.293 "$cc"; then
-      fix "Claude Code is $cc, and these skills need 2.1.293 or later. Run: claude update"
+      fix "claude --version printed no version, so the $cc_min minimum cannot be checked"
+    elif newer "$cc_min" "$cc"; then
+      fix "Claude Code is $cc, and these skills need $cc_min or later. Run: claude update"
     fi
 
     # Listed from / rather than from this clone, so the enabled state is the
@@ -688,9 +750,9 @@ if [ "$doctor" = yes ]; then
         || fix "$settings does not set skillOverrides.$name to \"off\", so a bare $name can load beside $plugin_name:$name"
     done
     # The README's attribution entry. Without it Claude Code tells the model
-    # to add a Co-Authored-By trailer and a PR footer, which the skills keep
-    # out, and from a Remote Control session a session link, which neither
-    # skill names. false hides all three.
+    # to add a Co-Authored-By trailer, a PR footer and, from a Remote Control
+    # session, a session link. The skills keep all three out, so this is the
+    # second lock. false hides all three.
     if ! jq -e '.attribution == false or
         (.attribution | type == "object" and .commit == "" and .pr == "" and .sessionUrl == false)' \
         "$settings" >/dev/null 2>&1; then
@@ -698,13 +760,30 @@ if [ "$doctor" = yes ]; then
     fi
   fi
 
+  # A repo's own settings beat the user's, so this clone's can turn the credit
+  # line or the session link back on for work here. Only a setting that does
+  # that counts: leaving attribution out, or turning it off again, is fine.
+  # Other repos are not read, since the doctor knows only this one.
+  for project_settings in .claude/settings.json .claude/settings.local.json; do
+    [ -f "$project_settings" ] || continue
+    if ! jq empty "$project_settings" >/dev/null 2>&1; then
+      fix "$repo/$project_settings is not valid JSON, so Claude Code cannot read it either"
+    elif jq -e '.attribution == true or
+        (.attribution | type == "object" and
+          ((.commit | type == "string" and . != "") or
+           (.pr | type == "string" and . != "") or
+           .sessionUrl == true))' "$project_settings" >/dev/null 2>&1; then
+      fix "$repo/$project_settings sets attribution so that an AI credit line or a session link comes back on commits and PRs here, over $settings. Remove its attribution entry, or set it as $settings does"
+    fi
+  done
+
   # Anything to fix fails the run rather than printing a warning under an
   # `ok`, which also lets a hook or a script gate on it.
   if [ "$problems" -gt 0 ]; then
     printf 'doctor: %d to fix\n' "$problems"
     fail=1
   else
-    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it\n' "$id" "$version"
+    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it, the settings it needs, and no hook errors logged\n' "$id" "$version"
   fi
 fi
 

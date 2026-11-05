@@ -297,3 +297,13 @@ allow mcp__Claude_Browser__computer
 allow mcp__terminal__list_terminal_tabs
 allow mcp__scheduled-tasks__create_scheduled_task
 allow mcp__Claude_Code_iOS_Simulator__control
+ask mcp__github__update_pull_request_branch {"pullNumber": 5}
+ask mcp__abc__exec {"command": "feature-flag delete 12"}
+allow mcp__abc__exec {"command": "npm run test"}
+allow mcp__abc__exec {"command": "insight get 12"}
+ask mcp__abc__exec {"command": "gh repo delete x"}
+ask mcp__abc__exec {"command": "--yes delete project x"}
+allow mcp__abc__exec {"command": "feature-flag list --search delete"}
+ask mcp__abc__exec {"command": "kubectl -n prod delete pod x"}
+ask mcp__abc__exec {"command": "gh -R o/r repo delete x"}
+allow mcp__abc__exec {"command": "git log --grep merge"}

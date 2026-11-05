@@ -68,7 +68,7 @@ over and stop. A plain `git commit` mid-rebase leaves the rebase unfinished, and
 the markers would land in history. `git apply --3way` leaves unmerged paths with
 no operation in progress, which is why the second check exists.
 
-End condition: both checks printed nothing and `git status --porcelain -uall`
+**Done when:** both checks printed nothing and `git status --porcelain -uall`
 printed at least one path, or the run has gone to step 8 for a push, or the
 run has stopped with its reason named, which is either nothing to commit or
 work handed to `eng:merge-conflicts`.
@@ -100,7 +100,7 @@ When the staged files cover unrelated concerns, name the groups to the user
 and commit them one at a time: stage the group, derive its scope, write its
 message, commit, then move to the next.
 
-End condition: every staged path belongs to the change named in the message
+**Done when:** every staged path belongs to the change named in the message
 you are about to write, or the run is waiting on the user's answer about a
 file outside the staged group, a file that fits neither test, or staging with
 `git add -A`, or the run has stopped with the secret it found named.
@@ -138,7 +138,7 @@ prefix, pick the shape most of the last 30 subjects share:
 Fewer than five commits, no shape most of them share, or `git log` exiting
 128 on a repo with no commits, all mean the conventional commits shape.
 
-End condition: every skill, command, and file the reference found that
+**Done when:** every skill, command, and file the reference found that
 covers commit messages has been read, or it found none, and the subject you draft satisfies the
 commitlint config when the repo has one, follows that guidance where it does
 not conflict with the config, and otherwise matches the shape most of the
@@ -167,7 +167,7 @@ src/auth/login.ts                   ->  auth
 those files. Omit the scope when nothing is left to name, as for
 `src/lib/utils.ts`, root config files, or a change spanning several units.
 
-End condition: the scope is one the config or step 3's guidance lists, or it names a
+**Done when:** the scope is one the config or step 3's guidance lists, or it names a
 directory that exists in the repo, or it is `ci`, or there is no scope.
 
 ## 5. Write the message
@@ -179,8 +179,10 @@ directory that exists in the repo, or it is `ci`, or there is no scope.
   two bullets, and the message ends at the last one or at the trailers below.
 - The message carries only the trailers step 3's guidance or config
   requires, such as `Signed-off-by` written from `git config user.name` and
-  `user.email`. A line crediting an AI, `Co-Authored-By` included, stays out
-  even when the harness would add one, as the reference says.
+  `user.email`. A line crediting an AI or linking to the session stays out,
+  such as a `Co-Authored-By` or `Claude-Session` trailer, a "Generated with"
+  footer, or a claude.ai session link, even when the harness or another
+  instruction asks for one, as the reference says.
 - Unless step 3's guidance sets the body's shape, wanting a third bullet means
   the commit covers too much, so go back to step 2 and split it.
 
@@ -194,11 +196,11 @@ type(scope): short description
 - optional bullet
 ```
 
-End condition: the subject fits in roughly 60 characters, carries step 3's
+**Done when:** the subject fits in roughly 60 characters, carries step 3's
 shape, and has no full stop; the body runs to two bullets at most and stops at
 the last one or at the trailers step 3 requires; where step 3's guidance sets
 another length, body, or trailer, the message follows it, except that a line
-crediting an AI stays out; or the run
+crediting an AI or linking to the session stays out; or the run
 has gone back to step 2 to split the commit.
 
 ## 6. Commit
@@ -233,7 +235,7 @@ Let the hooks run. When one blocks the commit, step 7 handles it, and
 the user wants a change folded into the commit before it, say that amending
 rewrites history and ask them to confirm first.
 
-End condition: the message file and the snapshot, with a hash for every
+**Done when:** the message file and the snapshot, with a hash for every
 partly staged path, are written in that order before the commit runs, and
 `git commit` has returned with its exit status and any hook output captured,
 or the run is waiting on the user to confirm an amend.
@@ -247,7 +249,7 @@ hook can rewrite a staged file and still pass, so check all three. Otherwise
 read [references/hooks.md](references/hooks.md) and handle the case it
 matches.
 
-End condition: those three checks hold, or the reference's case has run to
+**Done when:** those three checks hold, or the reference's case has run to
 one of its endings.
 
 ## 8. Push, when asked
@@ -258,7 +260,7 @@ and the default branch, stops on a detached `HEAD` or a repo with no remote,
 and asks before a push from the default branch, with the default unknown, or
 from a branch that tracks another one, and after a rejection.
 
-End condition: the reference's push step reached one of its endings, or no
+**Done when:** the reference's push step reached one of its endings, or no
 push was asked for.
 
 ## 9. Confirm
@@ -270,5 +272,5 @@ or added a hook fix-up prints each of them:
 git log --oneline -<commits this run created>
 ```
 
-End condition: every commit this run created is in that output, newest first,
+**Done when:** every commit this run created is in that output, newest first,
 and nothing the run did not create sits above them.

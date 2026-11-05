@@ -2,7 +2,8 @@
 
 Read this from step 1 of this skill, or from the `eng:commit` skill's push
 reference. It names the branch, the remote to use, and that remote's default
-branch. What to do with them is the caller's.
+branch. What to do with them is the caller's. The last two sections serve
+steps 2 and 3 of this skill.
 
 ## The branch and the remote
 
@@ -56,3 +57,29 @@ else `trunk`. When it prints none of them, the default branch is unknown.
 default branch is named or recorded as unknown. Or the run is waiting on the
 user to pick a remote, or has stopped on a detached `HEAD` or a repo with no
 remote.
+
+## Matching a repository to a remote
+
+The remote for a GitHub repository `owner/name` is the one whose
+`git remote get-url` holds `owner/name` right after the host's `/` or `:`,
+with nothing after it but an optional `.git`, ignoring case as GitHub does.
+
+## The base repository
+
+Step 3 reads this before it fetches. Where `gh` works, ask it which repository
+the PR targets:
+
+```bash
+gh repo view --json nameWithOwner --jq .nameWithOwner
+```
+
+When the printed repository matches `$REMOTE` by the rule above, or `gh` is
+unusable or the command fails, `$BASE_REMOTE` is `$REMOTE`. When one other
+remote matches it, `$REMOTE` is a fork, and `$BASE_REMOTE` is that remote. When
+no remote matches, run the same `gh repo view` with `$REMOTE`'s URL as its
+argument. The same repository means it was renamed or moved, so `$BASE_REMOTE`
+is `$REMOTE`. When it differs, or more than one remote matches, say which
+repository the PR targets and stop.
+
+**Done when:** `$BASE_REMOTE` is named, or the run has stopped with the base
+repository named and no single remote for it.

@@ -161,7 +161,9 @@ Regenerate a lockfile or other generated output rather than merging it by
 hand. First resolve any conflict in the manifest it comes from, such as
 `package.json`, hunk by hunk like any other file, because the install reads
 it. Then take one side of the lockfile whole and re-run the install or the
-generator, so only the two branches' own dependency changes move.
+generator, so only the two branches' own dependency changes move. When the
+install or the generator fails, print its output and stop, because the
+lockfile it leaves is neither side's.
 
 Read the lockfile and the install command off the repo rather than assuming
 either. Whichever lockfile is the unmerged path names the tool: `pnpm-lock.yaml`
@@ -195,7 +197,8 @@ when every path was deleted it has nothing to read and is skipped.
 
 **Done when:** all three commands print nothing, every contradicting hunk has
 its trade-off line on the record, and every generated path has been
-regenerated and staged.
+regenerated and staged, or the run has stopped on a regenerate that failed,
+with its output printed.
 
 The staged check matters: rebase and cherry-pick stage the files they resolve
 themselves, and `git diff --check` reports nothing for a staged file even

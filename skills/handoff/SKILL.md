@@ -26,10 +26,9 @@ carry what a reader needs.
 Type `/eng:handoff`. Optionally say what the next session is for, which narrows
 what gets included. The agent saves the document at
 `<repo>/.claude/handoffs/<slug>.md`, or at a path you name, and gives you the
-path, saying when `git check-ignore` shows the repo does not ignore it, so it
-stays out of commits. Paste
-the document as the first message of the next session, on this machine or any
-other.
+path. When `git check-ignore` shows the repo does not ignore that path, the
+agent says so, so you can keep the document out of commits. Paste the document
+as the first message of the next session, on this machine or any other.
 
 ---
 

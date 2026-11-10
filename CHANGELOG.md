@@ -6,6 +6,21 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.9.1 - unreleased
+
+### Changed
+
+- Every skill file with a tighter size budget, and `eng:pr` and
+  `eng:merge-conflicts`, now sits at 90% of its budget or less, so later
+  edits have room. Each moves blocks into reference files read at the step
+  that needs them: `eng:implement` its rename and guard rules and its intent
+  check, `eng:pr-feedback` its thread query and reply commands, `eng:pr` its
+  body template and its check of an open PR's head, `eng:issue` its edit,
+  close and read-back commands, `eng:investigate` its subagent briefs and
+  its question path, and `eng:merge-conflicts` the stash pop, `git am` and
+  `git apply --3way` branches. A few repeated or explanatory sentences are
+  gone. What each skill does is unchanged.
+
 ## 0.9.0 - unreleased
 
 ### Fixed

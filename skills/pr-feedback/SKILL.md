@@ -34,19 +34,8 @@ gh pr view <n> --json number,url,title,body,baseRefName,headRefName,headRefOid,r
 gh pr diff <n>
 ```
 
-Read every review thread with its state, which the REST list hides.
-`--paginate` reads past 100 threads:
-
-```bash
-gh api graphql --paginate -f owner=<owner> -f repo=<repo> -F n=<n> -f query='
-query($owner:String!,$repo:String!,$n:Int!,$endCursor:String){repository(owner:$owner,name:$repo){
-pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}
-nodes{isResolved isOutdated path line
-comments(first:100){totalCount nodes{databaseId author{login} body url}}}}}}}'
-```
-
-A `totalCount` over 100 means that thread came back cut at 100 comments: say
-so in the report.
+Read every review thread with its state, which the REST list hides, with the
+query in [references/threads.md](references/threads.md).
 
 Confirm the checked-out branch is the PR's `headRefName` and contains
 `headRefOid` (`git merge-base --is-ancestor <headRefOid> HEAD`), because
@@ -96,19 +85,8 @@ that does not hold: the evidence, in one or two sentences. Leave out thanks,
 
 Write them all to `pr-<n>-replies.md` in the scratchpad directory your system
 prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none. Under each
-reply, put the command that posts it from the clipboard: `pbpaste` on macOS,
-`wl-paste` or `xclip -selection clipboard -o` elsewhere. A reply in a review
-thread, where `<databaseId>` is the thread's first comment:
-
-```bash
-pbpaste | gh api repos/<owner>/<repo>/pulls/<n>/comments/<databaseId>/replies -F body=@-
-```
-
-A reply to a review body or an issue comment, which has no thread:
-
-```bash
-pbpaste | gh pr comment <n> --body-file -
-```
+reply, put the command that posts it, as
+[references/replies.md](references/replies.md) shows.
 
 **Done when:** each one that needs a reply has one in the file, whose path is
 in the report, or the report says none needs one.

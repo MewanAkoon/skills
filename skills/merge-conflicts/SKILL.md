@@ -26,9 +26,10 @@ before a request to investigate or review, report the operation and the
 unmerged paths and wait for the user.
 
 Two states skip ahead. With nothing left unmerged, record a stash pop's entry
-as step 2 says, run step 3's marker checks over the staged paths, then go to
-step 6. When every unmerged path is generated output, run step 1, record a
-stash pop's entry, regenerate each path as step 3 says, then go to step 5.
+by SHA as [references/no-ref.md](references/no-ref.md) says under "In step 2",
+run step 3's marker checks over the staged paths, then go to step 6. When every
+unmerged path is generated output, run step 1, record a stash pop's entry the
+same way, regenerate each path as step 3 says, then go to step 5.
 
 Conflict markers inside a file git has not listed as unmerged are text, not a
 conflict. Leave a parser fixture or a document about conflicts alone.
@@ -101,31 +102,9 @@ what this prints:
 git show $OTHER -- <file>
 ```
 
-A stash pop is the first of the three that keep no such ref. Its other side is
-the entry git kept, and the stash stack is shared by every worktree of the
-repo, so another session's push can move it off `stash@{0}`. Record it by SHA
-as soon as the run starts, and check its message is the work that was popped.
-When it is not, ask the user which entry it was. Then read the other side from
-that SHA:
-
-```bash
-git stash list -1 --format='%H %gs'
-git stash show -p <sha>
-```
-
-An applied patch is the second and the third, because neither `git am` nor
-`git apply --3way` records a commit to compare against. In both the other
-side is the patch. `git am` keeps a copy, so read it from there and carry on
-to step 3:
-
-```bash
-cat "$(git rev-parse --git-dir)"/rebase-apply/info     # author, subject, date
-cat "$(git rev-parse --git-dir)"/rebase-apply/patch    # what it changes
-```
-
-`git apply --3way` keeps no copy and starts no operation, so `git status`
-names none. Ask the user which patch file they applied, read that, and say on
-the record that the other side came from the user rather than from git.
+For a stash pop, `git am`, or `git apply --3way`, the three that keep no such
+ref, read the other side as [references/no-ref.md](references/no-ref.md) says
+under "In step 2".
 
 Where a commit subject carries a PR or an issue number, read it with
 `gh pr view <n>` or `gh issue view <n>`.
@@ -290,21 +269,8 @@ separate request.
 A rebase stops again on the next commit. Repeat from step 1 until it runs
 out.
 
-A bare `git apply --3way` started no operation, so there is nothing to
-continue and git prepared no message. Stage the resolved files and stop there.
-A commit for them waits for the user's request, and the `eng:commit` skill makes
-it.
-
-A stash pop has no continue. Stage the resolved files, confirm the working
-tree holds what you want, then drop the entry git kept. Find its current
-position from the SHA step 2 recorded, because it may have moved:
-
-```bash
-git stash list --format='%H %gd' | awk -v s=<sha> '$1 == s { print $2 }'
-git stash drop <the stash@{n} that printed>
-```
-
-When the lookup prints nothing, the entry is gone already, so drop nothing.
+A bare `git apply --3way` and a stash pop have no continue. Finish them as
+[references/no-ref.md](references/no-ref.md) says under "In step 6".
 
 Finish the operation rather than backing out of it. When the right move is
 `--abort`, say why and wait for the user to answer.

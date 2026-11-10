@@ -1,7 +1,7 @@
 # Review loop
 
-Read this at implement's step 5. Review runs through the built-in `code-review`,
-plus an intent check it lacks. Never pass `ultra`, `--comment`, or `--fix`.
+Read this at implement's step 5. Never pass a bare level, `ultra`,
+`--comment`, or `--fix`.
 
 ## 1. Snapshot
 
@@ -30,17 +30,7 @@ call the Skill tool with `code-review` and the arguments
 `high <parent>..<snapshot>`, hashes written out.
 
 In every round, at the same time, brief a general-purpose subagent with the
-intent check. In the first round it covers the whole change: each plan item
-done, missing, extra, or wrong, quoting the plan line; each bug fix's test seen
-failing on the old code, extracted from the top of the tree with
-`mkdir "$R/old" && git -C "$(git rev-parse --show-toplevel)" archive <parent> | tar -x -C "$R/old"`,
-or reported unproven when the extract lacks what the test needs to run; every
-changed sentence of prose backed by a `file:line`.
-In a later round it checks, on that round's range, that the fix left each plan
-item it touched done.
-Name the files implement's step 1 found already changed, so it does not call
-them extra. It edits, commits, and posts nothing, starts no subagents, and
-writes only under `R`.
+intent check in [intent-check.md](intent-check.md).
 
 **Done when:** the review's result and the intent check's are in. When
 `code-review` runs in the background and the turn must end first, say so,

@@ -9,8 +9,7 @@ description: Use at the start of a task, before changing code, when given a tick
 
 It finds out what is true before anything changes, then writes a plan checked
 against that and stops. It reads what the request points to, traces the code
-and its history, has a second agent check the findings, and ends with a plan
-that waits for approval.
+and its history, and has a second agent check the findings.
 
 ## When it runs
 
@@ -61,14 +60,8 @@ type, a utility many modules import, middleware, or an env var, call the Skill
 tool with `eng:blast-radius`.
 
 Split questions that do not depend on each other across two to four
-subagents at once: Explore for searches, a general-purpose agent for reads
-that need `gh`, git, or an MCP tool. Each brief carries:
-
-- The question, in one sentence.
-- Pointers: paths, URLs, and commit SHAs, never pasted summaries.
-- The return shape: claims, each with `file:line` and whether it was seen or
-  inferred.
-- The limits: read-only, no subagents, no commits, nothing posted.
+subagents at once, briefed as [references/briefs.md](references/briefs.md)
+says.
 
 **Done when:** every hop has a `file:line` and a sentence on what runs there,
 the changed lines have their history read, and each subagent question has an
@@ -131,11 +124,9 @@ or feedback, which goes back to step 7.
 
 ## Questions
 
-For a question rather than a task, run steps 1 to 3, and step 5 when the
-answer rests on more than one finding. Then answer in the shape in
-[references/answers.md](references/answers.md). There is no plan and no stop.
-A question about why code is shaped the way it is goes to the `eng:why` skill,
-which reads the history behind it.
+For a question rather than a task, read
+[references/answers.md](references/answers.md) and follow it. There is no plan
+and no stop.
 
 ---
 

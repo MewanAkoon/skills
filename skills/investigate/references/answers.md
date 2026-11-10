@@ -3,6 +3,11 @@
 Read this when the request is a question, such as how a subsystem works or
 where new code belongs, rather than a task.
 
+For a question about why code is shaped the way it is, call the Skill tool
+with `eng:why` instead, which reads the history behind it. For any other, run
+`SKILL.md`'s steps 1 to 3, and step 5 when the answer rests on more than one
+finding, then answer in the shape below.
+
 Restate the question in one line first, naming the concrete thing asked
 about. Then size it. A narrow question covers one module and one flow, and
 gets one trace. A wide one spans several packages or a cross-cutting concern,

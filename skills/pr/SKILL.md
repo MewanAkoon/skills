@@ -101,24 +101,10 @@ Call the result `PR_DATA`.
 
 - `PR_DATA` has content and `state` is `OPEN`: take `baseRefName` as the
   base, work through steps 3 to 5, then update the PR in step 7. First check
-  the branch against `headRefOid`, the commit the PR shows, which works
-  whether or not the branch tracks anything.
-
-  When `git merge-base --is-ancestor <headRefOid> HEAD` fails, the PR's head
-  is not in this branch: someone pushed commits this clone lacks, or the
-  branch was rebased since its last push. Say so and stop, because the first
-  needs a pull and the second a force push, and the user decides either.
-
-  When `git rev-list --count <headRefOid>..HEAD` prints more than zero, those
-  commits are not on the PR yet, so ask "<count> local commits are not on the
-  PR yet. Push them first? (yes / no)". Yes means
-  `git push <head remote> HEAD:<headRefName>` before step 7, never with
-  `--force`. `<head remote>` is the remote for the repository the PR's head
-  lives in, whether that is this one or a fork: the one matching
-  `headRepository.nameWithOwner` by remote.md's rule. When no remote matches,
-  or more than one, say which repository the push needs and stop. A failed
-  push prints its output and stops. No means steps 3 to 5 describe only what the PR holds, so write
-  `<headRefOid>` wherever their commands say `HEAD`.
+  the branch against `headRefOid`, the commit the PR shows, as
+  [references/update.md](references/update.md) says under "In step 2". When
+  the user declines to push local commits, steps 3 to 5 describe only what
+  the PR holds, so write `<headRefOid>` wherever their commands say `HEAD`.
 - `PR_DATA` is empty, or `state` is `CLOSED` or `MERGED`: take the base the
   user's message named, or else ask "What is the base branch for this PR?
   (default: <resolved default>)" and take their answer, or the resolved
@@ -181,9 +167,10 @@ find "$(git rev-parse --show-toplevel)" -maxdepth 3 -ipath '*pull_request_templa
 
 Found one, or a body format in the guidance? Fill in its sections and its
 checkboxes, keep any headings exactly as they are, and skip the body template
-in step 5. The title guidance in step 5 still applies. When it has no section for test evidence or for merge risk, add
-step 5's Evidence or Merge danger section at its end, or, when the guidance
-allows no extra sections, put them in its closest section.
+in step 5. The title guidance in step 5 still applies. When it has no section
+for test evidence or for merge risk, add the Evidence or Merge danger section
+from [references/body.md](references/body.md) at its end, or, when the
+guidance allows no extra sections, put them in its closest section.
 
 Found neither? Use the body template in step 5.
 
@@ -218,49 +205,8 @@ at 70 characters or fewer, picking the type from:
 The description is title-cased and names what the change makes true. A list
 of the files touched is not that.
 
-For the body:
-
-````
-## What and why
-<!-- One paragraph. What changed and why, not how. -->
-<one paragraph summary>
-
-## Type of change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor (no behaviour change)
-- [ ] Dependency update
-- [ ] Config / infra / env change
-- [ ] Documentation
-
----
-
-## Evidence
-<!-- Before and after from a real run: the test that failed and now passes, or output that changed. -->
-- Before: <command and what it printed>
-- After: <command and what it prints now>
-
-**How to review locally:**
-```sh
-# Commands to run and verify this PR
-```
-
----
-
-## Merge danger
-<!-- Whether a revert undoes this, how far a break would reach, where to look hardest. -->
-- Door: <one-way or two-way>, because <reason>
-- Blast radius: <small, medium, or wide>, <what could break>
-- Look hardest at: <file or area>
-
-## What did you deliberately not do?
-<!-- Scope decisions, known trade-offs, follow-up tickets -->
-- <deliberate omission>
-````
-
-Tick the boxes that apply under Type of change, and replace the comment under
-"How to review locally" with the commands a reviewer runs. A template shipped
-with every box empty is worse than no template.
+When step 4 chose the body template, read
+[references/body.md](references/body.md) and fill it in.
 
 Evidence comes from a run this session made: the test `eng:implement` saw fail
 and then pass, the checks its review ran, or output the change altered. A green
@@ -331,9 +277,9 @@ already open for this branch or another error.
 
 ## 7. Update, when a PR is open
 
-Read [references/update.md](references/update.md) and follow it. It shows the
-user what changes, asks before sending unless their latest message asked for
-the update, and sends it.
+Read [references/update.md](references/update.md) under "In step 7" and
+follow it. It shows the user what changes, asks before sending unless their
+latest message asked for the update, and sends it.
 
 **Done when:** the user declined and nothing was sent, or `gh pr edit` or the REST fallback exited zero, or both
 failed and their output is printed.

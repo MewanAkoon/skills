@@ -9,8 +9,7 @@ description: Use when the user's latest message asks to draft, file, edit, label
 
 It turns a problem, a plan, or a deferred review item into an issue written from
 the repo's own template and labels. The body goes to a file, and the reply gives
-the command that would file it. Nothing on GitHub changes until the user's
-latest message asks for it.
+the command that would file it.
 
 ## When it runs
 
@@ -40,8 +39,7 @@ gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled
 
 Pass the repo the user names, or nothing for this one. For Fibery, Jira,
 Linear, or any tracker other than GitHub, never call its tools: skip steps 2,
-3, and 6, and in step 5 write copy-paste text with no command. The user files
-it.
+3, and 6, and in step 5 write copy-paste text with no command.
 
 **Done when:** the target is named, or the run has stopped because issues are
 off for the repo or `gh` is not signed in, or the target is another tracker
@@ -97,14 +95,11 @@ breakdown is proposed and the run is waiting for the user's approval.
 ## Step 5: Draft, then stop
 
 Write the body alone to `issue-<slug>.md` in the scratchpad directory your
-system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, so the
-file can be passed to `gh` as it stands, and the title alone to
-`issue-<slug>.title` beside it. In the reply, give the title, the labels, both
-files' paths, and the exact command that would file it. Always pass a title
-and a body file, so `gh` never prompts. Reading the title from its file keeps
-a backtick, a `$`, or an apostrophe in it literal in every shell. Typed into
-the command, a title in double quotes is expanded, and one in single quotes
-breaks on an apostrophe:
+system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, and the
+title alone to `issue-<slug>.title` beside it. In the reply, give the title,
+the labels, both files' paths, and the exact command that would file it. Always
+pass a title and a body file. Reading the title from its file keeps a backtick,
+a `$`, or an apostrophe in it literal in every shell:
 
 ```bash
 gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \
@@ -119,20 +114,8 @@ asked to file it and the run goes on to step 6.
 
 ## Step 6: File, edit, or close, when asked
 
-Run the command from step 5, or the edit or close the user asked for:
-
-```bash
-gh issue edit <n> --repo <owner/repo> --add-label <name>
-gh issue close <n> --repo <owner/repo> --reason "not planned"
-gh issue close <n> --repo <owner/repo> --duplicate-of <m>
-```
-
-Then read the issue back. GitHub drops labels silently when the account lacks
-the access to set them:
-
-```bash
-gh issue view <n> --repo <owner/repo> --json number,url,title,labels,state
-```
+Run the command from step 5, or the edit or close the user asked for, then
+read the issue back, as [references/file.md](references/file.md) shows.
 
 **Done when:** the issue's URL is in the reply and its labels and state match
 what was asked, or a mismatch is reported, or the command failed and its

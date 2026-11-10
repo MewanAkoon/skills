@@ -16,12 +16,13 @@ needs a pull and the second a force push, and the user decides either.
 When `git rev-list --count <headRefOid>..HEAD` prints more than zero, those
 commits are not on the PR yet, so ask "<count> local commits are not on the PR
 yet. Push them first? (yes / no)". Yes means
-`git push <head remote> HEAD:<headRefName>` before step 7, never with `--force`. `<head remote>` is
-the remote for the repository the PR's head lives in, whether that is this one
-or a fork: the one matching `headRepository.nameWithOwner` by
-[remote.md](remote.md)'s rule. When no remote matches, or more than one, say
-which repository the push needs and stop. A failed push prints its output and
-stops. `SKILL.md` step 2 says what no means.
+`git push <head remote> HEAD:<headRefName>` before step 7, never with
+`--force`. `<head remote>` is the remote for the repository the PR's head lives
+in, whether that is this one or a fork: the one matching
+`headRepository.nameWithOwner` by [remote.md](remote.md)'s rule. When no
+remote matches, or more than one, say which repository the push needs and
+stop. A failed push prints its output and stops. `SKILL.md` step 2 says what
+no means.
 
 ## In step 7
 

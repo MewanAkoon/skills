@@ -114,6 +114,25 @@ whole purpose is that step has no configuration that saves it.
 Read [WRITING-RULES.md](WRITING-RULES.md). It is the standard every file here
 follows, and enforcing it is what this repo is for.
 
+## Tracking work
+
+Work here is tracked in Linear, team Skills (key SKI), not in GitHub issues.
+Dependabot pull requests are the one exception.
+
+- Every change has a SKI issue before work starts. Look for an existing one
+  before creating a new one.
+- The branch is named for the issue and its type, in lowercase:
+  `feature/ski-N-short-desc`, `fix/ski-N-short-desc` or
+  `chore/ski-N-short-desc`. A branch name holding `ski-N` links the issue as
+  closing, so merging the pull request moves the issue to Done.
+- The repo has no pull request template, so `eng:pr` uses its own body. Keep
+  it, and make the last line of its What and why section one linking line on
+  its own: `Fixes SKI-N` when merging finishes the issue, or `Part of SKI-N`
+  when more pull requests follow. A partial pull request leaves `ski-N` out
+  of its branch name, or the issue splits into sub-issues that each take
+  `Fixes`.
+- A Linear issue never names a pull request by number.
+
 ## Invariants
 
 `./scripts/check.sh` verifies these, so run it before committing.

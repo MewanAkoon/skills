@@ -346,31 +346,39 @@ A plan you approve can grant its own writes. The plan has to be a file in
 `.claude/plans` of the session's own checkout, holding `Plan name: <name>`
 and, in its first five lines, `Status: awaiting approval`. It has to have
 changed since the session started, and it needs a line that starts with
-`Branch:` and names a branch that is not a default one. Any message of yours
-with "approve" or "approved" in it approves the plan, such as "I like this
-plan, I approve it, let's go ahead", as long as what its first "approve" or
-"approved" approves is the plan: it ends its clause or is followed by "it",
-"this", "that", "the plan" or the plan's name, so "approve the dependabot PR"
-is not about the plan. It does not when it asks for changes or sets a
-condition: a question mark, a negation, a word in `NOT_APPROVAL` in
+`Branch:` and names a branch that is not a default one. Your own message
+approves it in plain words, such as "I like this plan, I approve it, let's go
+ahead". Only a plain approval of the plan counts. The first sentence that says
+"approve" or "approved" holds the approval, such as "I approve it", "approve
+the plan", "I want to approve it" or "the plan is approved", and between its
+commas, colons or dashes only go-ahead words, such as "okay", "looks good", "I
+like this plan", "let's go ahead" or "commit the changes". The message does
+not open like a question, has no line that ends in a colon or opens with ">",
+which would mean it quotes someone, and is not signed: no sentence after the
+approval opens with a dash, and none is a short one such as a name, though a
+go-ahead such as "Thanks" is fine. So "I approve it", "approve the plan",
+"Yes, approved" and "I like this plan and want to approve it" grant, while
+"approve the dependabot PR", "Sam approved it", "I would definitely approve
+it" and a message that opens like a question grant nothing. A message also
+does not approve when it asks for changes or sets a condition: a question
+mark, a negation, a word in `NOT_APPROVAL` in
 [hooks/eng-hook](hooks/eng-hook), such as "but", "before", "wait", "once",
 "until" or "if", a change, changes, an edit, edits or a tweak, unless a phrase
 that ends its clause has the run finish them ("finalize the changes" or
 "finalize the changes and the PR" is fine, while "commit the changes and push"
 is read as asking for changes, so give each step its own clause), or a no to a
-commit, push or PR. A hedge or a question right before "approve", as in "I
-would approve it" or "should I approve it", grants nothing. When several plans
-are waiting, the message names one. The hook says in the session whether it
-recorded a grant, and marks the plan `Status: approved`, so a later "approve"
-does not grant it again. A grant ends when another plan is approved, at
-`/clear`, when your message says no to a commit, push or PR, or when a later
-message speaks of approving along with a negation or a take-back word, as in
-"I don't approve", "I disapprove" or "I revoked my approval", or opens with
-"hold" or "wait". A compaction or resume keeps it. The grant and each push or
-PR made on its branch are logged to `grant-writes.log` in the plugin's data
-directory. A grant never covers merges, releases, tags, deploys or force
-pushes: they ask as before, and on the plan's branch a push of an unreviewed
-tree through Bash or a shell tool is denied whatever its form.
+commit, push or PR. When several plans are waiting, the message names one. The
+hook says in the session whether it recorded a grant, and marks the plan
+`Status: approved`, so a later "approve" does not grant it again. A grant ends
+when another plan is approved, at `/clear`, when your message says no to a
+commit, push or PR, or when a later message speaks of approving along with a
+negation or a take-back word, as in "I don't approve", "I disapprove" or "I
+revoked my approval", or opens with "hold" or "wait". A compaction or resume
+keeps it. The grant and each push or PR made on its branch are logged to
+`grant-writes.log` in the plugin's data directory. A grant never covers
+merges, releases, tags, deploys or force pushes: they ask as before, and on
+the plan's branch a push of an unreviewed tree through Bash or a shell tool is
+denied whatever its form.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
 a POSIX shell splits them, so a quoted

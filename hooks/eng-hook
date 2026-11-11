@@ -731,11 +731,22 @@ said_no() {
 NOT_APPROVAL="not no never cannot dont didnt doesnt cant wont isnt havent hasnt wouldnt \
 shouldnt couldnt arent wasnt werent before but once \
 when wait except after until unless if later yet hold without maybe \
-stop though first withdraw revoke retract"
+stop though first withdraw revoke retract assuming provided providing pending subject contingent"
 
 # The words that, beside "approve" in a later message, take an approval
 # back, read as an extended regex over the message's words.
 NEGATION=' (not|no|never|cannot|nope|dont|didnt|doesnt|cant|wont|isnt|arent|wasnt|werent|havent|hasnt|hadnt|wouldnt|shouldnt|couldnt|mustnt) | (withdr|revok|retract)| (took|take|taking) [a-z ]*back '
+
+# The words that may open an approving part before "I approve", read as an
+# extended regex over one word.
+APPROVE_WORDS='okay|ok|yes|yeah|yep|great|good|lgtm|sure|alright|perfect|cool|nice|thanks|so|then|well|right'
+APPROVE_FILLER="^($APPROVE_WORDS)\$"
+
+# The parts that may stand beside an approval in its sentence, between
+# commas: a go-ahead, or a delivery step on the plan's own work, and nothing
+# more, read as an extended regex.
+APPROVE_STEP='(commit|push|ship|finali[sz]e|land|open|create|start|begin|implement|build|run|test)( (it|them|this|that|everything|the changes|the change|the edits|the edit|the tweak|the tweaks|the code|the pr|a pr|the pull request|the tests))?( and (push|ship|commit))?'
+APPROVE_PARTS="^(($APPROVE_WORDS|thank you)( (work|job|plan))?|(looks|sounds|seems) (good|great|fine)( to me)?|(this|it) looks (good|great|fine)|i (like|love) (it|this|this plan|the plan)|(let s|lets) (go|go ahead|start|start building|begin|build|build it|do it|do this|get started|ship it|implement it)( with (it|the implementation|implementation))?|go ahead( with (it|the implementation|implementation))?|go for it|go|you can go ahead|please (proceed|go ahead|start|$APPROVE_STEP)|proceed|start building|ship it|(and |then )?(go ahead and )?$APPROVE_STEP)\$"
 
 # Prints the plan files in .claude/plans of the checkout at $1, one path per
 # line. With "waiting" as $2, only those changed since the session started
@@ -792,9 +803,9 @@ grant_still() {
 # Reads your message, $1, for an approval of a plan waiting in this session,
 # and records the grant: the plan's branch, name and file, the commit it
 # started from, and the time, one per line. A message of yours saying
-# "approve" or "approved", with no condition, grants the one plan waiting,
-# or, when several are, the one it names, as long as what it approves is
-# the plan rather than something else. A no to a commit, push or pull
+# "approve" or "approved" in a plain approval of the plan, with no condition,
+# grants the one plan waiting, or, when several are, the one it names. A no
+# to a commit, push or pull
 # request ends a grant, and so does a later message that speaks of approving
 # along with a negation or a take-back word, such as "I don't approve" or "I
 # revoked my approval", or whose first line opens with "hold" or "wait".
@@ -811,7 +822,8 @@ check_grant() {
   fi
   g_text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' |
     sed "s/$(printf '\342\200\231')/'/g; s/$(printf '\342\200\230')/'/g; s/$(printf '\312\274')/'/g; s/\`/'/g;
-      s/$(printf '\342\200\224')/;/g; s/$(printf '\342\200\223')/;/g; s/ - /; /g")"
+      s/$(printf '\302\240')/ /g; s/$(printf '\342\200\224')/, -- /g; s/$(printf '\342\200\223')/, -- /g;
+      s/$(printf '\342\200\225')/, -- /g; s/$(printf '\342\210\222')/, -- /g; s/ - /, -- /g; s/^-/-- /")"
   g_words=" $(printf '%s' "$g_text" | tr -c 'a-z0-9_-' ' ' | tr -s ' ') "
   # Once a plan is approved, doubt about the approval ends the grant: a first
   # line that opens with "hold" or "wait", or a message that speaks of
@@ -838,6 +850,7 @@ check_grant() {
   g_why=""
   case "$g_text" in *'?'*) g_why="it asks a question" ;; esac
   case "$g_text" in *"n't"*) g_why="it holds a negation" ;; esac
+  case "$g_words" in *' as long as '* | *' so long as '*) g_why="it sets a condition" ;; esac
   for g_w in $NOT_APPROVAL; do
     case "$g_words" in *" $g_w "*) g_why="it says \"$g_w\"" ;; esac
   done
@@ -868,27 +881,81 @@ check_grant() {
     fi
     return 0
   fi
-  # What is approved has to be the plan. After the first "approve" or
-  # "approved", up to the end of its clause or "and", comes nothing, "it",
-  # "this", "that", "the plan", or a waiting plan's name, perhaps as "the
-  # <name> plan", with "of" before any of them, or "all", "entirely",
-  # "fully", "in full" or "as written" after. So "approve the dependabot PR"
-  # is not about the plan, and neither is a later "Sam approved it".
+  # Only a plain approval of the plan grants, and anything else asks. Before
+  # the verb come only words such as "I", "we", "I want to", "I like this
+  # plan and want to" or "the plan is", and after it, up to "and", only "it",
+  # "this", "that", "the plan" or a waiting plan's name, perhaps as "the <name>
+  # plan", with "of" before or "all", "entirely", "fully", "in full" or "as
+  # written" after. So "approve the dependabot PR", "Sam approved it" and "I
+  # would definitely approve it" grant nothing.
   g_waiting_names="$(printf '%s\n' "$g_plans" | while IFS= read -r g_file; do
     [ -n "$g_file" ] && plan_field "$g_file" 'Plan name' | tr '[:upper:]' '[:lower:]'; done)"
-  # The object comes marked with "=", so no line at all means no approval.
-  g_object="$(printf '%s' "$g_text" | tr '.,;:!?\n' '||||||' | tr -c 'a-z0-9_|-' ' ' |
-    awk -v RS='|' '{ n = split($0, w, " ")
-      for (i = 1; i <= n; i++) if (w[i] == "approve" || w[i] == "approved") {
-        # A hedge or a question right before it, as in "I would approve it",
-        # "I d approve" or "should I approve it", is not an approval.
-        if (i > 1 && w[i - 1] ~ /^(would|should|could|might|may|will|ll|d|can|have)$/) { print "?"; exit }
-        if (w[1] ~ /^(should|could|would|can|may|shall|do|will)$/) { print "?"; exit }
-        o = ""; for (j = i + 1; j <= n && w[j] != "and"; j++) o = o (o == "" ? "" : " ") w[j]
-        print "=" o; exit } }')"
+  # The object comes marked with "=" for a plain approval, and as "?" for
+  # anything else: words before the verb that do not fit, a part that is not
+  # a go-ahead, a second approval, an opening question, a signature or a
+  # quote. No line at all means no approval.
+  # Sentences end at ".", ";", "!", "?" or a line break, and commas, colons
+  # and dashes split a sentence into parts. The sentence that first says
+  # "approve" or "approved" has to be made of the approving part and parts
+  # that only say go ahead, such as "okay", "looks good", "I like this plan"
+  # or "let's go ahead". So "I approve it, said Sam" or "approve it, assuming
+  # CI passes" is not a plain approval.
+  g_object="$(printf '%s' "$g_text" |
+    sed 's/:/,/g' |
+    tr '.;!?\n' '|||||' | tr -c 'a-z0-9_|,-' ' ' |
+    awk -v RS='|' -v fill="$APPROVE_FILLER" -v ok="$APPROVE_PARTS" '
+      function words(t, a,   m) { gsub(/,/, " ", t); m = split(t, a, " "); return m }
+      # The message opens like a question, with or without a "?".
+      !started {
+        m = words($0, q); k = 1; while (k <= m && q[k] ~ fill) k++
+        # A sentence of only go-ahead words, such as "Okay.", is skipped.
+        if (k <= m) {
+          started = 1
+          if (q[k] ~ /^(should|could|can|may|shall|would|does|did|has|is|are|was|were|will)$/ ||
+            (q[k] ~ /^(do|have)$/ && q[k + 1] ~ /^(you|we|i|they|the|these|those|any|all)$/)) { out = "?"; exit }
+        }
+      }
+      # A short sentence anywhere after the approval, such as a name, or one
+      # that opens with a dash, signs it. Every kind of dash reaches here as
+      # "--".
+      done { t = $0; gsub(/,/, " ", t); gsub(/^ +| +$/, "", t); gsub(/  +/, " ", t)
+        # A dash, as in "-- Sam", marks a signature.
+        if (t == "") next
+        if (t ~ /^-/ || (split(t, z, " ") <= 3 && t !~ ok)) { out = "?"; exit }
+        next }
+      {
+        m = words($0, q); hit = 0
+        for (i = 1; i <= m; i++) if (q[i] == "approve" || q[i] == "approved") hit = 1
+        if (!hit) next
+        np = split($0, part, ",")
+        for (p = 1; p <= np; p++) {
+          gsub(/^ +| +$/, "", part[p]); gsub(/  +/, " ", part[p])
+          sub(/^-+ */, "", part[p])
+          if (part[p] == "") continue
+          n = split(part[p], w, " "); at = 0
+          for (i = 1; i <= n; i++) if (w[i] == "approve" || w[i] == "approved") { at = i; break }
+          if (!at) { if (part[p] !~ ok) { out = "?"; exit } continue }
+          if (found) { out = "?"; exit }
+          found = 1
+          k = 1; while (k < at && w[k] ~ fill) k++
+          pre = ""; for (j = k; j < at; j++) pre = pre w[j] " "
+          if (pre !~ /^((i|we) )?((hereby|fully|really|also|now|do|have|ve|want to|d like to|would like to) )?$/ &&
+            pre !~ /^(i|we) (like|love) (it|this|this plan|the plan) and ((i|we) )?(want to|d like to|would like to) $/ &&
+            pre !~ /^(it|this|that|this plan|the plan|plan) (is|s) $/ && pre !~ /^((the|this) )?plan $/) { out = "?"; exit }
+          o = ""; for (j = at + 1; j <= n && w[j] != "and"; j++) o = o (o == "" ? "" : " ") w[j]
+          rest = ""; for (j = j + 1; j <= n; j++) rest = rest (rest == "" ? "" : " ") w[j]
+          if (rest != "" && rest !~ ok) { out = "?"; exit }
+          obj = o
+        }
+        done = 1
+      }
+      END { if (out != "") print out; else if (done) print "=" obj }')"
+  # A line that ends in a colon or opens with ">" means the message quotes
+  # someone, so its approval may not be the user's own.
+  [ "$g_object" != '?' ] && printf '%s\n' "$1" | grep -Eq ':[[:space:]]*.?$|^[[:space:]]*>' && g_object='?'
   g_about=""
   if [ "$g_object" = '?' ]; then
-    note="Your message hedges or asks about approving rather than approving, so no plan is granted its writes. Keep working on the plan with the user.$(grant_still)"
+    note="Your message does not read as a plain approval of the plan, so no plan is granted its writes. If the user means to approve it, they can say so plainly, as in \"I approve it\".$(grant_still)"
     return 0
   fi
   case "$g_object" in

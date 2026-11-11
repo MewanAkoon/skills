@@ -1299,7 +1299,22 @@ for words in "Yes, I approve this. Before we start, let's review the plan" "appr
   "approve, finalize the changes and the PR with a different title" \
   "I approve with one edit to step 2" "Approve, commit the changes and push" "Approve the dependabot PR." \
   "Approve the dependabot PR. Sam approved it." "Approve the dependabot PR, then I approve this plan" \
-  "I would approve it" "Should I approve it" "I'd approve it" "I'll approve it" "I might approve this"; do
+  "I would approve it" "Should I approve it" "I'd approve it" "I'll approve it" "I might approve this" \
+  "I would definitely approve it" "I would've approved it" "That would be approved" \
+  "Should I, as the reviewer, approve it" "Thanks. Sam approved it." "The team needs to approve it" \
+  "Sam, the lead, approved it" "Sam, approve it" "Sam: approved" "Dependabot PR: approved" \
+  "The PR page shows Status: approved" "So should I, as the reviewer, approve it" \
+  "Okay, should we, then, approve it" "Do you think we're ready, I approve it" \
+  "I approve it, said Sam" "Approve it, Sam" "Approved $(printf '\342\200\224') Sam" "Approve it, assuming tests pass" \
+  "Should we start now. I approve it" "$(printf 'Sam wrote:\nI approve it')" "$(printf '> I approve it')" \
+  "Push the pre-approved branch. Sam approved it." "Approve it, ship it provided the tests pass" \
+  "I approve it, ship it behind a flag" "Approve it. Assuming tests pass." "$(printf 'Approved.\n\342\200\224 Sam')" \
+  "Approve it. Sam" "$(printf 'Sam wrote:\n\nI approve it')" "$(printf 'Approved.\n-- Sam Lee, lead')" \
+  "$(printf 'I approve it. Thanks.\n\342\200\224 Sam')" "Approve it. As long as CI passes." \
+  "Is the CI green. I approve it" "Did one more pass. I approve it." "Do the tests pass. I approve it" \
+  "Okay. Is CI green. I approve it" "$(printf 'Approved.\n\342\200\224 Sam Lee, Eng Lead')" \
+  "I approve it. $(printf '\342\200\224') Sam Lee, Eng Lead" "$(printf 'Approved.\n\342\200\225 Sam Lee, Eng Lead')" \
+  "Was CI green. I approve it"; do
   gr_plan alpha feature/a
   gr_start g2
   gr_say g2 "$words"
@@ -1312,7 +1327,7 @@ gr_say g2 '<wake reason="mention"><message from="bot">approve</message></wake>'
 gr_say g2 '<task-notification>approve</task-notification>'
 [ ! -f "$data/sessions/g2/grant" ] || bad "grant: a task notification granted the plan"
 # The grant's context goes out beside a pull request hint.
-gr_say g2 "approve this, see https://github.com/o/r/pull/5#discussion_r1"
+gr_say g2 "approve this. The comment I mean is at https://github.com/o/r/pull/5#discussion_r1"
 gr_note | grep -q 'eng:pr-feedback' || bad "grant: the review comment hint was lost beside the grant"
 gr_note | grep -q 'approves plan alpha' || bad "grant: the grant's context was lost beside a hint"
 gr_plan alpha feature/a
@@ -1334,8 +1349,12 @@ for words in "approve the plan" "I approve the plan." "approve plan" "Yes, appro
   "Okay, I like this plan. I approve it. Let$(printf '\342\200\231')s go ahead with the implementation." \
   "i approve this, lets start building" "I like this plan and want to approve it" \
   "approve the alpha plan" "I approve of this plan" "approve it all" "approve \`alpha\`" \
-  "Okay. I approve it" "I approve it $(printf '\342\200\224') let's go" "approve - looks great" \
-  "I approve it. The PR should target main" "Approved, go with option d"; do
+  "Okay. I approve it" "I approve it $(printf '\342\200\224') let's go" "approve - looks great" "I like this plan, I approve it, let's go ahead" "Looks good, I approve" \
+  "I approve it. The PR should target main" \
+  "I have approved it" "I've approved it" "Do approve it" "It is approved" "I hereby approve the plan" \
+  "I want to approve it" "Great, approved" "Plan approved, go ahead" "Yes: approved" \
+  "Approved, go ahead and commit" "Approved, commit and push" \
+  "I approve, let's get started" "Great plan, I approve" "I approve it. Thanks"; do
   gr_plan alpha feature/a
   gr_start g4d
   gr_say g4d "$words"

@@ -311,7 +311,7 @@ every session and inside subagents. They run in Claude Code only.
 | Any other MCP write, one that only creates or changes something, such as a doc, page, sheet or issue edit through Claude Docs, Notion, Google Drive, Sheets, Linear or any other server | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
-| Under a plan you approved, a push or a PR write | Through any tool but Bash, MCP tools included, it asks, and a push or new PR through the terminal tool, Monitor or PowerShell of a tree the review loop did not read is denied. Through Bash, off the plan's branch, a push or a new PR asks. On it, it is denied when HEAD's tree is not the one the review loop last read, and it asks for any push but a plain `git push` of that branch as its own command, which also asks when git's settings would send it elsewhere, push other branches, or push tags or submodules along with it, for any new PR but a `gh pr create` on its own naming no other head or repository, and from the seventh push on. Otherwise it runs |
+| Under a plan you approved, a push or a PR write | Through any tool but Bash, MCP tools included, it asks, and on the plan's branch a push or new PR through the terminal tool, Monitor or PowerShell of a tree the review loop did not read is denied. Through Bash, off the plan's branch, a push or a new PR asks. On it, it is denied when HEAD's tree is not the one the review loop last read, and it asks for any push but a plain `git push` of that branch as its own command, which also asks when git's settings would send it elsewhere, push other branches, or push tags or submodules along with it, for any new PR but a `gh pr create` on its own naming no other head or repository, and from the seventh push on. Otherwise it runs |
 | Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review at `high` or above of the PR by number or by a link to the PR or its files after the push counts, and so does a range whose ends meet at or before the merge base with a remote's default branch and that ends at that commit, run after the push or as the last such range before it. Under a plan you approved, on its branch, the stop is blocked instead, once per pushed commit as the reminder is, so the review runs before the hand-back |
 
 The Claude app's own MCP servers, such as the one a project thread replies
@@ -348,8 +348,11 @@ and, in its first five lines, `Status: awaiting approval`. It has to have
 changed since the session started, and it needs a line that starts with
 `Branch:` and names a branch that is not a default one. Any message of yours
 with "approve" or "approved" in it approves the plan, such as "I like this
-plan, I approve it, let's go ahead". It does not when it asks for changes or
-sets a condition: a question mark, a negation, a word in `NOT_APPROVAL` in
+plan, I approve it, let's go ahead", as long as what its first "approve" or
+"approved" approves is the plan: it ends its clause or is followed by "it",
+"this", "that", "the plan" or the plan's name, so "approve the dependabot PR"
+is not about the plan. It does not when it asks for changes or sets a
+condition: a question mark, a negation, a word in `NOT_APPROVAL` in
 [hooks/eng-hook](hooks/eng-hook), such as "but", "before", "wait", "once",
 "until" or "if", a change, changes, an edit, edits or a tweak, unless a phrase
 that ends its clause has the run finish them ("finalize the changes" or
@@ -360,11 +363,13 @@ hook says in the session whether it recorded a grant, and marks the plan
 `Status: approved`, so a later "approve" does not grant it again. A grant ends
 when another plan is approved, at `/clear`, when your message says no to a
 commit, push or PR, or when a later message speaks of approving along with a
-negation or a take-back word, as in "I don't approve" or "I revoked my
-approval", or opens with "hold" or "wait". A compaction or resume keeps it.
-The grant and each push or PR made under it are logged to `grant-writes.log`
-in the plugin's data directory. Merges, releases, tags, deploys and force
-pushes ask as before.
+negation or a take-back word, as in "I don't approve", "I disapprove" or "I
+revoked my approval", or opens with "hold" or "wait". A compaction or resume
+keeps it. The grant and each push or PR made on its branch are logged to
+`grant-writes.log` in the plugin's data directory. A grant never covers
+merges, releases, tags, deploys or force pushes: they ask as before, and on
+the plan's branch a push of an unreviewed tree through Bash or a shell tool is
+denied whatever its form.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
 a POSIX shell splits them, so a quoted

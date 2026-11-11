@@ -793,7 +793,8 @@ grant_still() {
 # and records the grant: the plan's branch, name and file, the commit it
 # started from, and the time, one per line. A message of yours saying
 # "approve" or "approved", with no condition, grants the one plan waiting,
-# or, when several are, the one it names. A no to a commit, push or pull
+# or, when several are, the one it names, as long as what it approves is
+# the plan rather than something else. A no to a commit, push or pull
 # request ends a grant, and so does a later message that speaks of approving
 # along with a negation or a take-back word, such as "I don't approve" or "I
 # revoked my approval", or whose first line opens with "hold" or "wait".
@@ -809,7 +810,8 @@ check_grant() {
     fi
   fi
   g_text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' |
-    sed "s/$(printf '\342\200\231')/'/g; s/$(printf '\342\200\230')/'/g; s/$(printf '\312\274')/'/g; s/\`/'/g")"
+    sed "s/$(printf '\342\200\231')/'/g; s/$(printf '\342\200\230')/'/g; s/$(printf '\312\274')/'/g; s/\`/'/g;
+      s/$(printf '\342\200\224')/;/g; s/$(printf '\342\200\223')/;/g; s/ - /; /g")"
   g_words=" $(printf '%s' "$g_text" | tr -c 'a-z0-9_-' ' ' | tr -s ' ') "
   # Once a plan is approved, doubt about the approval ends the grant: a first
   # line that opens with "hold" or "wait", or a message that speaks of
@@ -821,6 +823,7 @@ check_grant() {
     printf '%s\n' "$g_text" | sed -n '/[^[:space:]]/{p;q;}' | grep -Eq '^[[:space:]]*(hold|wait)([^a-z]|$)' &&
       g_back=yes
     case "$g_words" in
+      *' disapprov'*) g_back=yes ;;
       *' approv'*)
         case "$g_text" in *"n't"*) g_back=yes ;; esac
         printf '%s' "$g_words" | sed 's/n t /nt /g' | grep -Eq "$NEGATION" && g_back=yes ;;
@@ -855,6 +858,43 @@ check_grant() {
     elif [ -n "$g_plans" ]; then
       note="Your message reads as an approval with a condition, a change or a no, because $g_why, so no plan is granted its writes. Keep working on the plan with the user."
     fi
+    return 0
+  fi
+  if [ -z "$g_plans" ]; then
+    if [ -f "$state/grant" ]; then
+      note="No other plan is waiting for approval, so nothing new is granted.$(grant_still)"
+    elif [ -n "$(plan_files "$f_cwd")" ] || case "$g_words" in *' plan '*) true ;; *) false ;; esac; then
+      note="Your message approves, but no plan file in .claude/plans is waiting for approval in this session, so no writes are granted. Each still needs its own ask."
+    fi
+    return 0
+  fi
+  # What is approved has to be the plan. After the first "approve" or
+  # "approved", up to the end of its clause or "and", comes nothing, "it",
+  # "this", "that", "the plan", or a waiting plan's name, perhaps as "the
+  # <name> plan", with "of" before any of them, or "all", "entirely",
+  # "fully", "in full" or "as written" after. So "approve the dependabot PR"
+  # is not about the plan, and neither is a later "Sam approved it".
+  g_waiting_names="$(printf '%s\n' "$g_plans" | while IFS= read -r g_file; do
+    [ -n "$g_file" ] && plan_field "$g_file" 'Plan name' | tr '[:upper:]' '[:lower:]'; done)"
+  # The object comes marked with "=", so no line at all means no approval.
+  g_object="$(printf '%s' "$g_text" | tr '.,;:!?\n' '||||||' | tr -c 'a-z0-9_|-' ' ' |
+    awk -v RS='|' '{ n = split($0, w, " ")
+      for (i = 1; i <= n; i++) if (w[i] == "approve" || w[i] == "approved") {
+        o = ""; for (j = i + 1; j <= n && w[j] != "and"; j++) o = o (o == "" ? "" : " ") w[j]
+        print "=" o; exit } }')"
+  g_about=""
+  case "$g_object" in
+    '='*)
+      g_object="$(printf '%s' "${g_object#=}" | sed -E 's/^of //; s/ (all|entirely|fully|in full|as written)$//;
+        s/^(the |this )?plan( |$)//; s/^(the |this )//; s/ plan$//')"
+      case "$g_object" in
+        '' | it | this | that | plan) g_about=yes ;;
+        *) printf '%s\n' "$g_waiting_names" | grep -qxF -- "$g_object" && g_about=yes ;;
+      esac ;;
+  esac
+  if [ -z "$g_about" ]; then
+    [ -n "$g_plans" ] &&
+      note="Your message approves something other than the plan, so no plan is granted its writes. To approve the plan, the user says so, as in \"I approve it\" or \"approve the plan\".$(grant_still)"
     return 0
   fi
   g_count=0 g_named=0 g_chosen="" g_only="" g_names=""
@@ -1026,12 +1066,13 @@ grant_checks() {
   g_name="$(sed -n 2p "$state/grant")"
   # Only a Bash command runs where the hook reads the branch and the tree, and
   # only its pushes are counted, so any other tool's push or pull request
-  # write asks. A shell tool's push of a tree no review read is still denied.
+  # write asks. A shell tool's push on the plan's branch of a tree no review
+  # read is still denied.
   if [ "$tool" != Bash ]; then
     printf '%s\n' "$found" | grep -Eqx 'gate push|gate pr|open pr' || return 0
     case "$tool" in
       mcp__terminal__run_in_terminal | Monitor | PowerShell)
-        if printf '%s\n' "$found" | grep -Eqx 'gate push|open pr' && ! tree_reviewed; then
+        if printf '%s\n' "$found" | grep -Eqx 'gate push|open pr' && on_grant_branch && ! tree_reviewed; then
           deny="Under the approved plan $g_name, only a tree the review loop read is pushed, and HEAD's tree is not the last one it read. Only a review at high or above, over a range that changes something, counts. Run the review step in eng:implement on this tree first."
           return 0
         fi ;;
@@ -1502,8 +1543,8 @@ record_push() {
     [ "$moved" = yes ] || return 0
   fi
   printf '%s\n' "$head" > "$state/pr-head"
-  if [ -f "$state/grant" ]; then
-    [ "$kind" = push ] && on_grant_branch &&
+  if on_grant_branch; then
+    [ "$kind" = push ] &&
       printf '%s\n' "$(($(cat "$state/grant-pushes" 2>/dev/null || echo 0) + 1))" > "$state/grant-pushes"
     log_write "$kind" "$head"
   fi

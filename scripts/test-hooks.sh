@@ -1297,7 +1297,8 @@ for words in "Yes, I approve this. Before we start, let's review the plan" "appr
   "Approve, land this change and put it behind a feature flag" "approve and finalize all the changes we agreed" \
   "Approve, land this change and push it behind a feature flag" \
   "approve, finalize the changes and the PR with a different title" \
-  "I approve with one edit to step 2" "Approve, commit the changes and push"; do
+  "I approve with one edit to step 2" "Approve, commit the changes and push" "Approve the dependabot PR." \
+  "Approve the dependabot PR. Sam approved it." "Approve the dependabot PR, then I approve this plan"; do
   gr_plan alpha feature/a
   gr_start g2
   gr_say g2 "$words"
@@ -1330,12 +1331,23 @@ granted g4 alpha || bad "grant: a plan older than the session counted as waiting
 # The ways you approve in your own words.
 for words in "approve the plan" "I approve the plan." "approve plan" "Yes, approve." "approved" \
   "Okay, I like this plan. I approve it. Let$(printf '\342\200\231')s go ahead with the implementation." \
-  "i approve this, lets start building" "I like this plan and want to approve it"; do
+  "i approve this, lets start building" "I like this plan and want to approve it" \
+  "approve the alpha plan" "I approve of this plan" "approve it all" "approve \`alpha\`" \
+  "Okay. I approve it" "I approve it $(printf '\342\200\224') let's go" "approve - looks great"; do
   gr_plan alpha feature/a
   gr_start g4d
   gr_say g4d "$words"
   granted g4d alpha || bad "grant: '$words' did not grant the one plan waiting"
 done
+# An approval of something other than the plan says so.
+gr_plan alpha feature/a
+gr_start g4k
+gr_say g4k "Approve the dependabot PR."
+gr_note | grep -q 'something other than the plan' || bad "grant: an approval of something else did not say so"
+# A condition in the same clause gets the condition's note.
+gr_say g4k "I approve this plan but change step 2"
+gr_note | grep -q 'condition' || bad "grant: a condition beside the approval did not get the condition note"
+gr_plan alpha feature/a approved
 # A message that grants nothing new says an earlier grant still holds, unless
 # it sets a condition.
 gr_say g4d "approve"
@@ -1354,7 +1366,7 @@ gr_say g4f "I don't approve this anymore"
 for words in "I didn't mean to approve that" "I withdraw my approval" "Hold on, I want to check something" "wait" \
   "I revoke my approval" "I take back my approval" "I didnt mean to approve that" \
   "I take my approval back" "I retract my approval" "I revoked my approval" "I have withdrawn my approval" \
-  "This isn't approved anymore" "I cannot approve this"; do
+  "This isn't approved anymore" "I cannot approve this" "I disapprove of this plan entirely"; do
   gr_plan alpha feature/a
   gr_say g4f "approve"
   granted g4f alpha || bad "grant: setup approval before '$words' failed"
@@ -1575,6 +1587,8 @@ stop gp '{"stop_hook_active": true}' "$gr"
 # that is then committed counts.
 gr_commit three
 gr_expect deny 'git push' 'review step'
+# On the plan's branch, an unreviewed tree is denied whatever the push.
+gr_expect deny 'git push origin hotfix' 'review step'
 # A shell tool's push of a tree no review read is denied too.
 hook_run pre-tool "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, tool_name: "mcp__terminal__run_in_terminal", tool_input: {command: "git push"}}')"
 [ "$(verdict)" = deny ] || bad "grant: an unreviewed push through the terminal tool got $(verdict), want deny"

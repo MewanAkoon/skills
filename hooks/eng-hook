@@ -731,7 +731,7 @@ said_no() {
 NOT_APPROVAL="not no never cannot dont didnt doesnt cant wont isnt havent hasnt wouldnt \
 shouldnt couldnt arent wasnt werent before but once \
 when wait except after until unless if later yet hold without maybe \
-stop though first withdraw revoke retract"
+stop though first withdraw revoke retract would should could might d"
 
 # The words that, beside "approve" in a later message, take an approval
 # back, read as an extended regex over the message's words.
@@ -909,14 +909,7 @@ check_grant() {
   done <<EOF
 $g_plans
 EOF
-  if [ "$g_count" -eq 0 ]; then
-    if [ -f "$state/grant" ]; then
-      note="No other plan is waiting for approval, so nothing new is granted.$(grant_still)"
-    elif [ -n "$(plan_files "$f_cwd")" ] || case "$g_words" in *' plan '*) true ;; *) false ;; esac; then
-      note="Your message approves, but no plan file in .claude/plans is waiting for approval in this session, so no writes are granted. Each still needs its own ask."
-    fi
-    return 0
-  elif [ "$g_count" -eq 1 ]; then
+  if [ "$g_count" -eq 1 ]; then
     g_chosen="$g_only"
   elif [ "$g_named" -ne 1 ]; then
     note="Several plans are waiting for approval ($g_names), and your message does not name exactly one, so no writes are granted. Ask the user which one.$(grant_still)"

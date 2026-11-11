@@ -880,9 +880,17 @@ check_grant() {
   g_object="$(printf '%s' "$g_text" | tr '.,;:!?\n' '||||||' | tr -c 'a-z0-9_|-' ' ' |
     awk -v RS='|' '{ n = split($0, w, " ")
       for (i = 1; i <= n; i++) if (w[i] == "approve" || w[i] == "approved") {
+        # A hedge or a question right before it, as in "I would approve it",
+        # "I d approve" or "should I approve it", is not an approval.
+        if (i > 1 && w[i - 1] ~ /^(would|should|could|might|may|will|ll|d|can|have)$/) { print "?"; exit }
+        if (w[1] ~ /^(should|could|would|can|may|shall|do|will)$/) { print "?"; exit }
         o = ""; for (j = i + 1; j <= n && w[j] != "and"; j++) o = o (o == "" ? "" : " ") w[j]
         print "=" o; exit } }')"
   g_about=""
+  if [ "$g_object" = '?' ]; then
+    note="Your message hedges or asks about approving rather than approving, so no plan is granted its writes. Keep working on the plan with the user.$(grant_still)"
+    return 0
+  fi
   case "$g_object" in
     '='*)
       g_object="$(printf '%s' "${g_object#=}" | sed -E 's/^of //; s/ (all|entirely|fully|in full|as written)$//;

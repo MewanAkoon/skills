@@ -358,18 +358,19 @@ condition: a question mark, a negation, a word in `NOT_APPROVAL` in
 that ends its clause has the run finish them ("finalize the changes" or
 "finalize the changes and the PR" is fine, while "commit the changes and push"
 is read as asking for changes, so give each step its own clause), or a no to a
-commit, push or PR. When several plans are waiting, the message names one. The
-hook says in the session whether it recorded a grant, and marks the plan
-`Status: approved`, so a later "approve" does not grant it again. A grant ends
-when another plan is approved, at `/clear`, when your message says no to a
-commit, push or PR, or when a later message speaks of approving along with a
-negation or a take-back word, as in "I don't approve", "I disapprove" or "I
-revoked my approval", or opens with "hold" or "wait". A compaction or resume
-keeps it. The grant and each push or PR made on its branch are logged to
-`grant-writes.log` in the plugin's data directory. A grant never covers
-merges, releases, tags, deploys or force pushes: they ask as before, and on
-the plan's branch a push of an unreviewed tree through Bash or a shell tool is
-denied whatever its form.
+commit, push or PR. A hedge or a question right before "approve", as in "I
+would approve it" or "should I approve it", grants nothing. When several plans
+are waiting, the message names one. The hook says in the session whether it
+recorded a grant, and marks the plan `Status: approved`, so a later "approve"
+does not grant it again. A grant ends when another plan is approved, at
+`/clear`, when your message says no to a commit, push or PR, or when a later
+message speaks of approving along with a negation or a take-back word, as in
+"I don't approve", "I disapprove" or "I revoked my approval", or opens with
+"hold" or "wait". A compaction or resume keeps it. The grant and each push or
+PR made on its branch are logged to `grant-writes.log` in the plugin's data
+directory. A grant never covers merges, releases, tags, deploys or force
+pushes: they ask as before, and on the plan's branch a push of an unreviewed
+tree through Bash or a shell tool is denied whatever its form.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
 a POSIX shell splits them, so a quoted

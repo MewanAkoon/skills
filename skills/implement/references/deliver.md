@@ -9,14 +9,16 @@ A plan grants its Delivery section's writes when the user approves it in their
 own message with "approve" or "approved", such as "I like this plan, I approve
 it, let's go ahead". What its first "approve" or "approved" approves has to be
 the plan: it ends its clause or is followed by "it", "this", "that", "the
-plan" or the plan's name, so "approve the dependabot PR" grants nothing. With
-several plans waiting, the message names one. It grants nothing when it sets a
-condition or says no: a question mark, a negation such as "not", "n't", or the
-bare "dont" or "wouldnt", a no to a commit, push or PR, or one of these words:
-before, but, once, when, wait, except, after, until, unless, if, later, yet,
-hold, without, maybe, stop, though, first, withdraw, revoke, retract. It also
-grants nothing when it asks for changes: a change, changes, an edit, edits or
-a tweak. The one exception is a phrase that ends its clause and has the run
+plan" or the plan's name, so "approve the dependabot PR" grants nothing. A
+hedge or a question right before "approve", as in "I would approve it", "I'll
+approve it" or "should I approve it", grants nothing. With several plans
+waiting, the message names one. It grants nothing when it sets a condition or
+says no: a question mark, a negation such as "not", "n't", or the bare "dont"
+or "wouldnt", a no to a commit, push or PR, or one of these words: before,
+but, once, when, wait, except, after, until, unless, if, later, yet, hold,
+without, maybe, stop, though, first, withdraw, revoke, retract. It also grants
+nothing when it asks for changes: a change, changes, an edit, edits or a
+tweak. The one exception is a phrase that ends its clause and has the run
 finish them, such as "finalize the changes" or "finalize the changes and the
 PR". "Commit the changes and push" counts as asking for changes, so give each
 step its own clause. Then keep working on the plan.

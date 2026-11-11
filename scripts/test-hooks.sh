@@ -1298,7 +1298,8 @@ for words in "Yes, I approve this. Before we start, let's review the plan" "appr
   "Approve, land this change and push it behind a feature flag" \
   "approve, finalize the changes and the PR with a different title" \
   "I approve with one edit to step 2" "Approve, commit the changes and push" "Approve the dependabot PR." \
-  "Approve the dependabot PR. Sam approved it." "Approve the dependabot PR, then I approve this plan"; do
+  "Approve the dependabot PR. Sam approved it." "Approve the dependabot PR, then I approve this plan" \
+  "I would approve it" "Should I approve it" "I'd approve it" "I'll approve it" "I might approve this"; do
   gr_plan alpha feature/a
   gr_start g2
   gr_say g2 "$words"

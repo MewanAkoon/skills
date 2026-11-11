@@ -13,6 +13,7 @@ the old code, extracted from the top of the tree with
 or reported unproven when the extract lacks what the test needs to run; every
 changed sentence of prose backed by a `file:line`.
 In a later round it checks, on that round's range, that the fix left each plan
-item it touched done.
+item it touched done, and that each earlier fix in `$R/ledger.md` still
+stands.
 The files listed as already changed are not extra. It edits, commits, and
 posts nothing, starts no subagents, and writes only under `R`.

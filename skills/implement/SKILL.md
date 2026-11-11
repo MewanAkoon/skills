@@ -15,7 +15,8 @@ the change made false, and reviews the result through `/code-review`.
 When the user approves a plan ("proceed", "go ahead", "do items 2 and 4") or
 names the exact change. A request to investigate or plan is not approval and
 goes to `eng:investigate`. One to review a PR, a branch, or a diff goes to
-`/code-review`. Committing waits for its own request.
+`/code-review`. Committing waits for its own request, or for an approved
+plan's Delivery section.
 
 ## How to use it
 
@@ -40,26 +41,23 @@ Take one change at a time. Where it alters behaviour, work test-first as
 [references/tdd.md](references/tdd.md) sets out, before any code. Match the
 nearest example of the same kind in this repo, and prefer the clean solution
 the codebase would want over the smallest diff. A change the plan does not cover
-waits for the user, unless an approved item needs it to work, and the report
-names it. When the plan sketched an interface, fill one body at a time against
+becomes a ruling, logged as [references/deliver.md](references/deliver.md)
+says, when it serves the plan's goal, and a stop when it would change it. When the plan sketched an interface, fill one body at a time against
 the sketch and run the typecheck after each.
 
 Before a rename, retype, or move that breaks callers, or removing a guard, a
 retry, or a special case, even one the request named, read
 [references/risky.md](references/risky.md).
 
-Keep agreed signatures. Stop and bring the problem back when friction repeats:
-the same workaround in unrelated places, unrelated edge cases each needing
-their own branch, a cast or `any` needed to compile, callers needing to know
-internals, a lock where the plan said nothing was shared. Say what the plan
-got wrong. A few hard cases in the data leave the plan standing.
+Keep agreed signatures. Stop when friction repeats, as
+[references/friction.md](references/friction.md) lists.
 
 Parts that touch disjoint files can run in parallel subagents, as
 [references/parallel.md](references/parallel.md) describes.
 
 **Done when:** every approved item is in the code, or the run has stopped
 with its reason named, which is the plan's flaw, a reason `eng:why` found to
-keep code, a change the plan does not cover, a failed parallel part, or a
+keep code, a change that would alter the plan's goal, a failed parallel part, or a
 `tdd.md` stop: a seam to agree, a suite that will not run, or a test that
 never reaches the code.
 
@@ -94,14 +92,17 @@ Read [references/review.md](references/review.md) first and follow it.
 **Done when:** its report says ready, or not ready with each blocker named, or
 the review still runs in the background and the reply says so.
 
+## Step 6: Deliver
+
+When the user approved a plan whose Delivery section lists writes, read
+[references/deliver.md](references/deliver.md) and follow it.
+
+**Done when:** its hand-back is written, or the run stopped with a report
+naming the stop it hit.
+
 ## Report
 
 What changed, by file. Every check run, with its result. Anything done outside
 the plan. The review report. What was not checked, and any risk.
 
 **Done when:** each of those is in the report, or marked none.
-
----
-
-The friction tells in step 2 are adapted from the `architect` skill in
-cursor/plugins pstack, by Lauren Tan (MIT).

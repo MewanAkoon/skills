@@ -20,7 +20,10 @@ confirm before committing.
 
 This skill shapes a commit. It does not decide that one happens. A go-ahead
 given earlier in the conversation does not carry forward, and "address the
-review" or "fix the comments" asks for changes and nothing else. With a dirty
+review" or "fix the comments" asks for changes and nothing else. The one
+exception is an approved plan whose Delivery section lists this commit, as
+`eng:implement`'s `references/deliver.md` says, once its review loop reported
+ready on this tree. With a dirty
 tree and no ask, say what you would commit and wait. A retry such as "try
 again" after a failed commit is the same ask. A background task's notification
 is not a message from the user, so the ask before it still stands.

@@ -4,6 +4,14 @@ Every section gets content or the word "none". Keep each to what a reviewer
 needs to approve or reject the plan. Point at code with `file:line` rather
 than pasting it.
 
+A plan file lives in `.claude/plans` of the checkout the work happens in,
+and opens with two lines: `Plan name: <name>`, short and in lowercase with
+hyphens, and `Status: awaiting approval` once it is presented. A plan written
+in an earlier session waits again once it is changed in this one. When the user
+wants one approved again, set its status back to awaiting approval. Approval of a plan in chat alone grants no writes. How the user
+approves, and what that lets the run do, is in `eng:implement`'s
+`references/deliver.md`.
+
 **Goal.** One or two sentences: what will be true when this is done.
 
 **Current behaviour.** What happens today, with the `file:line` that makes it
@@ -38,7 +46,32 @@ it runs at. For a bug, the reproduction that becomes the regression test.
 **Out of scope.** What this plan deliberately leaves alone.
 
 **Open questions.** Decisions the user has to make, each with the options and
-a recommendation.
+a recommendation. A plan is ready to approve only when every one has an
+answer. Until then, say so and present it as a draft.
+
+**Delivery.** What approval of this plan lets the run do without asking
+again: a line `Branch: <branch>`, `feature/`, `fix/` or `chore/` plus a short
+name; the commits, grouped as they will land; push to that branch; the PR, a
+draft until the post-PR review loop and CI are clean unless this says
+otherwise, and its title; the checks that must pass; and the post-PR review
+loop, with the standing rules for what review may find. Leave out anything
+that should wait for the user. Merges, releases, tags, deploys, force pushes
+and pushes to the default branch never go here.
+
+**Progress.** Empty at first. The run adds each ruling and each pushed
+commit, so a new session can resume from the file.
+
+## Walk-through
+
+Before asking anything, go through each item in Changes as if implementing it
+now: the files opened, the tests written, the review, the commits, the PR.
+List every decision point it hits. Each one the code or the repo's patterns
+answer goes into the plan. Every other one goes into Open questions. For what
+cannot be known until the run, such as what review will find or a check that
+still fails after the last review round, ask for a standing rule instead.
+Ask them one at a time, each with a recommendation, waiting for the answer
+before the next, and write each answer in. Repeat only if the answers raise
+new ones. What the walk-through still misses becomes a ruling during the run.
 
 ## Before presenting it
 

@@ -273,7 +273,8 @@ and `pr` back, and the `attribution` entry if you want its credit lines back.
 
 [standards/workflow.md](standards/workflow.md) is eight standing steps:
 understand first, plan and stop, implement on approval, review until clean,
-commit and open PRs only when asked, handle PR feedback on evidence and
+commit and open PRs only when asked or when a plan you approved lists them,
+handle PR feedback on evidence and
 review the whole PR after each push, never post, and report briefly. The
 plugin's SessionStart hook sends it at the start of every session and after
 each compaction. It names the skill for each step
@@ -282,7 +283,7 @@ that has a procedure, so a change of phase is the cue to load it:
 | Step | Skill |
 |---|---|
 | 1 and 2, understand and plan | `eng:investigate` |
-| 3, implement | `eng:implement` |
+| 3, implement, and the delivery an approved plan lists | `eng:implement`, and its `references/deliver.md` |
 | 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
 | 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
 | 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the whole PR |
@@ -310,7 +311,8 @@ every session and inside subagents. They run in Claude Code only.
 | Any other MCP write, one that only creates or changes something, such as a doc, page, sheet or issue edit through Claude Docs, Notion, Google Drive, Sheets, Linear or any other server | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
-| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review at `high` or above of the PR by number or by a link to the PR or its files after the push counts, and so does a range whose ends meet at or before the merge base with a remote's default branch and that ends at that commit, run after the push or as the last such range before it |
+| Under a plan you approved, a push or a PR write | Through any tool but Bash, MCP tools included, it asks, and a push or new PR through the terminal tool, Monitor or PowerShell of a tree the review loop did not read is denied. Through Bash, off the plan's branch, a push or a new PR asks. On it, it is denied when HEAD's tree is not the one the review loop last read, and it asks for any push but a plain `git push` of that branch as its own command, which also asks when git's settings would send it elsewhere, push other branches, or push tags or submodules along with it, for any new PR but a `gh pr create` on its own naming no other head or repository, and from the seventh push on. Otherwise it runs |
+| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review at `high` or above of the PR by number or by a link to the PR or its files after the push counts, and so does a range whose ends meet at or before the merge base with a remote's default branch and that ends at that commit, run after the push or as the last such range before it. Under a plan you approved, on its branch, the stop is blocked instead, once per pushed commit as the reminder is, so the review runs before the hand-back |
 
 The Claude app's own MCP servers, such as the one a project thread replies
 through, are exempt from every check, because they carry the conversation
@@ -340,6 +342,30 @@ on what you asked for. A subagent's report, a background task or a CI event is
 not your message, so it changes none of this. When the hook cannot read its
 state at all, it lets the write run.
 
+A plan you approve can grant its own writes. The plan has to be a file in
+`.claude/plans` of the session's own checkout, holding `Plan name: <name>`
+and, in its first five lines, `Status: awaiting approval`. It has to have
+changed since the session started, and it needs a line that starts with
+`Branch:` and names a branch that is not a default one. Any message of yours
+with "approve" or "approved" in it approves the plan, such as "I like this
+plan, I approve it, let's go ahead". It does not when it asks for changes or
+sets a condition: a question mark, a negation, a word in `NOT_APPROVAL` in
+[hooks/eng-hook](hooks/eng-hook), such as "but", "before", "wait", "once",
+"until" or "if", a change, changes, an edit, edits or a tweak, unless a phrase
+that ends its clause has the run finish them ("finalize the changes" or
+"finalize the changes and the PR" is fine, while "commit the changes and push"
+is read as asking for changes, so give each step its own clause), or a no to a
+commit, push or PR. When several plans are waiting, the message names one. The
+hook says in the session whether it recorded a grant, and marks the plan
+`Status: approved`, so a later "approve" does not grant it again. A grant ends
+when another plan is approved, at `/clear`, when your message says no to a
+commit, push or PR, or when a later message speaks of approving along with a
+negation or a take-back word, as in "I don't approve" or "I revoked my
+approval", or opens with "hold" or "wait". A compaction or resume keeps it.
+The grant and each push or PR made under it are logged to `grant-writes.log`
+in the plugin's data directory. Merges, releases, tags, deploys and force
+pushes ask as before.
+
 The hooks catch a slip, not a determined bypass. They read commands the way
 a POSIX shell splits them, so a quoted
 `gh pr comment` in a grep or a heredoc stays allowed, while a command inside
@@ -349,7 +375,7 @@ the words after its `--`, and before it the first four words and any later
 word that names a command the hook has a rule for. A chain of more than 50
 commands behind one another asks. A PowerShell
 command is read by those same rules, so its own quoting and escapes, and a
-command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings, a tag pushed
+command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings outside a grant's plain-push check, a tag pushed
 by its bare name, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name and input both hide what it does, or a browser posting through a web

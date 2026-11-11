@@ -731,7 +731,7 @@ said_no() {
 NOT_APPROVAL="not no never cannot dont didnt doesnt cant wont isnt havent hasnt wouldnt \
 shouldnt couldnt arent wasnt werent before but once \
 when wait except after until unless if later yet hold without maybe \
-stop though first withdraw revoke retract would should could might d"
+stop though first withdraw revoke retract"
 
 # The words that, beside "approve" in a later message, take an approval
 # back, read as an extended regex over the message's words.

@@ -14,13 +14,12 @@ several plans waiting, the message names one. It grants nothing when it sets a
 condition or says no: a question mark, a negation such as "not", "n't", or the
 bare "dont" or "wouldnt", a no to a commit, push or PR, or one of these words:
 before, but, once, when, wait, except, after, until, unless, if, later, yet,
-hold, without, maybe, stop, though, first, withdraw, revoke, retract, would,
-should, could, might, or "I'd". It also grants nothing when it asks for
-changes: a change, changes, an edit, edits or a tweak. The one exception is a
-phrase that ends its clause and has the run finish them, such as "finalize the
-changes" or "finalize the changes and the PR". "Commit the changes and push"
-counts as asking for changes, so give each step its own clause. Then keep
-working on the plan.
+hold, without, maybe, stop, though, first, withdraw, revoke, retract. It also
+grants nothing when it asks for changes: a change, changes, an edit, edits or
+a tweak. The one exception is a phrase that ends its clause and has the run
+finish them, such as "finalize the changes" or "finalize the changes and the
+PR". "Commit the changes and push" counts as asking for changes, so give each
+step its own clause. Then keep working on the plan.
 
 Once approved, the approval ends when another plan is approved, at `/clear`,
 at a no to a commit, push or PR, at a message that speaks of approving along

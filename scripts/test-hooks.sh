@@ -1070,7 +1070,8 @@ pr_review "high https://gitlab.com/o/r/-/merge_requests/5"
 # whether it counts as opening one.
 for case in 'gh pr create -twip -b x|gate pr open pr' 'gh pr create --web=false -t x|gate pr open pr' \
   'gh pr create -dw|gate push' 'gh pr create --dry-run=true|gate push' 'glab mr create --web=false -t x|gate pr open pr' \
-  'glab mr create -yw|gate pr' 'gt submit|gate push gate pr open pr' 'gt submit --dry-run|gate push gate pr'; do
+  'glab mr create -yw|gate pr' 'gt submit|gate push gate pr open pr' 'gt submit --dry-run|gate push gate pr' \
+  'gh pr create -t x -F b --assignee @me|gate pr open pr'; do
   said="$(printf '%s' "${case%%|*}" | awk -f hooks/classify-command.awk | tr '\n' ' ')"
   [ "$said" = "${case#*|} " ] || bad "classifier: '${case%%|*}' gave '$said', not '${case#*|}'"
 done
@@ -1530,6 +1531,8 @@ gr_expect allow 'gh pr create --title x --body-file b.md'
 # its $( ) stays unexpanded.
 # shellcheck disable=SC2016
 gr_expect allow 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md" --base main --draft'
+# shellcheck disable=SC2016
+gr_expect allow 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md" --base main --assignee @me --draft'
 bs="\\"
 # A backslash that is itself escaped leaves the line break a separator.
 gr_expect ask "$(printf '%s%s%s\n%s' 'gh pr create --title x ' "$bs" "$bs" 'gh pr create --repo other/repo')"
@@ -1538,6 +1541,8 @@ gr_expect allow 'gh pr create --title "Fix #12" --body-file b.md'
 # The same over two lines, as eng:pr writes it, joined by a backslash.
 # shellcheck disable=SC2016
 gr_expect allow "$(printf '%s %s\n  %s' 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md"' "$bs" '--base $BASE')"
+# shellcheck disable=SC2016
+gr_expect allow "$(printf '%s %s\n  %s' 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md"' "$bs" '--base $BASE --assignee @me')"
 gr_expect ask 'git push origin HEAD:main'
 gr_expect ask 'git push fork feature/a'
 gr_expect ask 'git push -q origin feature/a && echo done'

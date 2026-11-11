@@ -6,6 +6,18 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.11.0 - unreleased
+
+### Changed
+
+- `eng:pr` assigns each pull request it opens to the account `gh` is signed
+  in as, with `--assignee @me`, and still adds no reviewer the user did not
+  name. Assignees the user names, or none, win, and a PR to a fork's upstream
+  gets none. When the assignee fails after the PR opened, the run goes on and
+  says what is missing, and when no PR opened, it tries once without the
+  default `@me`. The explanation of its stop on an operation in flight or an
+  unmerged path moves to a reference file, to make room.
+
 ## 0.9.1 - unreleased
 
 ### Changed

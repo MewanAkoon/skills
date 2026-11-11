@@ -39,12 +39,14 @@ check_block() {
   local name="$1" text="$2"
   while IFS= read -r line; do
     [ -z "$line" ] && continue
-    printf '%s\n' "$text" | grep -qxF -- "$line" \
+    # A here-string, not a pipe: grep -q stops reading at its first match,
+    # and with pipefail the writer's broken pipe would fail the check.
+    grep -qxF -- "$line" <<< "$text" \
       || { bad "$name: the block is missing a line of $contract: $line"; return; }
   done < "$contract"
-  printf '%s\n' "$text" | grep -qx '## Punctuation' || bad "$name: no Punctuation section"
-  printf '%s\n' "$text" | grep -qx '## Word choice' || bad "$name: no Word choice section"
-  printf '%s\n' "$text" | grep -qx '## Sentences' && bad "$name: the block runs past Word choice"
+  grep -qx '## Punctuation' <<< "$text" || bad "$name: no Punctuation section"
+  grep -qx '## Word choice' <<< "$text" || bad "$name: no Word choice section"
+  grep -qx '## Sentences' <<< "$text" && bad "$name: the block runs past Word choice"
   local size
   size="$(printf '%s' "$text" | LC_ALL=C wc -c | tr -d ' ')"
   [ "$size" -le 5000 ] || bad "$name: the block is $size bytes, over the budget of 5000"
@@ -1224,6 +1226,443 @@ git -C "$pr" push -q 2>/dev/null
 pr_hook post-tool 'git push -q' PostToolUse t1
 pr_stop
 pr_reminded || bad "pr reminder: a push run beside another push command got no reminder"
+# Outside a plan's grant the reminder stays context, so Claude may still stop.
+pr_commit seventeen-b
+pr_bash 'git push -q'
+pr_stop
+[ -z "$(jq -r '.decision // empty' "$scratch/out" 2>/dev/null)" ] || bad "pr reminder: a push outside a grant blocked the stop"
+
+# Plan grants. A plan file waiting for approval, approved in the user's own
+# message, lets a push through only on its branch, as a plain push of a tree a
+# review read, six times; and the stop after it blocks rather than reminds.
+gr="$scratch/gr"
+git init -q --bare "$scratch/gr-remote.git"
+git clone -q "$scratch/gr-remote.git" "$gr" 2>/dev/null
+git -C "$gr" symbolic-ref HEAD refs/heads/main
+printf '.claude/\n' >> "$gr/.git/info/exclude"
+printf 'one\n' > "$gr/a.txt"
+git -C "$gr" add a.txt
+git -C "$gr" -c user.name=t -c user.email=t@t commit -qm init
+git -C "$gr" push -q -u origin main 2>/dev/null
+git -C "$gr" remote set-head origin main
+# Writes plan $1 for branch $2, none when empty, with status $3.
+gr_plan() {
+  mkdir -p "$gr/.claude/plans"
+  {
+    printf 'Plan name: %s\nStatus: %s\n\n# %s\n\n## Delivery\n\n' "$1" "${3:-awaiting approval}" "$1"
+    # The branch in backticks, as a plan writes it.
+    [ -z "$2" ] || printf 'Branch: %s%s%s\n' '`' "$2" '`'
+  } > "$gr/.claude/plans/$1.md"
+}
+# Starts session $1, dated well before any plan written after it.
+gr_start() {
+  hook_run session-start "$(jq -cn --arg s "$1" --arg d "$gr" '{session_id: $s, cwd: $d, source: "startup"}')"
+  touch -t 202501010000 "$data/sessions/$1/started"
+  # A real start is a new session; a test reuses the name, so clear its grant.
+  rm -f "$data/sessions/$1/grant" "$data/sessions/$1/grant-pushes"
+}
+gr_say() { hook_run prompt "$(jq -cn --arg s "$1" --arg d "$gr" --arg p "$2" '{session_id: $s, cwd: $d, prompt: $p}')"; }
+gr_note() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null; }
+# True when session $1 holds a grant for plan $2.
+granted() { [ "$(sed -n 2p "$data/sessions/$1/grant" 2>/dev/null)" = "$2" ]; }
+gr_plan alpha feature/a
+gr_start g1
+gr_say g1 "approve"
+granted g1 alpha || bad "grant: a bare approve with one plan waiting granted nothing"
+gr_note | grep -q 'approves plan alpha' || bad "grant: a grant recorded no context saying so"
+# A granted plan stops waiting, so a later approve cannot grant it again.
+head -n 2 "$gr/.claude/plans/alpha.md" | grep -qx 'Status: approved' || bad "grant: the granted plan was not marked approved"
+grep -qx 'Status: awaiting approval' "$gr/.claude/plans/alpha.md" && bad "grant: the granted plan still says it is waiting"
+printf '3\n' > "$data/sessions/g1/grant-pushes"
+gr_say g1 "approve"
+[ "$(cat "$data/sessions/g1/grant-pushes" 2>/dev/null)" = 3 ] || bad "grant: a second approve reset the count of pushes"
+gr_plan alpha feature/a
+gr_start g1b
+gr_say g1b "I approve this plan. Let$(printf '\342\200\231')s ensure we implement it correctly, follow the engineering workflow, and finalize the changes and the PR."
+granted g1b alpha || bad "grant: an approval in a sentence with no condition granted nothing"
+for words in "Yes, I approve this. Before we start, let's review the plan" "approved?" \
+  "I don't approve" "approve, but wait" "approve once CI passes" "approve it after lunch" \
+  "I can't approve this yet" "approve it when CI is green" "looks good, go ahead" \
+  "I haven$(printf '\342\200\231')t approved this" "I don$(printf '\342\200\231')t approve" \
+  "I won$(printf '\342\200\230')t approve" "I don\`t approve" "I'd approve this with one change" \
+  "approve this. Skip the push, just commit" "approve this, leave the PR to me" \
+  "I like it, but it needs changes before I approve" "I approve with a few changes" \
+  "approve, with two tweaks to step 3" "I approve, rename the branch first" \
+  "Approved, make these changes: rename the branch" "approve, a couple of changes below" \
+  "I approve with the following changes: rename step 2" "approve with 4 changes" "approve, a few more edits" \
+  "I wouldnt approve this" "you have my approval" "approve. review the changes I made to step 2" \
+  "Approved, two changes are good to add: rename the branch" "I approve. Accept the changes you suggested and go" \
+  "Approve, these edits please: rename step 2" "Approved, two changes look good to add: rename the branch" \
+  "The changes look good, approved" "Approve, land this change behind a feature flag" \
+  "Approve, land this change and put it behind a feature flag" "approve and finalize all the changes we agreed" \
+  "Approve, land this change and push it behind a feature flag" \
+  "approve, finalize the changes and the PR with a different title" \
+  "I approve with one edit to step 2" "Approve, commit the changes and push" "Approve the dependabot PR." \
+  "Approve the dependabot PR. Sam approved it." "Approve the dependabot PR, then I approve this plan" \
+  "I would approve it" "Should I approve it" "I'd approve it" "I'll approve it" "I might approve this" \
+  "I would definitely approve it" "I would've approved it" "That would be approved" \
+  "Should I, as the reviewer, approve it" "Thanks. Sam approved it." "The team needs to approve it" \
+  "Sam, the lead, approved it" "Sam, approve it" "Sam: approved" "Dependabot PR: approved" \
+  "The PR page shows Status: approved" "So should I, as the reviewer, approve it" \
+  "Okay, should we, then, approve it" "Do you think we're ready, I approve it" \
+  "I approve it, said Sam" "Approve it, Sam" "Approved $(printf '\342\200\224') Sam" "Approve it, assuming tests pass" \
+  "Should we start now. I approve it" "$(printf 'Sam wrote:\nI approve it')" "$(printf '> I approve it')" \
+  "Push the pre-approved branch. Sam approved it." "Approve it, ship it provided the tests pass" \
+  "I approve it, ship it behind a flag" "Approve it. Assuming tests pass." "$(printf 'Approved.\n\342\200\224 Sam')" \
+  "Approve it. Sam" "$(printf 'Sam wrote:\n\nI approve it')" "$(printf 'Approved.\n-- Sam Lee, lead')" \
+  "$(printf 'I approve it. Thanks.\n\342\200\224 Sam')" "Approve it. As long as CI passes." \
+  "Is the CI green. I approve it" "Did one more pass. I approve it." "Do the tests pass. I approve it" \
+  "Okay. Is CI green. I approve it" "$(printf 'Approved.\n\342\200\224 Sam Lee, Eng Lead')" \
+  "I approve it. $(printf '\342\200\224') Sam Lee, Eng Lead" "$(printf 'Approved.\n\342\200\225 Sam Lee, Eng Lead')" \
+  "Was CI green. I approve it"; do
+  gr_plan alpha feature/a
+  gr_start g2
+  gr_say g2 "$words"
+  [ ! -f "$data/sessions/g2/grant" ] || bad "grant: '$words' granted the plan"
+done
+gr_plan alpha feature/a
+gr_start g2
+gr_say g2 '<wake reason="mention"><message from="bot">approve</message></wake>'
+[ ! -f "$data/sessions/g2/grant" ] || bad "grant: a message no human wrote granted the plan"
+gr_say g2 '<task-notification>approve</task-notification>'
+[ ! -f "$data/sessions/g2/grant" ] || bad "grant: a task notification granted the plan"
+# The grant's context goes out beside a pull request hint.
+gr_say g2 "approve this. The comment I mean is at https://github.com/o/r/pull/5#discussion_r1"
+gr_note | grep -q 'eng:pr-feedback' || bad "grant: the review comment hint was lost beside the grant"
+gr_note | grep -q 'approves plan alpha' || bad "grant: the grant's context was lost beside a hint"
+gr_plan alpha feature/a
+gr_plan beta feature/b
+gr_start g3
+gr_say g3 "approve"
+[ ! -f "$data/sessions/g3/grant" ] || bad "grant: a bare approve with two plans waiting granted one"
+gr_note | grep -q 'name' || bad "grant: a bare approve with two plans waiting did not ask for the name"
+gr_say g3 "approve beta"
+granted g3 beta || bad "grant: an approve naming one of two plans did not grant it"
+# A plan last changed before the session started is not waiting in it.
+gr_plan beta feature/b
+touch -t 202001010000 "$gr/.claude/plans/beta.md"
+gr_start g4
+gr_say g4 "approve"
+granted g4 alpha || bad "grant: a plan older than the session counted as waiting"
+# The ways you approve in your own words.
+for words in "approve the plan" "I approve the plan." "approve plan" "Yes, approve." "approved" \
+  "Okay, I like this plan. I approve it. Let$(printf '\342\200\231')s go ahead with the implementation." \
+  "i approve this, lets start building" "I like this plan and want to approve it" \
+  "approve the alpha plan" "I approve of this plan" "approve it all" "approve \`alpha\`" \
+  "Okay. I approve it" "I approve it $(printf '\342\200\224') let's go" "approve - looks great" "I like this plan, I approve it, let's go ahead" "Looks good, I approve" \
+  "I approve it. The PR should target main" \
+  "I have approved it" "I've approved it" "Do approve it" "It is approved" "I hereby approve the plan" \
+  "I want to approve it" "Great, approved" "Plan approved, go ahead" "Yes: approved" \
+  "Approved, go ahead and commit" "Approved, commit and push" \
+  "I approve, let's get started" "Great plan, I approve" "I approve it. Thanks"; do
+  gr_plan alpha feature/a
+  gr_start g4d
+  gr_say g4d "$words"
+  granted g4d alpha || bad "grant: '$words' did not grant the one plan waiting"
+done
+# An approval of something other than the plan says so.
+gr_plan alpha feature/a
+gr_start g4k
+gr_say g4k "Approve the dependabot PR."
+gr_note | grep -q 'something other than the plan' || bad "grant: an approval of something else did not say so"
+# A condition in the same clause gets the condition's note.
+gr_say g4k "I approve this plan but change step 2"
+gr_note | grep -q 'condition' || bad "grant: a condition beside the approval did not get the condition note"
+gr_plan alpha feature/a approved
+# A message that grants nothing new says an earlier grant still holds, unless
+# it sets a condition.
+gr_say g4d "approve"
+gr_note | grep -q 'still holds' || bad "grant: a later approve with no plan waiting did not say the grant still holds"
+gr_say g4d "Hold on, I need to approve the new version first"
+gr_note | grep -q 'still holds' && bad "grant: a message asking to hold said the grant still holds"
+[ ! -f "$data/sessions/g4d/grant" ] || bad "grant: doubt about the approval left the grant"
+# A passing mention of approval with a condition word keeps the grant.
+gr_plan alpha feature/a
+gr_start g4f
+gr_say g4f "approve"
+gr_say g4f "The client approved the copy, carry on"
+granted g4f alpha || bad "grant: a passing mention of approval ended the grant"
+gr_say g4f "I don't approve this anymore"
+[ ! -f "$data/sessions/g4f/grant" ] || bad "grant: 'I don't approve this anymore' left the grant"
+for words in "I didn't mean to approve that" "I withdraw my approval" "Hold on, I want to check something" "wait" \
+  "I revoke my approval" "I take back my approval" "I didnt mean to approve that" \
+  "I take my approval back" "I retract my approval" "I revoked my approval" "I have withdrawn my approval" \
+  "This isn't approved anymore" "I cannot approve this" "I disapprove of this plan entirely"; do
+  gr_plan alpha feature/a
+  gr_say g4f "approve"
+  granted g4f alpha || bad "grant: setup approval before '$words' failed"
+  gr_say g4f "$words"
+  [ ! -f "$data/sessions/g4f/grant" ] || bad "grant: '$words' left the grant"
+done
+# Only a first line that opens with "hold" or "wait" pauses.
+for words in "Stop asking me, just push it" "$(printf 'Carry on.\n  wait times are fine')" \
+  "The client approved the copy, carry on" "We still want approval from legal later, carry on"; do
+  gr_plan alpha feature/a
+  gr_say g4f "approve"
+  gr_say g4f "$words"
+  granted g4f alpha || bad "grant: '$words' ended the grant"
+done
+# Changes the run is to finish, in a phrase that ends its clause, do not block.
+for words in "I approve, then commit the edits, and finalize the changes" \
+  "Approve, commit the changes, push the changes" "Approved, ship the change" \
+  "approved, commit the tweak" "Approve, commit the edit"; do
+  gr_plan alpha feature/a
+  gr_start g4g
+  gr_say g4g "$words"
+  granted g4g alpha || bad "grant: '$words' did not grant"
+done
+# In a repo with plans and none waiting, an approval is told it grants nothing.
+gr_start g4i
+gr_say g4i "approve"
+gr_note | grep -q 'no plan file' || bad "grant: an approval with no plan waiting got no note"
+# Outside a repo with plans, an approval that speaks of a plan is told too.
+hook_run prompt "$(jq -cn --arg d "$scratch/plain" '{session_id: "g4j", cwd: $d, prompt: "approved, go ahead with the plan"}')"
+gr_note | grep -q 'no plan file' || bad "grant: an approval of a plan with no plan file got no note"
+# Outside a repo with plans, approving something else gets no note.
+hook_run prompt "$(jq -cn --arg d "$scratch/plain" '{session_id: "g4h", cwd: $d, prompt: "approve the dependabot PR"}')"
+[ -z "$(gr_note)" ] || bad "grant: an approval outside any plan got a note"
+# With no plan waiting, a message that only mentions approving gets no note.
+gr_start g4e
+gr_say g4e "don't approve PR 12 until CI passes"
+[ -z "$(gr_note)" ] || bad "grant: a condition with no plan waiting got a note"
+gr_plan beta feature/b approved
+gr_plan gamma ""
+gr_start g5
+gr_say g5 "approve"
+[ ! -f "$data/sessions/g5/grant" ] || bad "grant: a plan with no Branch line granted"
+gr_note | grep -q 'Branch' || bad "grant: a plan with no Branch line did not say why"
+gr_plan gamma main
+gr_start g6
+gr_say g6 "approve"
+[ ! -f "$data/sessions/g6/grant" ] || bad "grant: a plan naming the default branch granted"
+gr_note | grep -q 'default branch' || bad "grant: a plan naming the default branch did not say why"
+rm "$gr/.claude/plans/gamma.md"
+# Only the header's Status line changes, and a plan that cannot be marked
+# grants nothing.
+gr_plan alpha feature/a
+printf '\n\n\n\nStatus: awaiting approval\n' >> "$gr/.claude/plans/alpha.md"
+gr_start g8
+gr_say g8 "approve"
+granted g8 alpha || bad "grant: the plan with a quoted status line was not granted"
+[ "$(grep -c '^Status: awaiting approval$' "$gr/.claude/plans/alpha.md")" = 1 ] || bad "grant: a Status line past the header was changed"
+if [ "$(id -u)" != 0 ]; then
+  gr_plan alpha feature/a
+  chmod 555 "$gr/.claude/plans"
+  gr_start g9
+  gr_say g9 "approve"
+  chmod 755 "$gr/.claude/plans"
+  [ ! -f "$data/sessions/g9/grant" ] || bad "grant: a plan that could not be marked approved was granted"
+  gr_note | grep -q 'could not be marked' || bad "grant: a plan that could not be marked did not say why"
+fi
+# Another checkout's plans, such as the main clone's beside a worktree, are
+# not this session's.
+git -C "$gr" worktree add -q -b wt-branch "$scratch/gr-wt" 2>/dev/null || bad "grant: the worktree for the next case was not made"
+gr_plan alpha feature/a
+hook_run session-start "$(jq -cn --arg d "$scratch/gr-wt" '{session_id: "g7", cwd: $d, source: "startup"}')"
+touch -t 202501010000 "$data/sessions/g7/started"
+hook_run prompt "$(jq -cn --arg d "$scratch/gr-wt" '{session_id: "g7", cwd: $d, prompt: "approve"}')"
+[ ! -f "$data/sessions/g7/grant" ] || bad "grant: a worktree session granted the main clone's plan"
+git -C "$gr" worktree remove --force "$scratch/gr-wt"
+
+# Under a grant, at a push.
+gr_plan alpha feature/a
+git -C "$gr" checkout -q -b feature/a
+gr_start gp
+gr_say gp "approve alpha"
+granted gp alpha || bad "grant: setup approval failed"
+printf 'commit\npr\n' >> "$data/sessions/gp/skills"
+gr_pre() {
+  hook_run pre-tool "$(jq -cn --arg d "$gr" --arg c "$1" --arg i "${2:-}" \
+    '{session_id: "gp", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}
+      + (if $i == "" then {} else {tool_use_id: $i} end)')"
+}
+# Runs a command as Claude Code would: pre-tool, then, when allowed, the
+# command and post-tool. $gr_verdict holds what pre-tool decided.
+gr_run() {
+  local id="id$RANDOM$RANDOM" input
+  input="$(jq -cn --arg d "$gr" --arg c "$1" --arg i "$id" \
+    '{session_id: "gp", cwd: $d, tool_name: "Bash", tool_use_id: $i, tool_input: {command: $c}}')"
+  hook_run pre-tool "$(jq -c '. + {hook_event_name: "PreToolUse"}' <<< "$input")"
+  gr_verdict="$(verdict)"
+  [ "$gr_verdict" = allow ] || return 0
+  (cd "$gr" && eval "$1") > /dev/null 2>&1
+  hook_run post-tool "$(jq -c '. + {hook_event_name: "PostToolUse"}' <<< "$input")"
+}
+gr_commit() {
+  printf '%s\n' "$1" > "$gr/a.txt"
+  git -C "$gr" -c user.name=t -c user.email=t@t commit -qam "$1"
+}
+gr_review() {
+  hook_run post-tool "$(jq -cn --arg d "$gr" --arg a "$1" '{session_id: "gp", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: $a}}')"
+}
+gr_whole() { gr_review "high $(git -C "$gr" merge-base origin/main HEAD)..HEAD"; }
+# The review loop's kind of review, at high: the last commit taken back to
+# uncommitted changes, a snapshot of them on HEAD reviewed, and the commit
+# made again, so the review reads the local changes and not the whole PR.
+gr_snap() {
+  git -C "$gr" reset -q --soft HEAD~1
+  gr_review "high HEAD..$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree \
+    "$(git -C "$gr" write-tree)" -p HEAD -m review)"
+  git -C "$gr" -c user.name=t -c user.email=t@t commit -qm again
+}
+gr_expect() {
+  gr_pre "$2"
+  [ "$(verdict)" = "$1" ] || bad "grant: got $(verdict), want $1, for: $2 ($(jq -r .hookSpecificOutput.permissionDecisionReason "$scratch/out" 2>/dev/null))"
+  if [ -n "${3:-}" ]; then
+    jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$3" \
+      || bad "grant: the reason for '$2' does not say '$3'"
+  fi
+}
+gr_commit two
+gr_expect deny 'git push -u origin feature/a' 'review step'
+gr_expect deny 'gh pr create --title x --body-file b.md' 'review step'
+# A review of a range whose start does not resolve reads nothing, so it does
+# not count.
+gr_review "high nosuchref..$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree "HEAD^{tree}" -p HEAD -m review)"
+gr_expect deny 'git push -u origin feature/a' 'review step'
+# A review of an empty range reads nothing, so it does not count.
+gr_review "high HEAD..$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree "HEAD^{tree}" -p HEAD -m review)"
+gr_expect deny 'git push -u origin feature/a' 'review step'
+gr_snap
+gr_expect allow 'git push -u origin feature/a'
+gr_expect allow 'gh pr create --title x --body-file b.md'
+# The form eng:pr runs, its title read from a file. The command is data, so
+# its $( ) stays unexpanded.
+# shellcheck disable=SC2016
+gr_expect allow 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md" --base main --draft'
+bs="\\"
+# A backslash that is itself escaped leaves the line break a separator.
+gr_expect ask "$(printf '%s%s%s\n%s' 'gh pr create --title x ' "$bs" "$bs" 'gh pr create --repo other/repo')"
+gr_expect ask "$(printf '%s%s\n%s' 'gh pr create --fill #' "$bs" 'gh pr create --fill')"
+gr_expect allow 'gh pr create --title "Fix #12" --body-file b.md'
+# The same over two lines, as eng:pr writes it, joined by a backslash.
+# shellcheck disable=SC2016
+gr_expect allow "$(printf '%s %s\n  %s' 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md"' "$bs" '--base $BASE')"
+gr_expect ask 'git push origin HEAD:main'
+gr_expect ask 'git push fork feature/a'
+gr_expect ask 'git push -q origin feature/a && echo done'
+gr_expect ask 'git -c user.name=t -c user.email=t@t commit -qam x && git push'
+gr_expect ask 'git push --force'
+gr_expect ask 'gh pr create --head unrelated --base main --title x --body-file b.md'
+gr_expect ask 'gh pr create -R other/repo --title x --body-file b.md'
+gr_expect ask 'gh pr create -dR other/repo --title x --body-file b.md'
+gr_expect ask 'gh pr create --title x "--head" other --body-file b.md'
+gr_expect ask "gh pr create --title x '--repo=other/repo' --body-file b.md"
+gr_expect ask 'gh pr create --title x --body-file b.md && echo done'
+gr_expect ask 'GH_REPO=other/repo gh pr create --title x --body-file b.md'
+gr_expect ask 'gh api repos/o/r/pulls -X POST -f head=other -f base=main -f title=x'
+git -C "$gr" config remote.origin.push 'HEAD:refs/heads/main'
+gr_expect ask 'git push'
+gr_expect ask 'git push origin feature/a'
+git -C "$gr" config --unset remote.origin.push
+git -C "$gr" config remote.origin.mirror true
+gr_expect ask 'git push origin'
+git -C "$gr" config --unset remote.origin.mirror
+git -C "$gr" config branch.feature/a.pushRemote fork
+gr_expect ask 'git push'
+git -C "$gr" config --unset branch.feature/a.pushRemote
+git -C "$gr" config remote.origin.pushurl "$scratch/elsewhere.git"
+gr_expect ask 'git push -u origin feature/a'
+git -C "$gr" config --unset remote.origin.pushurl
+git -C "$gr" config url."$scratch/elsewhere.git".pushInsteadOf "$scratch/gr-remote.git"
+gr_expect ask 'git push'
+git -C "$gr" config --unset url."$scratch/elsewhere.git".pushInsteadOf
+git -C "$gr" config url."$scratch/elsewhere.git".insteadOf "$scratch/gr-remote.git"
+gr_expect ask 'git push'
+git -C "$gr" config --unset url."$scratch/elsewhere.git".insteadOf
+git -C "$gr" config push.followTags true
+gr_expect ask 'git push'
+git -C "$gr" config --unset push.followTags
+git -C "$gr" config push.recurseSubmodules on-demand
+gr_expect ask 'git push'
+# An explicit no wins over submodule.recurse.
+git -C "$gr" config push.recurseSubmodules no
+git -C "$gr" config submodule.recurse true
+gr_expect allow 'git push -u origin feature/a'
+git -C "$gr" config --unset push.recurseSubmodules
+gr_expect ask 'git push -u origin feature/a'
+git -C "$gr" config --unset submodule.recurse
+git -C "$gr" config push.default matching
+gr_expect ask 'git push'
+git -C "$gr" config --unset push.default
+# Through any tool but Bash, a push or a pull request write asks, even for a
+# plain push of a reviewed tree.
+for tool in mcp__terminal__run_in_terminal Monitor PowerShell; do
+  hook_run pre-tool "$(jq -cn --arg d "$gr" --arg t "$tool" '{session_id: "gp", cwd: $d, tool_name: $t, tool_input: {command: "git push -u origin feature/a"}}')"
+  [ "$(verdict)" = ask ] || bad "grant: a plain push of a reviewed tree through $tool got $(verdict), want ask"
+done
+for mcp in mcp__github__create_pull_request mcp__github__push_files; do
+  hook_run pre-tool "$(jq -cn --arg d "$gr" --arg t "$mcp" '{session_id: "gp", cwd: $d, tool_name: $t, tool_input: {}}')"
+  [ "$(verdict)" = ask ] || bad "grant: $mcp under a grant got $(verdict), want ask"
+done
+gr_run 'git push -q -u origin feature/a'
+[ "$gr_verdict" = allow ] || bad "grant: a plain push of a reviewed tree got $gr_verdict"
+[ "$(cat "$data/sessions/gp/grant-pushes" 2>/dev/null)" = 1 ] || bad "grant: a push under the grant was not counted"
+grep -q ' alpha feature/a push ' "$data/grant-writes.log" 2>/dev/null || bad "grant: a push under the grant was not logged"
+stop gp '{}' "$gr"
+[ "$(jq -r '.decision // empty' "$scratch/out")" = block ] || bad "grant: the stop after a push did not block"
+jq -r '.reason // empty' "$scratch/out" | grep -q 'review the whole PR' || bad "grant: the stop's block gave no reason"
+stop gp '{"stop_hook_active": true}' "$gr"
+[ ! -s "$scratch/out" ] || bad "grant: the stop blocked twice in one turn"
+# A tree that changed after the review is denied, and a snapshot of the tree
+# that is then committed counts.
+gr_commit three
+gr_expect deny 'git push' 'review step'
+# On the plan's branch, an unreviewed tree is denied whatever the push.
+gr_expect deny 'git push origin hotfix' 'review step'
+# A shell tool's push of a tree no review read is denied too.
+hook_run pre-tool "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, tool_name: "mcp__terminal__run_in_terminal", tool_input: {command: "git push"}}')"
+[ "$(verdict)" = deny ] || bad "grant: an unreviewed push through the terminal tool got $(verdict), want deny"
+printf 'four\n' > "$gr/a.txt"
+GIT_INDEX_FILE="$scratch/gr-index" git -C "$gr" read-tree HEAD
+GIT_INDEX_FILE="$scratch/gr-index" git -C "$gr" add -A
+snap="$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree "$(GIT_INDEX_FILE="$scratch/gr-index" git -C "$gr" write-tree)" -p HEAD -m review)"
+# A review below high reads the tree but does not clear it for a push.
+gr_review "medium HEAD..$snap"
+git -C "$gr" -c user.name=t -c user.email=t@t commit -qam four
+gr_expect deny 'git push' 'review step'
+git -C "$gr" reset -q --soft HEAD~1
+gr_review "high HEAD..$snap"
+git -C "$gr" -c user.name=t -c user.email=t@t commit -qam four
+gr_expect allow 'git push'
+# A review of a range ending in another tree leaves the last reviewed tree as
+# it was.
+gr_review "high HEAD~2..HEAD~1"
+gr_expect allow 'git push'
+# Off the plan's branch, a push asks.
+git -C "$gr" checkout -q -b other
+gr_expect ask 'git push -u origin other' 'branch'
+git -C "$gr" checkout -q feature/a
+# The seventh push under one grant asks.
+# A review of the whole pull request on a clean tree counts as well.
+for n in 2 3 4 5 6; do
+  gr_commit "push-$n"
+  gr_whole
+  gr_run 'git push -q'
+  [ "$gr_verdict" = allow ] || bad "grant: push $n got $gr_verdict"
+done
+gr_commit push-7
+gr_whole
+gr_expect ask 'git push -q' 'six'
+[ "$(grep -c ' alpha feature/a push ' "$data/grant-writes.log")" = 6 ] || bad "grant: the log does not hold one line per push"
+# A new grant starts the count again, a no ends it, and so does /clear.
+gr_plan alpha feature/a
+gr_say gp "approve alpha"
+[ ! -f "$data/sessions/gp/grant-pushes" ] || bad "grant: a new grant kept the old count"
+gr_say gp "Looks good, no issues. Carry on"
+[ -f "$data/sessions/gp/grant" ] || bad "grant: 'no issues' ended the grant"
+gr_say gp "don't push anything"
+[ ! -f "$data/sessions/gp/grant" ] || bad "grant: a no to pushing left the grant"
+gr_plan alpha feature/a
+gr_say gp "approve alpha"
+hook_run session-start "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, source: "clear"}')"
+[ ! -f "$data/sessions/gp/grant" ] || bad "grant: /clear left the grant"
+touch -t 202501010000 "$data/sessions/gp/started"
+# A compaction keeps it.
+gr_plan alpha feature/a
+gr_say gp "approve alpha"
+hook_run session-start "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, source: "compact"}')"
+granted gp alpha || bad "grant: a compaction dropped the grant"
 
 # Monitor and PowerShell commands are read like Bash ones.
 for tool in Monitor PowerShell; do

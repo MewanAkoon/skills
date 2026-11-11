@@ -39,26 +39,31 @@ and carry on from section 3 when it reports.
 ## 3. Triage
 
 Open the code at every finding. Mark it valid, invalid with the reason, or a
-judgement call, and blocking, should-fix, or nit. Judgement calls go in the
-report, not the code.
+judgement call, and blocking, should-fix, or nit, and log it in the ledger
+as [ledger.md](ledger.md) says. A finding that would undo an earlier fix or
+a ruling, or improve something outside the plan, is not fixed here.
+Judgement calls go in the report, not the code.
 
-**Done when:** every finding has both marks.
+**Done when:** every finding has both marks and a ledger line.
 
-## 4. Fix, at most twice
+## 4. Fix, until clean
 
 Fix valid blocking and should-fix findings, one-line nits, and every check
-the change broke. Then go back to section 1 after any fix: a new
-snapshot on the last one, and a review of only what changed. The third review
-is the last, and fixes nothing: what it finds goes in the report.
+the change broke. Then go back to section 1: a new snapshot on the last one,
+and a review of only what changed. Stop when a round finds nothing valid to
+fix. Stop early, not ready, when two rounds in a row fail to lower the count
+of open valid findings, or after six rounds.
 
-**Done when:** the last review ran on the tree as it now stands.
+**Done when:** a round found nothing valid to fix on the tree as it now
+stands, or the loop stopped early with its reason named.
 
 ## 5. Report
 
 Ready only when every check passes, no valid blocking finding remains, the
 intent check ran in every round, and the last review saw the final tree.
 Otherwise not ready, with each reason. List what was fixed, each finding left
-and why, each claim beside its evidence, and what was not checked.
+and why, the follow-ups, each claim beside its evidence, and what was not
+checked.
 Name `/security-review` when the diff touches authentication, payments, secrets,
 or cryptography, and `/run` when the change alters what the running app does.
 Where `/run` is missing, give the commands that show the change running.

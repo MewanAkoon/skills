@@ -11,20 +11,24 @@
 #                  also asks Claude Code to load the skill listing again, which
 #                  compaction drops.
 #   prompt         UserPromptSubmit. Keeps your latest message for the write
-#                  gate, and adds a hint when it is a pull request link.
+#                  gate, records a grant when it approves a plan file waiting
+#                  in .claude/plans, and adds a hint when it is a pull
+#                  request link.
 #   expansion      UserPromptExpansion. Records a skill you type, blocks
 #                  /code-review with --comment or --post, and records the
 #                  tree a review you type will read.
 #   pre-tool       PreToolUse. The post guard, the write gate and the
 #                  confirmation prompt for shell commands and MCP tools, and
-#                  the guard on a code-review the model calls. Before a push or
-#                  a pull request command, keeps where the remote branches
-#                  stood.
+#                  the guard on a code-review the model calls, and the checks
+#                  on a push or a new pull request under a grant. Before a
+#                  push or a pull request command, keeps where the remote
+#                  branches stood.
 #   post-tool      PostToolUse and PostToolUseFailure. Records a skill that
 #                  loaded and a push that moved a remote branch to HEAD, and
 #                  adds a hint when git reports a conflict.
 #   stop           Stop. The review gate, and the reminder to review the
-#                  whole pull request after a push.
+#                  whole pull request after a push, which under a grant
+#                  blocks the stop.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates: turn (the text of your latest message), skills (those loaded
@@ -34,10 +38,16 @@
 # with where every remote branch stood before it), reviewed-commit (the end of
 # the last range that read the whole pull request),
 # pr-head (the commit the last push or new pull request left on a remote
-# branch), pr-review (that commit, once a review reached it) and pr-reminded
-# (that commit, once the stop gate asked for its review). It is not read from
-# the transcript, which Claude Code writes asynchronously. Where the state
-# cannot be read, the write gate allows.
+# branch), pr-review (that commit, once a review reached it), pr-reminded
+# (that commit, once the stop gate asked for its review), started (when the
+# session started, for dating plan files), reviewed-tree (the last tree a
+# review at high or above ended in, when it was the working tree and the range
+# changed something), grant (the approved plan's branch, name, file, start
+# commit and time) and grant-pushes (the pushes made under it). The grant and
+# each write under it are also logged to grant-writes.log in
+# ${CLAUDE_PLUGIN_DATA}. It is not read from the transcript, which Claude
+# Code writes asynchronously. Where the state cannot
+# be read, the write gate allows.
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
 # fails open and lets the tool run, except the command parser. When it fails
@@ -84,6 +94,11 @@ post it, give the user the path, and say that is why. Reading stays open."
 # The words in a message that name a write. A refusal such as "don't stage,
 # commit or push" may list several before the one it refuses.
 WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)? ?in|prs?|pull[ -]requests?|merge[ -]requests?|mrs?|issues?|tickets?'
+# The words for each write the gate reads a no to, one at a time.
+COMMIT_WORDS='commit(s|ted|ting)?|check(ed)?( it)?[ -]?in'
+PUSH_WORDS='push(ed|es|ing)?'
+PR_WORDS='prs?|pull[ -]requests?|merge[ -]requests?|mrs?'
+ISSUE_WORDS='issues?|tickets?'
 
 # The words in an MCP tool's name that say what it does: it reads, it posts,
 # or it writes somewhere else. A write either edits, which Claude Code's own
@@ -313,6 +328,10 @@ mark_pr_reviewed() {
 # last such range is kept as reviewed-commit, so a review run just before a
 # push counts once the push lands on that same commit. A review loop's
 # snapshot is never the commit that lands, so it does not count.
+#
+# A range at high or above whose end is this very tree, and whose start's
+# tree differs, is kept as reviewed-tree, which a push under a plan's grant
+# has to match.
 record_review() {
   find_state || return 0
   cwd="$f_cwd"
@@ -374,6 +393,12 @@ record_review() {
     [ "$local" = yes ] || return 0
     reviewed="$(git -C "$top" rev-parse -q --verify "$target^{tree}" 2>/dev/null)" || return 0
     [ "$reviewed" = "$(worktree_tree "$top")" ] || return 0
+    # A plan's grant pushes only this tree, once it is committed, and only
+    # after a review at high or above, as the review loop runs, of a range
+    # that changes something.
+    start_tree="$(git -C "$top" rev-parse -q --verify "$start^{tree}" 2>/dev/null)"
+    [ "$deep" = yes ] && [ -n "$start_tree" ] && [ "$start_tree" != "$reviewed" ] &&
+      printf '%s\n' "$reviewed" > "$state/reviewed-tree"
   fi
   now="$(tree_state "$cwd")" || return 0
   printf '%s\n' "$now" > "$state/review-hash"
@@ -435,6 +460,13 @@ $rules"
       rm -f "$state/start-hash"
       : > "$state/start-pending"
     fi
+    # A plan file counts as waiting only when changed after this mark. A
+    # clear starts a new conversation, which ends any grant; a resume or a
+    # compaction keeps it.
+    if [ "$source" = startup ] || [ "$source" = clear ] || [ ! -f "$state/started" ]; then
+      : > "$state/started"
+    fi
+    [ "$source" = clear ] && rm -f "$state/grant" "$state/grant-pushes"
     find "$CLAUDE_PLUGIN_DATA/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
       -exec rm -rf {} + 2>/dev/null
     # The slash follows /tmp where it is a link, as on macOS.
@@ -468,6 +500,7 @@ on_prompt() {
 }
 
 on_message() {
+  note=""
   text="$(get .prompt)"
   lead="$(printf '%s\n' "$text" | sed -n '/[^[:space:]]/{s/^[[:space:]]*//;p;q;}')"
   # A background task or a subagent reporting back, a CI event, or another
@@ -488,6 +521,7 @@ on_message() {
   if find_state; then
     printf '%s\n' "$request" > "$state/turn"
     : > "$state/skills"
+    check_grant "$request"
     # UserPromptExpansion fires before this, so a skill typed as a slash
     # command is recorded again after the reset.
     case "$lead" in
@@ -496,12 +530,16 @@ on_message() {
   fi
 
   pr='https?://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+'
+  hint=""
   if printf '%s' "$request" | grep -Eq "${pr}[^[:space:]]*#(issuecomment-|discussion_r|pullrequestreview-|r[0-9])"; then
-    context UserPromptSubmit "The message links a pull request review comment. The eng:pr-feedback skill covers review feedback."
+    hint="The message links a pull request review comment. The eng:pr-feedback skill covers review feedback."
   elif printf '%s' "$request" | grep -Eq "$pr" &&
     [ -z "$(printf '%s' "$request" | sed -E "s#${pr}[^[:space:]]*##g" | tr -d '[:space:]')" ]; then
-    context UserPromptSubmit "The message is a pull request link with no request. Ask what to do with it rather than starting a review."
+    hint="The message is a pull request link with no request. Ask what to do with it rather than starting a review."
   fi
+  # What the grant check found goes out beside any hint, never instead of it.
+  hint="$hint${hint:+${note:+ }}$note"
+  [ -z "$hint" ] || context UserPromptSubmit "$hint"
 }
 
 on_expansion() {
@@ -528,16 +566,16 @@ gate() {
   case "$1" in
     commit)
       skills=commit label=commit via="the eng:commit skill"
-      words='commit(s|ted|ting)?|check(ed)?( it)?[ -]?in' ;;
+      words="$COMMIT_WORDS" ;;
     push)
       skills="commit pr" label=push via="the eng:commit skill, or eng:pr when it pushes its branch"
-      words='push(ed|es|ing)?' ;;
+      words="$PUSH_WORDS" ;;
     pr)
       skills=pr label="pull request change" via="the eng:pr skill"
-      words='prs?|pull[ -]requests?|merge[ -]requests?|mrs?' ;;
+      words="$PR_WORDS" ;;
     *)
       skills=issue label="issue change" via="the eng:issue skill"
-      words='issues?|tickets?' ;;
+      words="$ISSUE_WORDS" ;;
   esac
   if [ -n "$f_agent" ]; then
     verdict=deny
@@ -685,6 +723,450 @@ said_no() {
       }
       exit 1
     }'
+}
+
+# The words that make an approval conditional, deferred, a request for
+# changes or a no. A message holding any of them, a contraction ending in
+# "n't", or a question mark grants nothing.
+NOT_APPROVAL="not no never cannot dont didnt doesnt cant wont isnt havent hasnt wouldnt \
+shouldnt couldnt arent wasnt werent before but once \
+when wait except after until unless if later yet hold without maybe \
+stop though first withdraw revoke retract assuming provided providing pending subject contingent"
+
+# The words that, beside "approve" in a later message, take an approval
+# back, read as an extended regex over the message's words.
+NEGATION=' (not|no|never|cannot|nope|dont|didnt|doesnt|cant|wont|isnt|arent|wasnt|werent|havent|hasnt|hadnt|wouldnt|shouldnt|couldnt|mustnt) | (withdr|revok|retract)| (took|take|taking) [a-z ]*back '
+
+# The words that may open an approving part before "I approve", read as an
+# extended regex over one word.
+APPROVE_WORDS='okay|ok|yes|yeah|yep|great|good|lgtm|sure|alright|perfect|cool|nice|thanks|so|then|well|right'
+APPROVE_FILLER="^($APPROVE_WORDS)\$"
+
+# The parts that may stand beside an approval in its sentence, between
+# commas: a go-ahead, or a delivery step on the plan's own work, and nothing
+# more, read as an extended regex.
+APPROVE_STEP='(commit|push|ship|finali[sz]e|land|open|create|start|begin|implement|build|run|test)( (it|them|this|that|everything|the changes|the change|the edits|the edit|the tweak|the tweaks|the code|the pr|a pr|the pull request|the tests))?( and (push|ship|commit))?'
+APPROVE_PARTS="^(($APPROVE_WORDS|thank you)( (work|job|plan))?|(looks|sounds|seems) (good|great|fine)( to me)?|(this|it) looks (good|great|fine)|i (like|love) (it|this|this plan|the plan)|(let s|lets) (go|go ahead|start|start building|begin|build|build it|do it|do this|get started|ship it|implement it)( with (it|the implementation|implementation))?|go ahead( with (it|the implementation|implementation))?|go for it|go|you can go ahead|please (proceed|go ahead|start|$APPROVE_STEP)|proceed|start building|ship it|(and |then )?(go ahead and )?$APPROVE_STEP)\$"
+
+# Prints the plan files in .claude/plans of the checkout at $1, one path per
+# line. With "waiting" as $2, only those changed since the session started
+# whose first five lines hold "Status: awaiting approval". The date keeps an
+# old plan from counting. Another checkout's plans, such as the main clone's
+# beside a worktree, belong to other sessions and are left out.
+plan_files() {
+  g_top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -d "$g_top/.claude/plans" ] || return 0
+  if [ "${2:-}" = waiting ]; then
+    [ -f "$state/started" ] || return 0
+    find "$g_top/.claude/plans" -maxdepth 1 -type f -name '*.md' -newer "$state/started" 2>/dev/null |
+      sort | while IFS= read -r g_file; do
+        head -n 5 "$g_file" | tr -d '\r' | grep -qx 'Status: awaiting approval' && printf '%s\n' "$g_file"
+      done
+  else
+    find "$g_top/.claude/plans" -maxdepth 1 -type f -name '*.md' 2>/dev/null | sort
+  fi
+}
+
+# Prints the value of the line "$2: value", at the start of a line, in the
+# plan file $1, backticks dropped.
+plan_field() {
+  sed -n "s/^$2:[[:space:]]*//p" "$1" 2>/dev/null | head -n 1 | tr -d '`\r' | sed 's/[[:space:]]*$//'
+}
+
+# Appends one line to the log of writes made under a grant, which the stats
+# script is to count (it does not read it yet):
+# the time, the session, the plan, its branch, the kind of write, $1, and its
+# commit, $2.
+log_write() {
+  printf '%s %s %s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$f_sid" \
+    "$(sed -n 2p "$state/grant")" "$(sed -n 1p "$state/grant")" "$1" "$2" \
+    >> "$CLAUDE_PLUGIN_DATA/grant-writes.log" 2>/dev/null
+}
+
+# True when your latest message says not to commit, push or change a pull
+# request, each read on its own as the gate reads it, so "skip the push, just
+# commit" is a no to the push.
+no_to_a_write() {
+  for g_w in "$COMMIT_WORDS" "$PUSH_WORDS" "$PR_WORDS"; do
+    said_no "$g_w" && return 0
+  done
+  return 1
+}
+
+# Prints a sentence saying a grant recorded earlier still holds, when one
+# does, for a note that grants nothing new.
+grant_still() {
+  [ -f "$state/grant" ] || return 0
+  printf ' The grant for plan %s, recorded earlier, still holds.' "$(sed -n 2p "$state/grant")"
+}
+
+# Reads your message, $1, for an approval of a plan waiting in this session,
+# and records the grant: the plan's branch, name and file, the commit it
+# started from, and the time, one per line. A message of yours saying
+# "approve" or "approved" in a plain approval of the plan, with no condition,
+# grants the one plan waiting, or, when several are, the one it names. A no
+# to a commit, push or pull
+# request ends a grant, and so does a later message that speaks of approving
+# along with a negation or a take-back word, such as "I don't approve" or "I
+# revoked my approval", or whose first line opens with "hold" or "wait".
+# $note says what happened, for the model to read.
+check_grant() {
+  g_no=""
+  if [ -f "$state/grant" ]; then
+    g_no=no
+    if no_to_a_write; then
+      rm -f "$state/grant" "$state/grant-pushes"
+      note="Your message says not to commit, push or open the pull request, so the approved plan's grant has ended. Each of those needs its own ask again."
+      return 0
+    fi
+  fi
+  g_text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' |
+    sed "s/$(printf '\342\200\231')/'/g; s/$(printf '\342\200\230')/'/g; s/$(printf '\312\274')/'/g; s/\`/'/g;
+      s/$(printf '\302\240')/ /g; s/$(printf '\342\200\224')/, -- /g; s/$(printf '\342\200\223')/, -- /g;
+      s/$(printf '\342\200\225')/, -- /g; s/$(printf '\342\210\222')/, -- /g; s/ - /, -- /g; s/^-/-- /")"
+  g_words=" $(printf '%s' "$g_text" | tr -c 'a-z0-9_-' ' ' | tr -s ' ') "
+  # Once a plan is approved, doubt about the approval ends the grant: a first
+  # line that opens with "hold" or "wait", or a message that speaks of
+  # approving along with a negation or a take-back word, as in
+  # "I don't approve" or "I revoked my approval". Reading a passing mention
+  # this way only costs an ask before the next write.
+  if [ -f "$state/grant" ]; then
+    g_back=""
+    printf '%s\n' "$g_text" | sed -n '/[^[:space:]]/{p;q;}' | grep -Eq '^[[:space:]]*(hold|wait)([^a-z]|$)' &&
+      g_back=yes
+    case "$g_words" in
+      *' disapprov'*) g_back=yes ;;
+      *' approv'*)
+        case "$g_text" in *"n't"*) g_back=yes ;; esac
+        printf '%s' "$g_words" | sed 's/n t /nt /g' | grep -Eq "$NEGATION" && g_back=yes ;;
+    esac
+    if [ -n "$g_back" ]; then
+      rm -f "$state/grant" "$state/grant-pushes"
+      note="Your message speaks of the approval with doubt, so the approved plan's grant has ended. Each commit, push and pull request needs its own ask again. If the user still wants the plan delivered, they can approve it again once its status is set back to awaiting approval."
+      return 0
+    fi
+  fi
+  case "$g_words" in *' approve '* | *' approved '*) ;; *) return 0 ;; esac
+  g_why=""
+  case "$g_text" in *'?'*) g_why="it asks a question" ;; esac
+  case "$g_text" in *"n't"*) g_why="it holds a negation" ;; esac
+  case "$g_words" in *' as long as '* | *' so long as '*) g_why="it sets a condition" ;; esac
+  for g_w in $NOT_APPROVAL; do
+    case "$g_words" in *" $g_w "*) g_why="it says \"$g_w\"" ;; esac
+  done
+  # A change, changes, an edit, edits or a tweak mean the plan is not settled,
+  # unless the run is to finish them, as in "finalize the changes" or "commit
+  # the edits", with the phrase, or the phrase and "and the PR", ending its
+  # clause. Punctuation ends a clause.
+  case "$(printf '%s' "$g_text" | tr '.,;:!?\n' '||||||' | tr -c 'a-z0-9_|-' ' ' | sed 's/|/ | /g' | tr -s ' ' |
+    sed -E -e 's/^/ /' -e 's/$/ /' -e ':a' \
+      -e 's/ (finali[sz]e|commit|push|ship|merge|land) ((the|these|this|all|my|your|our) ){0,2}(change|changes|edit|edits|tweak|tweaks)( and (the )?(pr|pull request))?( \| |[[:space:]]*$)/ \8/' -e 'ta')" in
+    *' change '* | *' changes '* | *' edit '* | *' edits '* | *' tweak'*) g_why="it asks for changes" ;;
+  esac
+  [ -n "$g_why" ] || [ -n "$g_no" ] || ! no_to_a_write || g_why="it says not to commit, push or open the pull request"
+  g_plans="$(plan_files "$f_cwd" waiting)"
+  if [ -n "$g_why" ]; then
+    if [ -f "$state/grant" ]; then
+      note="Your message grants nothing new, because $g_why.$(grant_still)"
+    elif [ -n "$g_plans" ]; then
+      note="Your message reads as an approval with a condition, a change or a no, because $g_why, so no plan is granted its writes. Keep working on the plan with the user."
+    fi
+    return 0
+  fi
+  if [ -z "$g_plans" ]; then
+    if [ -f "$state/grant" ]; then
+      note="No other plan is waiting for approval, so nothing new is granted.$(grant_still)"
+    elif [ -n "$(plan_files "$f_cwd")" ] || case "$g_words" in *' plan '*) true ;; *) false ;; esac; then
+      note="Your message approves, but no plan file in .claude/plans is waiting for approval in this session, so no writes are granted. Each still needs its own ask."
+    fi
+    return 0
+  fi
+  # Only a plain approval of the plan grants, and anything else asks. Before
+  # the verb come only words such as "I", "we", "I want to", "I like this
+  # plan and want to" or "the plan is", and after it, up to "and", only "it",
+  # "this", "that", "the plan" or a waiting plan's name, perhaps as "the <name>
+  # plan", with "of" before or "all", "entirely", "fully", "in full" or "as
+  # written" after. So "approve the dependabot PR", "Sam approved it" and "I
+  # would definitely approve it" grant nothing.
+  g_waiting_names="$(printf '%s\n' "$g_plans" | while IFS= read -r g_file; do
+    [ -n "$g_file" ] && plan_field "$g_file" 'Plan name' | tr '[:upper:]' '[:lower:]'; done)"
+  # The object comes marked with "=" for a plain approval, and as "?" for
+  # anything else: words before the verb that do not fit, a part that is not
+  # a go-ahead, a second approval, an opening question, a signature or a
+  # quote. No line at all means no approval.
+  # Sentences end at ".", ";", "!", "?" or a line break, and commas, colons
+  # and dashes split a sentence into parts. The sentence that first says
+  # "approve" or "approved" has to be made of the approving part and parts
+  # that only say go ahead, such as "okay", "looks good", "I like this plan"
+  # or "let's go ahead". So "I approve it, said Sam" or "approve it, assuming
+  # CI passes" is not a plain approval.
+  g_object="$(printf '%s' "$g_text" |
+    sed 's/:/,/g' |
+    tr '.;!?\n' '|||||' | tr -c 'a-z0-9_|,-' ' ' |
+    awk -v RS='|' -v fill="$APPROVE_FILLER" -v ok="$APPROVE_PARTS" '
+      function words(t, a,   m) { gsub(/,/, " ", t); m = split(t, a, " "); return m }
+      # The message opens like a question, with or without a "?".
+      !started {
+        m = words($0, q); k = 1; while (k <= m && q[k] ~ fill) k++
+        # A sentence of only go-ahead words, such as "Okay.", is skipped.
+        if (k <= m) {
+          started = 1
+          if (q[k] ~ /^(should|could|can|may|shall|would|does|did|has|is|are|was|were|will)$/ ||
+            (q[k] ~ /^(do|have)$/ && q[k + 1] ~ /^(you|we|i|they|the|these|those|any|all)$/)) { out = "?"; exit }
+        }
+      }
+      # A short sentence anywhere after the approval, such as a name, or one
+      # that opens with a dash, signs it. Every kind of dash reaches here as
+      # "--".
+      done { t = $0; gsub(/,/, " ", t); gsub(/^ +| +$/, "", t); gsub(/  +/, " ", t)
+        # A dash, as in "-- Sam", marks a signature.
+        if (t == "") next
+        if (t ~ /^-/ || (split(t, z, " ") <= 3 && t !~ ok)) { out = "?"; exit }
+        next }
+      {
+        m = words($0, q); hit = 0
+        for (i = 1; i <= m; i++) if (q[i] == "approve" || q[i] == "approved") hit = 1
+        if (!hit) next
+        np = split($0, part, ",")
+        for (p = 1; p <= np; p++) {
+          gsub(/^ +| +$/, "", part[p]); gsub(/  +/, " ", part[p])
+          sub(/^-+ */, "", part[p])
+          if (part[p] == "") continue
+          n = split(part[p], w, " "); at = 0
+          for (i = 1; i <= n; i++) if (w[i] == "approve" || w[i] == "approved") { at = i; break }
+          if (!at) { if (part[p] !~ ok) { out = "?"; exit } continue }
+          if (found) { out = "?"; exit }
+          found = 1
+          k = 1; while (k < at && w[k] ~ fill) k++
+          pre = ""; for (j = k; j < at; j++) pre = pre w[j] " "
+          if (pre !~ /^((i|we) )?((hereby|fully|really|also|now|do|have|ve|want to|d like to|would like to) )?$/ &&
+            pre !~ /^(i|we) (like|love) (it|this|this plan|the plan) and ((i|we) )?(want to|d like to|would like to) $/ &&
+            pre !~ /^(it|this|that|this plan|the plan|plan) (is|s) $/ && pre !~ /^((the|this) )?plan $/) { out = "?"; exit }
+          o = ""; for (j = at + 1; j <= n && w[j] != "and"; j++) o = o (o == "" ? "" : " ") w[j]
+          rest = ""; for (j = j + 1; j <= n; j++) rest = rest (rest == "" ? "" : " ") w[j]
+          if (rest != "" && rest !~ ok) { out = "?"; exit }
+          obj = o
+        }
+        done = 1
+      }
+      END { if (out != "") print out; else if (done) print "=" obj }')"
+  # A line that ends in a colon or opens with ">" means the message quotes
+  # someone, so its approval may not be the user's own.
+  [ "$g_object" != '?' ] && printf '%s\n' "$1" | grep -Eq ':[[:space:]]*.?$|^[[:space:]]*>' && g_object='?'
+  g_about=""
+  if [ "$g_object" = '?' ]; then
+    note="Your message does not read as a plain approval of the plan, so no plan is granted its writes. If the user means to approve it, they can say so plainly, as in \"I approve it\".$(grant_still)"
+    return 0
+  fi
+  case "$g_object" in
+    '='*)
+      g_object="$(printf '%s' "${g_object#=}" | sed -E 's/^of //; s/ (all|entirely|fully|in full|as written)$//;
+        s/^(the |this )?plan( |$)//; s/^(the |this )//; s/ plan$//')"
+      case "$g_object" in
+        '' | it | this | that | plan) g_about=yes ;;
+        *) printf '%s\n' "$g_waiting_names" | grep -qxF -- "$g_object" && g_about=yes ;;
+      esac ;;
+  esac
+  if [ -z "$g_about" ]; then
+    [ -n "$g_plans" ] &&
+      note="Your message approves something other than the plan, so no plan is granted its writes. To approve the plan, the user says so, as in \"I approve it\" or \"approve the plan\".$(grant_still)"
+    return 0
+  fi
+  g_count=0 g_named=0 g_chosen="" g_only="" g_names=""
+  while IFS= read -r g_file; do
+    [ -n "$g_file" ] || continue
+    g_count=$((g_count + 1))
+    g_only="$g_file"
+    g_name="$(plan_field "$g_file" 'Plan name' | tr '[:upper:]' '[:lower:]')"
+    g_names="${g_names:+$g_names, }$g_name"
+    [ -n "$g_name" ] || continue
+    case "$g_words" in *" $g_name "*) g_named=$((g_named + 1)) g_chosen="$g_file" ;; esac
+  done <<EOF
+$g_plans
+EOF
+  if [ "$g_count" -eq 1 ]; then
+    g_chosen="$g_only"
+  elif [ "$g_named" -ne 1 ]; then
+    note="Several plans are waiting for approval ($g_names), and your message does not name exactly one, so no writes are granted. Ask the user which one.$(grant_still)"
+    return 0
+  fi
+  g_name="$(plan_field "$g_chosen" 'Plan name')"
+  g_branch="$(plan_field "$g_chosen" Branch)"
+  if [ -z "$g_name" ] || [ -z "$g_branch" ]; then
+    note="The plan in $g_chosen has no \"Plan name:\" line, or no \"Branch:\" line in its Delivery section, so no writes are granted. Each still needs its own ask.$(grant_still)"
+    return 0
+  fi
+  # A grant never covers a push to a default branch.
+  for g_ref in $(default_refs "$f_cwd") refs/remotes/origin/main refs/remotes/origin/master; do
+    if [ "${g_ref#refs/remotes/*/}" = "$g_branch" ]; then
+      note="The plan $g_name names $g_branch, a default branch, which a grant never covers, so no writes are granted. Each still needs its own ask.$(grant_still)"
+      return 0
+    fi
+  done
+  # The plan stops waiting, so a later "approve" cannot grant it again and
+  # reset the count of pushes. The grant is written first and removed when
+  # the plan cannot be marked, so neither is left without the other.
+  if ! printf '%s\n' "$g_branch" "$g_name" "$g_chosen" \
+    "$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$state/grant" 2>/dev/null; then
+    rm -f "$state/grant"
+    note="The grant for plan $g_name could not be saved, so no writes are granted. Each still needs its own ask."
+    return 0
+  fi
+  if ! { sed '1,5s/^Status: awaiting approval\r\{0,1\}$/Status: approved/' "$g_chosen" > "$g_chosen.$$" 2>/dev/null &&
+    mv "$g_chosen.$$" "$g_chosen" 2>/dev/null; }; then
+    rm -f "$g_chosen.$$" "$state/grant"
+    note="The plan file $g_chosen could not be marked approved, so no writes are granted. Each still needs its own ask."
+    return 0
+  fi
+  rm -f "$state/grant-pushes"
+  log_write grant "$(sed -n 4p "$state/grant")"
+  note="Your message approves plan $g_name ($g_chosen). The writes its Delivery section lists may now run on branch $g_branch without another ask, as the deliver reference of the eng:implement skill says. The hook lets a push or a new pull request through without asking only through the Bash tool, on that branch, as a plain git push or gh pr create, of a tree the review loop read, six times."
+}
+
+# Succeeds when the shell command in $command is a plain push of the granted
+# branch $1: git push with -u, --set-upstream, -q or --quiet, and perhaps
+# origin, then $1 or HEAD, with no push refspec, mirror or push URL on
+# origin, no URL rewrite, and no setting that pushes tags or submodules too.
+# With
+# no branch named, push.default has to be a plain one, no push remote may be
+# set, and git's push target has to be origin's $1.
+plain_push() {
+  g_branch="$1"
+  case "$command" in *[\;\&\|\<\>\$\`\(\)\{\}\\\"\']* | *'
+'*) return 1 ;; esac
+  set -f
+  # The command is split into words on purpose.
+  # shellcheck disable=SC2086
+  set -- $command
+  set +f
+  [ "${1:-}" = git ] && [ "${2:-}" = push ] || return 1
+  shift 2
+  g_remote="" g_ref=""
+  for g_w; do
+    case "$g_w" in
+      -u | --set-upstream | -q | --quiet) ;;
+      -*) return 1 ;;
+      *)
+        if [ -z "$g_remote" ]; then
+          g_remote="$g_w"
+        elif [ -z "$g_ref" ]; then
+          g_ref="$g_w"
+        else
+          return 1
+        fi ;;
+    esac
+  done
+  [ -z "$g_remote" ] || [ "$g_remote" = origin ] || return 1
+  # A push refspec or a mirror setting on origin sends a branch somewhere
+  # else, or every branch, whatever the command names.
+  [ -z "$(git -C "$f_cwd" config --get-all remote.origin.push 2>/dev/null)" ] || return 1
+  [ "$(git -C "$f_cwd" config --bool remote.origin.mirror 2>/dev/null)" != true ] || return 1
+  # Settings that send tags or submodules along with the branch.
+  [ "$(git -C "$f_cwd" config --bool push.followTags 2>/dev/null)" != true ] || return 1
+  # push.recurseSubmodules, when set, wins over submodule.recurse.
+  g_sub="$(git -C "$f_cwd" config push.recurseSubmodules 2>/dev/null)" ||
+    g_sub="$(git -C "$f_cwd" config --bool submodule.recurse 2>/dev/null)"
+  case "$g_sub" in '' | no | false | check) ;; *) return 1 ;; esac
+  # A push URL, or any URL rewrite, sends the push to another repository.
+  [ -z "$(git -C "$f_cwd" config --get-all remote.origin.pushurl 2>/dev/null)" ] || return 1
+  [ -z "$(git -C "$f_cwd" config --get-regexp '^url\..*\.(push)?insteadof$' 2>/dev/null)" ] || return 1
+  case "$g_ref" in
+    HEAD | "$g_branch") return 0 ;;
+    '')
+      # Push settings decide where a push with no branch goes: a push.default
+      # such as matching sends other branches too, and a push remote sends it
+      # elsewhere. Only the plain settings, and a push target git resolves to
+      # origin's branch, go through.
+      case "$(git -C "$f_cwd" config push.default 2>/dev/null)" in
+        '' | simple | current | upstream | tracking) ;;
+        *) return 1 ;;
+      esac
+      if [ -z "$g_remote" ]; then
+        for g_key in remote.pushDefault "branch.$g_branch.pushRemote"; do
+          case "$(git -C "$f_cwd" config "$g_key" 2>/dev/null)" in '' | origin) ;; *) return 1 ;; esac
+        done
+      fi
+      [ "$(git -C "$f_cwd" rev-parse --abbrev-ref --symbolic-full-name '@{push}' 2>/dev/null)" = "origin/$g_branch" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Succeeds when a grant is recorded and HEAD in the session's directory is on
+# its branch.
+on_grant_branch() {
+  [ -f "$state/grant" ] &&
+    [ "$(git -C "$f_cwd" symbolic-ref -q --short HEAD 2>/dev/null)" = "$(sed -n 1p "$state/grant")" ]
+}
+
+# Succeeds when HEAD's tree in the session's directory is the one the review
+# loop last read.
+tree_reviewed() {
+  g_tree="$(git -C "$f_cwd" rev-parse -q --verify 'HEAD^{tree}' 2>/dev/null)"
+  [ -n "$g_tree" ] && [ "$g_tree" = "$(cat "$state/reviewed-tree" 2>/dev/null)" ]
+}
+
+# Succeeds when the shell command in $command is a plain gh pr create: one
+# command, perhaps over lines joined by a backslash, not a chain, that
+# mentions no other head or repository anywhere, quoted or not: --head,
+# --repo, -H or -R alone or in a cluster such as -dR, GH_REPO or GH_HOST. Its
+# title may come from $(cat ...), as eng:pr writes it.
+plain_pr() {
+  # An escaped backslash, or a comment, leaves a line break a separator.
+  case "$command" in *'\\
+'*) return 1 ;; esac
+  case "$command" in *'#'*"\\"*) return 1 ;; esac
+  g_cmd="$(printf '%s\n' "$command" | sed -e ':a' -e '/\\$/N' -e 's/\\\n/ /' -e 'ta')"
+  case "$g_cmd" in *';'* | *'&'* | *'|'* | *'
+'*) return 1 ;; esac
+  printf '%s' "$g_cmd" | grep -Eq '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)' || return 1
+  ! printf '%s' "$g_cmd" |
+    grep -Eq -- "--head|--repo|GH_REPO|GH_HOST|(^|[[:space:]\"'=])-[A-Za-z]*[HR]"
+}
+
+# Under a plan's grant, adds to $deny or $ask for a push or a pull request
+# write the gate allowed. Through Bash, a push or a new pull request runs only
+# on the granted branch and only when HEAD's tree is the one the review loop
+# last read, and a push only as a plain one, six times. Through any other
+# tool it asks.
+grant_checks() {
+  find_state && [ -f "$state/grant" ] || return 0
+  g_branch="$(sed -n 1p "$state/grant")"
+  g_name="$(sed -n 2p "$state/grant")"
+  # Only a Bash command runs where the hook reads the branch and the tree, and
+  # only its pushes are counted, so any other tool's push or pull request
+  # write asks. A shell tool's push on the plan's branch of a tree no review
+  # read is still denied.
+  if [ "$tool" != Bash ]; then
+    printf '%s\n' "$found" | grep -Eqx 'gate push|gate pr|open pr' || return 0
+    case "$tool" in
+      mcp__terminal__run_in_terminal | Monitor | PowerShell)
+        if printf '%s\n' "$found" | grep -Eqx 'gate push|open pr' && on_grant_branch && ! tree_reviewed; then
+          deny="Under the approved plan $g_name, only a tree the review loop read is pushed, and HEAD's tree is not the last one it read. Only a review at high or above, over a range that changes something, counts. Run the review step in eng:implement on this tree first."
+          return 0
+        fi ;;
+    esac
+    ask="${ask:+$ask }Under the approved plan $g_name, a push or a pull request write runs without asking only through the Bash tool. Confirm this one."
+    return 0
+  fi
+  printf '%s\n' "$found" | grep -Eqx 'gate push|open pr' || return 0
+  if ! on_grant_branch; then
+    ask="${ask:+$ask }This is outside the approved plan $g_name, whose grant covers the branch $g_branch only. Confirm it."
+    return 0
+  fi
+  if ! tree_reviewed; then
+    deny="Under the approved plan $g_name, only a tree the review loop read is pushed, and HEAD's tree is not the last one it read. Only a review at high or above, over a range that changes something, counts. Run the review step in eng:implement on this tree first, and commit the reviewed changes as their own command before pushing. The review reads untracked files too, so one left out of the commit keeps the trees apart until it is deleted or ignored."
+    return 0
+  fi
+  if printf '%s\n' "$found" | grep -qx 'open pr' && ! plain_pr; then
+    ask="${ask:+$ask }Under the approved plan $g_name, only a plain gh pr create for $g_branch, in this repository, runs without asking, as its own command. Confirm this one."
+    return 0
+  fi
+  printf '%s\n' "$found" | grep -qx 'gate push' || return 0
+  if ! plain_push "$g_branch"; then
+    ask="${ask:+$ask }Under the approved plan $g_name, only a plain git push of $g_branch runs without asking, as its own command. Confirm this one."
+  elif [ "$(cat "$state/grant-pushes" 2>/dev/null || echo 0)" -ge 6 ]; then
+    ask="${ask:+$ask }There have been six pushes under the approved plan $g_name already. Confirm this one."
+  fi
 }
 
 # Prints what an MCP tool writes, in the parser's form, from its name split
@@ -1041,6 +1523,8 @@ on_pre_tool() {
 $found
 EOF
   [ -z "$failed" ] || ask="${ask:+$ask }$failed"
+  # A subagent's push is already denied.
+  [ -z "$deny" ] && [ -z "$f_agent" ] && grant_checks
   # A command the gate denies never runs, so it has nothing to compare.
   [ -z "$deny" ] && [ "$tool" = Bash ] && note_push
   if [ -n "$deny" ]; then
@@ -1127,6 +1611,11 @@ record_push() {
     [ "$moved" = yes ] || return 0
   fi
   printf '%s\n' "$head" > "$state/pr-head"
+  if on_grant_branch; then
+    [ "$kind" = push ] &&
+      printf '%s\n' "$(($(cat "$state/grant-pushes" 2>/dev/null || echo 0) + 1))" > "$state/grant-pushes"
+    log_write "$kind" "$head"
+  fi
   # A pull request opened on a commit whose push was already reminded about
   # asks for its own review.
   [ "$kind" = open ] && rm -f "$state/pr-reminded"
@@ -1184,7 +1673,13 @@ on_stop() {
   [ "$pushed" = "$(cat "$state/pr-reminded" 2>/dev/null)" ] && return 0
   [ "$pushed" = "$(git -C "$f_cwd" rev-parse -q --verify HEAD 2>/dev/null)" ] || return 0
   printf '%s\n' "$pushed" > "$state/pr-reminded"
-  context Stop "$PR_REMINDER"
+  # Under a plan's grant, on its branch, the run reviews the whole pull
+  # request before it hands back, rather than only being told to.
+  if on_grant_branch; then
+    jq -n --arg r "$PR_REMINDER" '{decision: "block", reason: $r}'
+  else
+    context Stop "$PR_REMINDER"
+  fi
 }
 
 input="$(cat)"

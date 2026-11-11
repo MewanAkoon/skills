@@ -63,10 +63,12 @@ too unclear to judge and the run asks the user about it before fixing any.
 
 A table: comment (author, `file:line`, the point in a few words), class,
 evidence, and the proposed action with its test's level. Then wait, unless
-the user's message already asked you to address or fix them.
+the user's message already asked you to address or fix them, or an approved
+plan's delivery covers this PR's review loop and each fix stays inside the
+plan. A fix that would change the plan waits.
 
 **Done when:** the table is presented and the turn has ended, or the user had
-already approved the fixes.
+already approved the fixes, or the plan's delivery covers them.
 
 ## Step 4: Fix
 

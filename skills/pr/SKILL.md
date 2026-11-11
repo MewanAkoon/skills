@@ -20,7 +20,10 @@ Reviewable does not mean every commit has landed.
 
 This skill shapes a pull request. It does not decide that one gets opened.
 Opening one puts the branch in front of reviewers, so a go-ahead given earlier
-in the conversation does not carry forward. With a reviewable branch and no
+in the conversation does not carry forward. The one exception is an approved
+plan whose Delivery section lists the PR, as `eng:implement`'s
+`references/deliver.md` says: open it as a draft unless Delivery says
+otherwise, and later run `gh pr ready <number>` when that reference says to. With a reviewable branch and no
 ask, say what the PR would say and wait. A retry such as "try again" after a
 failed attempt is the same ask. A background task's notification is not a
 message from the user, so the ask before it still stands.
@@ -258,8 +261,8 @@ Then write the title alone to `pr-title.txt` and the body alone to
 your system prompt names, or when it names none, in one directory per run
 from `mktemp -d`. The files keep quotes, backticks, and `$` literal in every
 shell, where a heredoc inside `$( )` breaks macOS's bash 3.2 on one
-apostrophe. Add `--draft` on `/eng:pr draft`, and add no reviewer or assignee
-the user did not name:
+apostrophe. Add `--draft` on `/eng:pr draft` or for an approved plan's draft,
+and add no reviewer or assignee the user did not name:
 
 ```bash
 gh pr create --title "$(cat "<title path>")" --body-file "<body path>" \

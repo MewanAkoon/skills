@@ -113,6 +113,10 @@ threads are all unaffected, and so is opening one. The rule is categorical
 because the mistake is public and cannot be taken back, so anything whose
 whole purpose is that step has no configuration that saves it.
 
+Every other comment, review or reply is drafted to a file too, with one
+exception: a comment on a Linear issue that the user's latest message asks
+for, made through `eng:issue`.
+
 ## Before changing a skill
 
 Read [WRITING-RULES.md](WRITING-RULES.md). It is the standard every file here

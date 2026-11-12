@@ -1,6 +1,6 @@
 ---
 name: issue
-description: Use when the user's latest message asks to draft, file, edit, label, or close an issue or a ticket, or to turn a plan or deferred review items into issues. Finds the repo's tracker, drafts to files, and writes to it only when asked. Working on an issue you were handed is eng:investigate.
+description: Use when the user's latest message asks to draft, file, edit, label, close, or comment on an issue or a ticket, or to turn a plan or deferred review items into issues. Finds the repo's tracker, drafts to files, and writes to it only when asked. Working on an issue you were handed is eng:investigate.
 ---
 
 # Issue
@@ -13,20 +13,21 @@ file, and the reply gives the command or call that would file it.
 
 ## When it runs
 
-When the user's latest message asks to draft, file, edit, label, or close an
-issue or a ticket, or to split a plan or deferred review items into issues.
+When the user's latest message asks to draft, file, edit, label, close, or
+comment on an issue or a ticket, or to split a plan or deferred review items
+into issues.
 Working on an issue the user handed you, such as "look into issue 42", goes
 to `eng:investigate`.
 
 An earlier go-ahead does not carry forward: each create, edit, label change,
-or close needs the latest message to ask for it. This skill never comments on
-an issue, and never passes `--comment` to `gh issue close`.
+close, or comment needs the latest message to ask for it. Only a Linear issue
+takes a comment, and `gh issue close` never gets `--comment`.
 
 ## How to use it
 
 Say what the issue is about, or point at the plan or the review items. You get
-the draft's title and body files and the command that would file it. Say "file
-it" to create it.
+the title and body files and the command to file it. Say "file it" to create
+it.
 
 ---
 
@@ -98,8 +99,8 @@ Write the body alone to `issue-<slug>.md` in the scratchpad directory your
 system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, and the
 title alone to `issue-<slug>.title` beside it. In the reply, give the title,
 the labels, both files' paths, and the exact command that would file it,
-passing both files. Reading the title from its file keeps a backtick, a `$`,
-or an apostrophe in it literal in every shell:
+passing both files. Reading the title from its file keeps a backtick, `$` or
+apostrophe in it literal in any shell:
 
 ```bash
 gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \

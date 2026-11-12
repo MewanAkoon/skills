@@ -48,3 +48,9 @@ without one, use this repo.
 - Any other tracker, or Linear with no tools in the session: never call its
   tools. Skip steps 2, 3 and 6, and in step 5 write copy-paste text with no
   command.
+
+Only a Linear issue takes a comment, as [linear.md](linear.md) says. A comment
+asked for on any other tracker, GitHub included, or on Linear with no tools in
+the session, is a draft: write its body to `comment-<issue>.md` in step 5's
+draft directory, give the path and the command or text that would post it, and
+post nothing.

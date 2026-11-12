@@ -1,6 +1,6 @@
 # Linear
 
-Read this when step 1 found Linear and Linear's MCP tools are loaded. It
+Read this when step 1 found Linear and Linear's MCP tools are in the session. It
 replaces the `gh` commands in steps 2, 3, 5 and 6. Everything else in
 `SKILL.md` holds: the duplicate check, the draft in files, and filing only
 when the user's latest message asks.
@@ -9,7 +9,8 @@ when the user's latest message asks.
 
 Search the team named in step 1 with `list_issues`, passing the team and a
 `query` of key words from the title and the error text. Search open, closed
-and archived issues, with `includeArchived`, and read the description of any
+and archived issues, with `includeArchived`, following `cursor` while
+`hasNextPage` is true, and read the description of any
 close match with `get_issue` before calling it a duplicate. A match goes back
 to the user with its identifier and URL instead of a new draft.
 
@@ -23,8 +24,9 @@ has issue templates, list them with `list_templates`, passing the team and
 sections in the body. Leave `template` off `save_issue`, because it sets
 fields and sub-issues the draft never showed. List the fields the template
 sets, other than people, among the draft's fields instead, as fields the
-guidance names. List the team's labels with `list_issue_labels`, following
-`cursor` while `hasNextPage` is true, and use only labels that exist and are
+guidance names. List the labels with `list_issue_labels`, once for the team
+and once with no team for the workspace's, following `cursor` while
+`hasNextPage` is true, and use only labels that exist and are
 not retired. Set a field only when the guidance or the user names it.
 
 ## Step 5: Draft, then stop
@@ -41,10 +43,10 @@ Call `save_issue` with the fields from step 5. Pass `id` only to edit an
 issue, and change only the fields asked for. `labels` replaces the whole set,
 so an edit adds and removes labels with `addLabels` and `removeLabels`. To
 close one, set the `state` the user names, such as Done or Canceled, or mark a
-duplicate with `duplicateOf`. Then read it back with `get_issue`, passing
-`fields` that name each field set, with `parentId` and `relations` when a
-parent, a blocker or a duplicate was set, and check each against what was
-asked.
+duplicate with `duplicateOf`. Then read it back with `get_issue`, adding
+`includeRelations` when a blocker or a duplicate was set, and check each field
+against what was asked. `list_issues` with a `parentId` lists the issues
+filed under that parent.
 
 For several issues, draft and file in the order [github.md](github.md) sets
 out. Pass `parentId` and `blockedBy` to `save_issue` in place of its `gh`

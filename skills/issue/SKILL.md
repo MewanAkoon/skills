@@ -15,7 +15,6 @@ file, and the reply gives the command that would file it.
 
 When the user's latest message asks to draft, file, edit, label, or close an
 issue or a ticket, or to split a plan or deferred review items into issues.
-Reading issues to answer a question needs no request and is not this skill.
 Working on an issue the user handed you, such as "look into issue 42", goes
 to `eng:investigate`.
 
@@ -33,24 +32,24 @@ it" to create it.
 
 ## Step 1: Find the target
 
-Work out the tracker, and which steps below it takes, from
-[references/tracker.md](references/tracker.md). For GitHub, pass the repo the
-user names, or nothing for this one:
+Work out the tracker, its target, and which steps below it takes, from
+[references/tracker.md](references/tracker.md). For Linear with its tools,
+[references/linear.md](references/linear.md) replaces the `gh` commands in
+steps 2, 3, 5 and 6. For GitHub, pass the repo named, or nothing for this one:
 
 ```bash
 gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled
 ```
 
-**Done when:** the tracker and the target in it are named, or the run asked
-which tracker to use, or it stopped because issues are off for the repo or
-`gh` is not signed in, or the draft will be copy-paste text.
+**Done when:** the tracker and its target are named, or the run asked for
+one, or it stopped on issues off or `gh` signed out, or the draft will be
+copy-paste text.
 
 ## Step 2: Look for a duplicate
 
 Search open and closed issues for the same problem, with key words from the
 title and the error text. Keep them to letters, digits, spaces, `_`, and `.`,
-because the shell expands a `$` or a backtick inside double quotes, and the
-search reads a `:` or a leading `-` as syntax:
+so neither the shell nor the search reads one as syntax:
 
 ```bash
 gh search issues --repo <owner/repo> "<key words>" --json number,title,state,url
@@ -118,8 +117,8 @@ Run the command from step 5, or the edit or close the user asked for, then
 read the issue back, as [references/file.md](references/file.md) shows.
 
 **Done when:** the issue's URL is in the reply and its labels and state match
-what was asked, or a mismatch is reported, or the command failed and its
-output is reported.
+what was asked, or a mismatch is reported, or the run asked which state to
+close it with, or the command failed and its output is reported.
 
 ## Report
 

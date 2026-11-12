@@ -11,13 +11,15 @@ follow semantic versioning.
 ### Changed
 
 - `eng:issue` now works out which tracker a repo uses before it drafts: the
-  one your message names, then the one the repo's guidance names, then the
-  repo's history and metadata, then GitHub. When it had to guess, it says so
-  and offers a line for the repo's guidance. In Linear, with Linear's tools
-  loaded, it searches for a duplicate, drafts to files, and creates the issue
-  only when your latest message asks. The hook gates GitHub issue writes but
-  not Linear's, so there the skill and the workflow hold that rule. Any other
-  tracker still gets copy-paste text.
+  one your message names, or else the one the repo's guidance names, with
+  the team, project or repo to file in. When neither names one, it drafts
+  for GitHub if issues are on, says so, and offers a line for the repo's
+  guidance, and otherwise asks. It never guesses from history. In
+  Linear, with Linear's tools in the session, it searches for a duplicate,
+  drafts to files, and creates the issue only when your latest message
+  asks. The hook gates GitHub issue writes but not Linear's, so there the
+  skill and the workflow hold that rule. Any other tracker still gets
+  copy-paste text.
 
 ## 0.11.0 - unreleased
 

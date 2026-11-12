@@ -665,12 +665,63 @@ expect_bash pushed ask 'git push --force-with-lease origin feature/x' 'forces'
 # A typed /eng:commit is both the skill and the request.
 set_state typed "/eng:commit" commit
 expect_bash typed allow 'git commit -m x'
-# No state to read: the gate fails open, like every check but the command parser.
+# No state to read: the gate fails open, as every check does but the command
+# parser and the gate on a Linear comment.
 jq -cn '{session_id: "missing", tool_name: "Bash", tool_input: {command: "git commit -m x"}}' |
   "$hook" pre-tool > "$scratch/out" 2>/dev/null
 [ "$(verdict)" = allow ] || bad "write gate: a commit with no state was not allowed"
 bash_call nosuchsession 'git commit -m x'
 [ "$(verdict)" = allow ] || bad "write gate: a commit in a session with no message was not allowed"
+
+# A comment on a Linear issue, and a Linear issue write, through the gate.
+linear_comment='mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment'
+linear_issue='mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue'
+# Checks that session $1's MCP tool $3 with input $4 gets decision $2, with
+# the JSON object $6, when given, merged into the call, and when $5 is given,
+# that the reason holds it.
+expect_mcp() {
+  local extra="${6:-}"
+  [ -n "$extra" ] || extra='{}'
+  hook_run pre-tool "$(jq -cn --arg s "$1" --arg t "$3" --argjson i "$4" --argjson x "$extra" \
+    '{session_id: $s, cwd: "/tmp", tool_name: $t, tool_input: $i} + $x')"
+  local got
+  got="$(verdict)"
+  [ "$got" = "$2" ] || { bad "write gate: got $got, want $2, for $3 $4 in session $1"; return; }
+  if [ -n "${5:-}" ]; then
+    jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$5" \
+      || bad "write gate: the reason for $3 $4 in session $1 does not say '$5'"
+  fi
+}
+comment_in='{"issueId":"SKI-1","body":"Done in the PR."}'
+expect_mcp all deny "$linear_comment" "$comment_in" 'A subagent never' '{"agent_id": "a1"}'
+expect_mcp all deny "$linear_issue" '{"team":"SKI","title":"x"}' 'A subagent never' '{"agent_id": "a1"}'
+expect_mcp none deny "$linear_comment" "$comment_in" 'eng:issue'
+expect_mcp none deny "$linear_issue" '{"team":"SKI","title":"x"}' 'eng:issue'
+expect_mcp none deny mcp__linear__update_issue '{"id":"SKI-1","title":"x"}' 'eng:issue'
+expect_mcp none deny mcp__LinearServer__save_issue '{"team":"SKI","title":"x"}' 'eng:issue'
+expect_mcp none allow mcp__linearb__save_issue '{"team":"SKI","title":"x"}'
+# Unlike the other gates, a comment with no state to read is denied.
+jq -cn --arg t "$linear_comment" --argjson i "$comment_in" '{session_id: "missing", tool_name: $t, tool_input: $i}' |
+  "$hook" pre-tool > "$scratch/out" 2>/dev/null
+[ "$(verdict)" = deny ] || bad "write gate: a Linear comment with no state was not denied"
+expect_mcp nocommentstate deny "$linear_comment" "$comment_in" 'cannot read this session'
+# A plain no to the comment refuses it. A no to something else, or one that
+# narrows the comment, leaves it to the skill.
+comment_said() { # message, verdict
+  set_state said "$1" issue
+  expect_mcp said "$2" "$linear_comment" "$comment_in" "$([ "$2" = deny ] && printf 'says not to')"
+}
+comment_said "don't comment" deny
+comment_said "No comment." deny
+comment_said "don't comment yet" deny
+comment_said "please don't post a comment" deny
+comment_said "Don't add a comment yet" deny
+comment_said "comment on SKI-1 that the PR is up" allow
+comment_said "don't file a new issue, just comment on SKI-1" allow
+comment_said "don't comment on SKI-9" allow
+set_state said "Don't file an issue for this" issue
+expect_mcp said deny "$linear_issue" '{"team":"SKI","title":"x"}' 'says not to'
+said_allows "don't comment or push" commit deny 'git push origin x'
 # Input that is not JSON passes in every mode: exit 0, no output.
 for m in prompt expansion pre-tool post-tool stop; do
   printf 'not json' | env CLAUDE_PLUGIN_DATA="$data" "$hook" "$m" > "$scratch/out" 2>/dev/null \
@@ -1728,8 +1779,9 @@ jq -cn --arg d "$repo" '{session_id: "order", cwd: $d, prompt: "commit it"}' |
 [ -f "$scratch/order-seen" ] || bad "prompt: the tree was hashed before the message was saved"
 rm -f "$shims/git"
 
-# A check of your message that fails lets the write run, as every check but
-# the parser fails open, and logs it. A stand-in awk fails only that check.
+# A check of your message that fails lets the write run, a Linear comment
+# too, as the checks that fail open do, and logs it. A stand-in awk fails only
+# that check.
 # shellcheck disable=SC2016
 printf '#!/bin/sh\nfor a; do case "$a" in target=*) exit 2 ;; esac; done\nexec "%s" "$@"\n' "$real_awk" > "$shims/awk"
 chmod +x "$shims/awk"

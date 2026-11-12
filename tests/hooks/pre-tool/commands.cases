@@ -420,6 +420,8 @@ glab mr note 5 -m lgtm
 glab mr approve 5
 == deny
 jira issue comment add PROJ-1 "done"
+== deny the Linear CLI's comment, which the Linear issue exception leaves out
+linear comment add SKI-1 -b "done"
 == ask flock takes a lock file first
 flock /tmp/lock git push --force origin main
 == deny

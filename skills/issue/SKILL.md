@@ -20,8 +20,10 @@ Working on an issue the user handed you, such as "look into issue 42", goes
 to `eng:investigate`.
 
 An earlier go-ahead does not carry forward: each create, edit, label change,
-close, or comment needs the latest message to ask for it. Only a Linear issue
-takes a comment, and `gh issue close` never gets `--comment`.
+close, or comment needs the latest message to ask for it. The one exception is
+an issue write, never a comment, that an approved plan's Delivery names, as
+`eng:implement`'s `references/deliver.md` says. Only a Linear issue takes a
+comment, and `gh issue close` never gets `--comment`.
 
 ## How to use it
 
@@ -84,10 +86,8 @@ the expected result, acceptance criteria someone can test, what is in and out
 of scope, and what blocks it. Link the source: the PR comment, the plan, the
 error. Follow `eng:plain-writing`.
 
-Split into several issues only when the user asked for that. Propose the
-breakdown first, as vertical slices that each deliver something testable, and
-wait for approval. [references/github.md](references/github.md) covers
-sub-issues, blockers, and the order to file them in.
+Split work into issues, or link them as parents or blockers, only when
+asked, as [references/github.md](references/github.md) sets out.
 
 **Done when:** every section the template asks for holds content, and every
 acceptance criterion can be checked by someone who did not write it, or a
@@ -107,16 +107,16 @@ gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \
   --body-file "<body path>" --label <name>
 ```
 
-Stop there unless the user's latest message asked to file it.
+Stop there unless filing it was asked for, as "When it runs" says.
 
 **Done when:** both files' paths, the title, and the command are in the
-reply, or for another tracker the copy-paste text is, or the latest message
-asked to file it and the run goes on to step 6.
+reply, or for another tracker the copy-paste text is, or filing it was
+asked for and the run goes on to step 6.
 
 ## Step 6: File, edit, or close, when asked
 
-Run the command from step 5, or the edit or close the user asked for, then
-read the issue back, as [references/file.md](references/file.md) shows.
+Run the command from step 5, or the edit or close asked for, then read the
+issue back, as [references/file.md](references/file.md) shows.
 
 **Done when:** the issue's URL is in the reply and its labels and state match
 what was asked, or a mismatch is reported, or the run asked which state to

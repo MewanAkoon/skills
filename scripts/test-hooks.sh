@@ -1651,6 +1651,14 @@ for mcp in mcp__github__create_pull_request mcp__github__push_files; do
   hook_run pre-tool "$(jq -cn --arg d "$gr" --arg t "$mcp" '{session_id: "gp", cwd: $d, tool_name: $t, tool_input: {}}')"
   [ "$(verdict)" = ask ] || bad "grant: $mcp under a grant got $(verdict), want ask"
 done
+# An issue write the plan's Delivery names goes through the write gate alone:
+# with eng:issue loaded, the grant neither asks about it nor denies it, through
+# Bash or Linear's MCP tool.
+printf 'issue\n' >> "$data/sessions/gp/skills"
+gr_pre 'gh issue create --title x --body y'
+[ "$(verdict)" = allow ] || bad "grant: gh issue create under a grant got $(verdict), want allow"
+hook_run pre-tool "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, tool_name: "mcp__linear__save_issue", tool_input: {team: "SKI", title: "x"}}')"
+[ "$(verdict)" = allow ] || bad "grant: Linear save_issue under a grant got $(verdict), want allow"
 gr_run 'git push -q -u origin feature/a'
 [ "$gr_verdict" = allow ] || bad "grant: a plain push of a reviewed tree got $gr_verdict"
 [ "$(cat "$data/sessions/gp/grant-pushes" 2>/dev/null)" = 1 ] || bad "grant: a push under the grant was not counted"

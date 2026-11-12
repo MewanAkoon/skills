@@ -1,6 +1,7 @@
 # Filing, editing, and closing
 
-Read this at issue's step 6, once the user's latest message asked for it.
+Read this at issue's step 6, once the write was asked for, as `SKILL.md`'s
+"When it runs" says.
 
 Step 5's command files the issue. These edit or close one:
 

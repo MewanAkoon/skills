@@ -6,6 +6,20 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.14.0 - unreleased
+
+### Changed
+
+- `eng:issue` now makes an issue write that a plan you approved names under
+  Delivery without another ask, as `eng:commit` and `eng:pr` already do for a
+  commit and a PR. Delivery names a new issue by its team or repo and what it
+  is about, and an edit, label change or close by the issue and the change. A
+  line that names no write, such as "file an issue for each follow-up review
+  finds", grants nothing, and a comment still needs your latest message.
+  `eng:implement`'s delivery makes those writes once the review loop reports
+  ready, before the commit, and the hand-back lists each one with its URL, or
+  why it was skipped. The plan template gives Delivery a place for them.
+
 ## 0.13.0 - unreleased
 
 ### Changed

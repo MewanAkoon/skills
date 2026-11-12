@@ -1,6 +1,6 @@
 ---
 name: issue
-description: Use when the user's latest message asks to draft, file, edit, label, or close an issue or a ticket, or to turn a plan or deferred review items into issues. Finds the repo's tracker, drafts to files, and files only when asked. Working on an issue you were handed is eng:investigate.
+description: Use when the user's latest message asks to draft, file, edit, label, or close an issue or a ticket, or to turn a plan or deferred review items into issues. Finds the repo's tracker, drafts to files, and writes to it only when asked. Working on an issue you were handed is eng:investigate.
 ---
 
 # Issue
@@ -9,7 +9,7 @@ description: Use when the user's latest message asks to draft, file, edit, label
 
 It turns a problem, a plan, or a deferred review item into an issue in the
 repo's own tracker, written from its template and labels. The body goes to a
-file, and the reply gives the command that would file it.
+file, and the reply gives the command or call that would file it.
 
 ## When it runs
 
@@ -32,10 +32,11 @@ it" to create it.
 
 ## Step 1: Find the target
 
-Work out the tracker, its target, and which steps below it takes, from
+Work out the tracker, its target, and the steps below it takes from
 [references/tracker.md](references/tracker.md). For Linear with its tools,
 [references/linear.md](references/linear.md) replaces the `gh` commands in
-steps 2, 3, 5 and 6. For GitHub, pass the repo named, or nothing for this one:
+steps 2, 3, 5 and 6. For GitHub, or with no tracker named, pass the repo
+named, or nothing:
 
 ```bash
 gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled

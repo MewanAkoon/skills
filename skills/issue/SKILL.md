@@ -1,21 +1,20 @@
 ---
 name: issue
-description: Use when the user's latest message asks to draft, file, edit, label, or close a GitHub issue or a ticket, or to turn a plan or deferred review items into issues. Writes the draft to files and changes GitHub only when asked. Working on an issue you were handed is eng:investigate.
+description: Use when the user's latest message asks to draft, file, edit, label, or close an issue or a ticket, or to turn a plan or deferred review items into issues. Finds the repo's tracker, drafts to files, and writes to it only when asked. Working on an issue you were handed is eng:investigate.
 ---
 
 # Issue
 
 ## What this does
 
-It turns a problem, a plan, or a deferred review item into an issue written from
-the repo's own template and labels. The body goes to a file, and the reply gives
-the command that would file it.
+It turns a problem, a plan, or a deferred review item into an issue in the
+repo's own tracker, written from its template and labels. The body goes to a
+file, and the reply gives the command or call that would file it.
 
 ## When it runs
 
 When the user's latest message asks to draft, file, edit, label, or close an
 issue or a ticket, or to split a plan or deferred review items into issues.
-Reading issues to answer a question needs no request and is not this skill.
 Working on an issue the user handed you, such as "look into issue 42", goes
 to `eng:investigate`.
 
@@ -33,24 +32,25 @@ it" to create it.
 
 ## Step 1: Find the target
 
+Work out the tracker, its target, and the steps below it takes from
+[references/tracker.md](references/tracker.md). For Linear with its tools,
+[references/linear.md](references/linear.md) replaces the `gh` commands in
+steps 2, 3, 5 and 6. For GitHub, or with no tracker named, pass the repo
+named, or nothing:
+
 ```bash
 gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled
 ```
 
-Pass the repo the user names, or nothing for this one. For Fibery, Jira,
-Linear, or any tracker other than GitHub, never call its tools: skip steps 2,
-3, and 6, and in step 5 write copy-paste text with no command.
-
-**Done when:** the target is named, or the run has stopped because issues are
-off for the repo or `gh` is not signed in, or the target is another tracker
-and the draft will be text only.
+**Done when:** the tracker and its target are named, or the run asked for
+one, or it stopped on GitHub issues off or `gh` signed out, or the draft will
+be copy-paste text.
 
 ## Step 2: Look for a duplicate
 
 Search open and closed issues for the same problem, with key words from the
 title and the error text. Keep them to letters, digits, spaces, `_`, and `.`,
-because the shell expands a `$` or a backtick inside double quotes, and the
-search reads a `:` or a leading `-` as syntax:
+so neither the shell nor the search reads one as syntax:
 
 ```bash
 gh search issues --repo <owner/repo> "<key words>" --json number,title,state,url
@@ -97,9 +97,9 @@ breakdown is proposed and the run is waiting for the user's approval.
 Write the body alone to `issue-<slug>.md` in the scratchpad directory your
 system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, and the
 title alone to `issue-<slug>.title` beside it. In the reply, give the title,
-the labels, both files' paths, and the exact command that would file it. Always
-pass a title and a body file. Reading the title from its file keeps a backtick,
-a `$`, or an apostrophe in it literal in every shell:
+the labels, both files' paths, and the exact command that would file it,
+passing both files. Reading the title from its file keeps a backtick, a `$`,
+or an apostrophe in it literal in every shell:
 
 ```bash
 gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \
@@ -118,14 +118,14 @@ Run the command from step 5, or the edit or close the user asked for, then
 read the issue back, as [references/file.md](references/file.md) shows.
 
 **Done when:** the issue's URL is in the reply and its labels and state match
-what was asked, or a mismatch is reported, or the command failed and its
-output is reported.
+what was asked, or a mismatch is reported, or the run asked which state to
+close it with, or the command failed and its output is reported.
 
 ## Report
 
-The draft's two paths, or the issue's URL. The labels as GitHub shows them. A
-duplicate found instead, with its link. What the user still has to do, such
-as filing in another tracker.
+The draft's two paths, or the issue's URL. The labels as the tracker shows
+them. A duplicate found instead, with its link. What the user still has to do,
+such as filing in another tracker.
 
 **Done when:** each of those that applies to this run is in the reply.
 

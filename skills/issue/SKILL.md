@@ -1,15 +1,15 @@
 ---
 name: issue
-description: Use when the user's latest message asks to draft, file, edit, label, or close a GitHub issue or a ticket, or to turn a plan or deferred review items into issues. Writes the draft to files and changes GitHub only when asked. Working on an issue you were handed is eng:investigate.
+description: Use when the user's latest message asks to draft, file, edit, label, or close an issue or a ticket, or to turn a plan or deferred review items into issues. Finds the repo's tracker, drafts to files, and files only when asked. Working on an issue you were handed is eng:investigate.
 ---
 
 # Issue
 
 ## What this does
 
-It turns a problem, a plan, or a deferred review item into an issue written from
-the repo's own template and labels. The body goes to a file, and the reply gives
-the command that would file it.
+It turns a problem, a plan, or a deferred review item into an issue in the
+repo's own tracker, written from its template and labels. The body goes to a
+file, and the reply gives the command that would file it.
 
 ## When it runs
 
@@ -33,17 +33,17 @@ it" to create it.
 
 ## Step 1: Find the target
 
+Work out the tracker, and which steps below it takes, from
+[references/tracker.md](references/tracker.md). For GitHub, pass the repo the
+user names, or nothing for this one:
+
 ```bash
 gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled
 ```
 
-Pass the repo the user names, or nothing for this one. For Fibery, Jira,
-Linear, or any tracker other than GitHub, never call its tools: skip steps 2,
-3, and 6, and in step 5 write copy-paste text with no command.
-
-**Done when:** the target is named, or the run has stopped because issues are
-off for the repo or `gh` is not signed in, or the target is another tracker
-and the draft will be text only.
+**Done when:** the tracker and the target in it are named, or the run asked
+which tracker to use, or it stopped because issues are off for the repo or
+`gh` is not signed in, or the draft will be copy-paste text.
 
 ## Step 2: Look for a duplicate
 
@@ -97,9 +97,9 @@ breakdown is proposed and the run is waiting for the user's approval.
 Write the body alone to `issue-<slug>.md` in the scratchpad directory your
 system prompt names, or in `${TMPDIR:-/tmp}/drafts` when it names none, and the
 title alone to `issue-<slug>.title` beside it. In the reply, give the title,
-the labels, both files' paths, and the exact command that would file it. Always
-pass a title and a body file. Reading the title from its file keeps a backtick,
-a `$`, or an apostrophe in it literal in every shell:
+the labels, both files' paths, and the exact command that would file it,
+passing both files. Reading the title from its file keeps a backtick, a `$`,
+or an apostrophe in it literal in every shell:
 
 ```bash
 gh issue create --repo <owner/repo> --title "$(cat "<title path>")" \
@@ -123,9 +123,9 @@ output is reported.
 
 ## Report
 
-The draft's two paths, or the issue's URL. The labels as GitHub shows them. A
-duplicate found instead, with its link. What the user still has to do, such
-as filing in another tracker.
+The draft's two paths, or the issue's URL. The labels as the tracker shows
+them. A duplicate found instead, with its link. What the user still has to do,
+such as filing in another tracker.
 
 **Done when:** each of those that applies to this run is in the reply.
 

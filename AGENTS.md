@@ -123,15 +123,17 @@ follows, and enforcing it is what this repo is for.
 Work here is tracked in Linear, team Skills (key SKI), not in GitHub issues.
 Dependabot pull requests are the one exception.
 
-- Every change has a SKI issue before work starts. Look for an existing one
-  before creating a new one.
+- Every change has a SKI issue before work starts. An agent looks for an
+  existing one first, and creates a new one only when the user asks for it,
+  through `eng:issue`, which reads this section to find the tracker.
 - The branch is named for the issue and its type, in lowercase:
   `feature/ski-N-short-desc`, `fix/ski-N-short-desc` or
   `chore/ski-N-short-desc`. A branch name holding `ski-N` links the issue as
   closing, so merging the pull request moves the issue to Done.
 - The repo has no pull request template, so `eng:pr` uses its own body. Keep
-  it, and make the last line of its What and why section one linking line on
-  its own: `Fixes SKI-N` when merging finishes the issue, or `Part of SKI-N`
+  it, and make the last line of its What and why section one linking line,
+  with a blank line before it so it renders as its own paragraph:
+  `Fixes SKI-N` when merging finishes the issue, or `Part of SKI-N`
   when more pull requests follow. A partial pull request leaves `ski-N` out
   of its branch name, or the issue splits into sub-issues that each take
   `Fixes`.

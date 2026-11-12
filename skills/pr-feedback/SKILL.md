@@ -97,8 +97,8 @@ in the report, or the report says none needs one.
 
 The verdict per comment, what was fixed, the checks run, the drafts file's
 path, and whether it is ready to commit or to update the PR. For each
-deferred comment, offer an issue draft through `eng:issue`, or ticket text for
-another tracker. The user posts the replies, and a commit or an issue
-waits for their request.
+deferred comment, offer an issue draft through `eng:issue`, in the repo's
+tracker. The user posts the replies, and a commit or an issue waits for their
+request.
 
 **Done when:** each of those is in the report.

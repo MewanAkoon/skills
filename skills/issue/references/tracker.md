@@ -12,7 +12,7 @@ tracker.
    "work is tracked in Linear, team Skills (key SKI)" names the tracker and
    the team to file in. So does a `bugs` URL in `package.json`, or a contact
    link in `.github/ISSUE_TEMPLATE/config.yml`, that sends issues to another
-   issue tracker.
+   tracker or to another repo's GitHub issues.
 
 The user's message wins. Read the guidance even then, for the team, project
 or repo it names for that same tracker. Guidance that names one tracker and
@@ -43,8 +43,8 @@ without one, use this repo.
 - GitHub: the steps in `SKILL.md` as written.
 - Linear, when its MCP tools are in the session, loaded or deferred. A
   connector's server can be named by an id, so tell Linear's tools by their
-  descriptions or the server's instructions. Load deferred ones with
-  ToolSearch first, then follow [linear.md](linear.md).
+  descriptions or the server's instructions. Where the harness defers tools,
+  load them with ToolSearch first. Then follow [linear.md](linear.md).
 - Any other tracker, or Linear with no tools in the session: never call its
   tools. Skip steps 2, 3 and 6, and in step 5 write copy-paste text with no
   command.

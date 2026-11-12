@@ -9,8 +9,8 @@ when the user's latest message asks.
 
 Search the team named in step 1 with `list_issues`, passing the team and a
 `query` of key words from the title and the error text. Search open, closed
-and archived issues, with `includeArchived` and a `limit` of 50. When
-`hasNextPage` comes back true, say the search covered only the first 50.
+and archived issues, with `includeArchived` and a `limit` of 250. When
+`hasNextPage` comes back true, say the search covered only the first 250.
 Read the
 description of any close match with `get_issue` before calling it a
 duplicate. A match goes back to the user with its identifier and URL instead
@@ -42,17 +42,17 @@ asked to file it.
 
 ## Step 6: File, edit, or close, when asked
 
-Call `save_issue` with the fields from step 5, reading the title and the body
-from their files again, since the user may have edited them. Pass `id` only to
-edit an issue, and change only the fields asked for. `labels` replaces the
-whole set, so an edit adds and removes labels with `addLabels` and
-`removeLabels`. To close one as a duplicate, set `duplicateOf`. To close one
-otherwise, set the `state` the user names, matched to one of the team's from
-`list_issue_statuses`, and when the user names none, ask which of the team's
-completed or canceled states to use. Then read it back with `get_issue`,
-adding `includeRelations` when a blocker or a duplicate was set, and check
-each field against what was asked. `list_issues` with a `parentId` lists the
-issues filed under that parent.
+Call `save_issue` with the fields from step 5. To create one, read the title
+and the body from their files again, since the user may have edited them. Pass
+`id` only to edit an issue, and change only the fields asked for. `labels`
+replaces the whole set, so an edit adds and removes labels with `addLabels`
+and `removeLabels`. To close one as a duplicate, set `duplicateOf`. To close
+one otherwise, set the `state` the user names, matched to one of the team's
+from `list_issue_statuses`, and when the user names none, ask which of the
+team's completed or canceled states to use. Then read it back with
+`get_issue`, adding `includeRelations` when a blocker or a duplicate was set,
+and check each field against what was asked. `list_issues` with a `parentId`
+lists the issues filed under that parent.
 
 For several issues, draft and file in the order [github.md](github.md) sets
 out. Pass `parentId` and `blockedBy` to `save_issue` in place of its `gh`

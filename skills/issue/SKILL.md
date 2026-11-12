@@ -42,8 +42,8 @@ gh repo view [<owner/repo>] --json nameWithOwner,hasIssuesEnabled
 ```
 
 **Done when:** the tracker and its target are named, or the run asked for
-one, or it stopped on issues off or `gh` signed out, or the draft will be
-copy-paste text.
+one, or it stopped on GitHub issues off or `gh` signed out, or the draft will
+be copy-paste text.
 
 ## Step 2: Look for a duplicate
 

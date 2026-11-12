@@ -64,7 +64,8 @@ covers when to commit or open a PR, staging, hooks, amending, force pushes,
 and anything posted. A step the guidance adds beyond the commit or the PR
 itself, such as a label, a reviewer, or a comment, gets named to the user and
 runs only when their latest message asks for it. A comment goes to a draft
-file instead, as the workflow's step 7 says.
+file instead, as the workflow's step 7 says, unless it is a comment on a
+Linear issue that message asks for, which `eng:issue` posts.
 
 Where the guidance says nothing about a part of the result, the eng skill's
 default for that part still applies. The eng skill names what it treats as

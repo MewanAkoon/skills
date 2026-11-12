@@ -46,13 +46,15 @@
 # commit and time) and grant-pushes (the pushes made under it). The grant and
 # each write under it are also logged to grant-writes.log in
 # ${CLAUDE_PLUGIN_DATA}. It is not read from the transcript, which Claude
-# Code writes asynchronously. Where the state cannot
-# be read, the write gate allows.
+# Code writes asynchronously. Where the state cannot be read, the write gate
+# allows, except a comment on a Linear issue, which it denies.
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
-# fails open and lets the tool run, except the command parser. When it fails
-# on a shell command, or runs past PARSE_SECONDS below, the hook reads what the
-# parser printed before it stopped: a post there is still denied, and so is a
+# fails open and lets the tool run, except the command parser and the gate on a
+# Linear issue comment, which was a post before it had a gate and is denied
+# when the state or its input cannot be read. When the parser fails on a shell
+# command, or runs past PARSE_SECONDS below, the hook reads what the parser
+# printed before it stopped: a post there is still denied, and so is a
 # write the gate refuses. Anything else asks, because the command may post or
 # write. The limit sits below the hook's timeout in hooks/hooks.json, so Claude
 # Code does not stop the hook first and run the command unread. A failure,
@@ -89,22 +91,28 @@ POST_FLAGS='--comment(=[^[:space:]]*)?|--post(=[^[:space:]]*)?'
 
 POST_REASON="Posting a comment, review or reply is off limits in this setup, and \
 no approval releases it. Write the draft to a file with the command that would \
-post it, give the user the path, and say that is why. Reading stays open."
+post it, give the user the path, and say that is why. Reading stays open. The \
+one exception is a comment on a Linear issue that the user's latest message \
+asks for, through the eng:issue skill, with only the issue and the body."
 
 # The words in a message that name a write. A refusal such as "don't stage,
 # commit or push" may list several before the one it refuses.
-WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)? ?in|prs?|pull[ -]requests?|merge[ -]requests?|mrs?|issues?|tickets?'
+WRITE_WORDS='commit(s|ted|ting)?|push(ed|es|ing)?|stag(e|ed|ing)|check(ed)?( it)? ?in|prs?|pull[ -]requests?|merge[ -]requests?|mrs?|issues?|tickets?|comments?'
 # The words for each write the gate reads a no to, one at a time.
 COMMIT_WORDS='commit(s|ted|ting)?|check(ed)?( it)?[ -]?in'
 PUSH_WORDS='push(ed|es|ing)?'
 PR_WORDS='prs?|pull[ -]requests?|merge[ -]requests?|mrs?'
 ISSUE_WORDS='issues?|tickets?'
+# A comment, and a phrase that posts one, so "don't add a comment" refuses it.
+COMMENT_WORDS='(post|add|leave|write|make)( (a|an|any|the|that|this))? comments?|comments?|commenting'
 
 # The words in an MCP tool's name that say what it does: it reads, it posts,
-# or it writes somewhere else. A write either edits, which Claude Code's own
-# permission settings decide, or is risky, which the hook asks about every
-# time: it deletes, moves, shares, sends, publishes, merges, deploys, runs or
-# stops something, or changes who has access.
+# or it writes somewhere else. A comment on a Linear issue is the one post
+# that goes through the write gate instead, which mcp_tool decides from the
+# server, the whole name and the input. A write either edits, which Claude
+# Code's own permission settings decide, or is risky, which the hook asks
+# about every time: it deletes, moves, shares, sends, publishes, merges,
+# deploys, runs or stops something, or changes who has access.
 READS="read get list search fetch view retrieve query find lookup download \
 describe count inspect show summarize analyze"
 POSTS="comment comments reply review reviews reaction reactions approve"
@@ -558,8 +566,9 @@ on_expansion() {
 }
 
 # Sets $verdict to allow or deny, and $reason, for a write the eng skill named
-# by $1 runs: commit, push, pr or issue. The write runs unless the user's
-# latest message says not to.
+# by $1 runs: commit, push, pr, comment, which is a comment on a Linear issue,
+# or issue. The write runs unless the user's latest message says not to. A
+# comment with no state to read is denied, where the others pass.
 gate() {
   verdict=allow
   reason=""
@@ -573,18 +582,27 @@ gate() {
     pr)
       skills=pr label="pull request change" via="the eng:pr skill"
       words="$PR_WORDS" ;;
+    comment)
+      skills=issue label="issue comment" via="the eng:issue skill"
+      words="$COMMENT_WORDS" ;;
     *)
       skills=issue label="issue change" via="the eng:issue skill"
       words="$ISSUE_WORDS" ;;
   esac
   if [ -n "$f_agent" ]; then
     verdict=deny
-    reason="A subagent never commits, pushes, changes a pull request or writes an issue. Hand the work back to the main session."
+    reason="A subagent never commits, pushes, changes a pull request, or writes or comments on an issue. Hand the work back to the main session."
     return 0
   fi
-  # With no state to read, the gate fails open, like every check but the
-  # command parser.
-  find_state && [ -f "$state/turn" ] || return 0
+  # With no state to read, the gate fails open, as most checks do. A comment
+  # was a post before it had a gate, so it stays denied.
+  if ! { find_state && [ -f "$state/turn" ]; }; then
+    [ "$1" = comment ] && {
+      verdict=deny
+      reason="The hook cannot read this session's latest message, so it cannot let a comment through. Write the draft to a file with the call that would post it, give the user the path, and say that is why."
+    }
+    return 0
+  fi
   loaded=no
   for s in $skills; do
     grep -qx "$s" "$state/skills" 2>/dev/null && loaded=yes
@@ -1169,6 +1187,24 @@ grant_checks() {
   fi
 }
 
+# Prints "name" when the MCP server $1 is named for Linear, "id" when it is
+# named by a claude.ai connector's id, as Linear's connector is, and nothing
+# otherwise.
+linear_tool() {
+  # Linear as a whole word in the name, split at case changes as mcp_tool
+  # splits a tool's name: linear, linear-server, my_linear, LinearServer.
+  # LinearB, another product, reads as "linear b" in any spelling, such as
+  # LinearB or linear-b, and is left out.
+  case "$(printf '%s' "$1" | sed 's/\([a-z0-9]\)\([A-Z]\)/\1 \2/g; s/\([A-Z]\)\([A-Z][a-z]\)/\1 \2/g' |
+    tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' ' ')" in
+    *linear\ b | *linear\ b\ *) ;;
+    linear | linear\ * | *\ linear | *\ linear\ *) printf 'name'; return 0 ;;
+  esac
+  printf '%s' "$1" | grep -Eqx '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' &&
+    printf 'id'
+  return 0
+}
+
 # Prints what an MCP tool writes, in the parser's form, from its name split
 # into words.
 mcp_tool() {
@@ -1219,6 +1255,32 @@ mcp_tool() {
     post) case "$words" in *" search "* | *" query "*) return 0 ;; esac ;;
   esac
   case " $READS " in *" $first "*) return 0 ;; esac
+  # Linear's comment on an issue, and its issue writes, go through the write
+  # gate. A server named by an id counts only with Linear's current names,
+  # since other connectors carry an update_issue too. A comment holds only
+  # issueId, which a P- project identifier is not, and body. Anything else,
+  # or input jq cannot read, is a post below. A mention in the body, as
+  # @name, a profile link or a user:// link, reaches someone, so it asks.
+  linear="$(linear_tool "$server")"
+  case "$linear:$words" in
+    ?*:" save comment " | name:" create comment ")
+      # shellcheck disable=SC2016
+      if printf '%s' "${input:-}" | jq -e '.tool_input // {} |
+        (keys - ["issueId", "body"]) == [] and
+        (.issueId | type) == "string" and .issueId != "" and
+        (.issueId | test("^[Pp]-") | not)' > /dev/null 2>&1; then
+        printf 'gate comment\n'
+        printf '%s' "$input" | jq -e '.tool_input.body // "" | tostring |
+          test("(^|[^A-Za-z0-9_.+-])@[A-Za-z0-9]|linear\\.app/[^/ ]+/profiles/|user://")' > /dev/null 2>&1 &&
+          printf 'confirm %s\n' "$1"
+        return 0
+      fi ;;
+    ?*:" save issue " | name:" create issue " | name:" update issue ")
+      printf 'gate issue\n'
+      case "$words" in *" update "*) moving=true ;; *) moving=false ;; esac
+      risky_input "$moving" && printf 'confirm %s\n' "$1"
+      return 0 ;;
+  esac
   # Sending or posting a message, a DM or a chat line is a post. In a chat
   # service, adding or writing one is too, and Slack's and Teams' own tool
   # names say so even under a connector named by an id.
@@ -1352,7 +1414,7 @@ mcp_tool() {
 # - with $1 true, a new parent or folder, which moves the file.
 # Deleting text inside a doc through an op such as Claude Docs' delete is
 # editing it, so a key named op is not read, though one named operation is. A jq failure is logged and
-# counts as nothing risky, as every check but the command parser fails open.
+# counts as nothing risky, as the checks that fail open do.
 risky_input() {
   [ -n "$input" ] || return 1
   # shellcheck disable=SC2016

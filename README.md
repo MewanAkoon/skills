@@ -274,8 +274,8 @@ and `pr` back, and the `attribution` entry if you want its credit lines back.
 [standards/workflow.md](standards/workflow.md) is eight standing steps:
 understand first, plan and stop, implement on approval, review until clean,
 commit and open PRs only when asked or when a plan you approved lists them,
-handle PR feedback on evidence and
-review the whole PR after each push, never post, and report briefly. The
+handle PR feedback on evidence and review the whole PR after each push, post
+nothing but a Linear issue comment you ask for, and report briefly. The
 plugin's SessionStart hook sends it at the start of every session and after
 each compaction. It names the skill for each step
 that has a procedure, so a change of phase is the cue to load it:
@@ -305,10 +305,10 @@ every session and inside subagents. They run in Claude Code only.
 
 | Action | What happens |
 |---|---|
-| A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post` | Denied, with a note to write the draft to a file |
-| A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync or submit, `gt submit`, and a GitHub MCP tool that writes files or pushes | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes |
+| A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post`. The `linear comment` CLI, and a Linear comment that edits, replies, or sits on anything but an issue, count too | Denied, with a note to write the draft to a file |
+| A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync or submit, `gt submit`, a GitHub MCP tool that writes files or pushes, a Linear issue write through MCP, and a comment on a Linear issue through Linear's `save_comment` with only the issue and the body | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes. A Linear comment that mentions someone also asks you to confirm it, and with no state to read it is denied |
 | A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [hooks/eng-hook](hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
-| Any other MCP write, one that only creates or changes something, such as a doc, page, sheet or issue edit through Claude Docs, Notion, Google Drive, Sheets, Linear or any other server | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
+| Any other MCP write, one that only creates or changes something, such as a doc, page, sheet or issue edit through Claude Docs, Notion, Google Drive, Sheets or any other server but GitHub's and Linear's issue writes | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
 | Under a plan you approved, a push or a PR write | Through any tool but Bash, MCP tools included, it asks, and on the plan's branch a push or new PR through the terminal tool, Monitor or PowerShell of a tree the review loop did not read is denied. Through Bash, off the plan's branch, a push or a new PR asks. On it, it is denied when HEAD's tree is not the one the review loop last read, and it asks for any push but a plain `git push` of that branch as its own command, which also asks when git's settings would send it elsewhere, push other branches, or push tags or submodules along with it, for any new PR but a `gh pr create` on its own naming no other head or repository, and from the seventh push on. Otherwise it runs |
@@ -401,7 +401,9 @@ branch, and a push run after a `cd` that leaves the directory the session starte
 exception is the command parser: when it fails on a shell command, the hook
 still denies what it found before it failed that it would deny anyway, such
 as a post, and otherwise asks before the command runs, because it cannot tell
-whether the command posts or writes. The parser has a time limit,
+whether the command posts or writes. A comment on a Linear issue is the
+other exception: with no state to read, the gate denies it, since without the
+gate it is a post. The parser has a time limit,
 `PARSE_SECONDS` in [hooks/eng-hook](hooks/eng-hook), set below the hook's
 timeout in [hooks/hooks.json](hooks/hooks.json). A command it cannot read in
 time, such as one with a couple of thousand nested `$( )`, is handled the same way, so
@@ -438,7 +440,7 @@ above leaves out the ones you do not want.
 | [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
 | [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
-| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, or close an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked |
+| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files or comments on a Linear issue only when asked |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
 | [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |

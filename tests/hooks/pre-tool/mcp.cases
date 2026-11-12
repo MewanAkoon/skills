@@ -2,10 +2,12 @@
 # "<deny|ask|allow> <tool name> [<tool input as JSON>]" per line, the input
 # {} when left out. The state is the one commands.cases uses. The names cover
 # every form seen on this machine and the trackers the plan names. "allow"
-# means the hook stays out, and Claude Code's own permission settings decide.
+# means the hook stays out, or its write gate lets the write run, and Claude
+# Code's own permission settings decide.
 #
 # Posting: comment, reply, review, reaction, send_message, post_message,
-# schedule_message.
+# schedule_message. The one exception, a comment on a Linear issue, has its
+# own cases below.
 deny mcp__github__add_issue_comment
 deny mcp__github__create_pull_request_review
 deny mcp__github__add_pull_request_review_comment_to_pending_review
@@ -129,9 +131,47 @@ allow mcp__github__convert_pull_request_to_draft
 allow mcp__github__reopen_issue
 allow mcp__github__push_files
 allow mcp__github__create_or_update_file
-# A write that only creates or changes something passes.
+# Linear's issue writes go through the same gate: the old server's names on a
+# server named for Linear, and save_issue there or under a connector id.
+# Another id-named connector's update_issue, such as Sentry's, stays out.
 allow mcp__linear__create_issue
 allow mcp__linear__update_issue
+allow mcp__linear__save_issue {"team":"SKI","title":"x"}
+allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"team":"SKI","title":"x"}
+ask mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"id":"SKI-1","assignee":"sam"}
+allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"id":"SKI-1","assignee":"me"}
+allow mcp__7f2b0cab-a9ac-49c9-ac04-dc4ec229d765__update_issue {"issueId":"PROJ-1","status":"resolved"}
+# A comment on a Linear issue goes through the gate too, when the input holds
+# only issueId and body. An @mention, a profile link or a user:// link asks.
+# Any other comment, edit, reply or parent is a post.
+allow mcp__linear__save_comment {"issueId":"SKI-1","body":"Done in the PR."}
+allow mcp__linear__create_comment {"issueId":"SKI-1","body":"Done in the PR."}
+allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"SKI-1","body":"Done in the PR."}
+allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"SKI-1","body":"Mail sam@example.com"}
+ask mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"SKI-1","body":"@sam can you look"}
+ask mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"SKI-1","body":"See [Sam](https://linear.app/acme/profiles/sam)"}
+ask mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"SKI-1","body":"see user://abc"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"id":"c1","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"SKI-1","parentId":"c1","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"projectId":"p","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"documentId":"d","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"initiativeId":"i","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"milestoneId":"m","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"statusUpdateId":"s","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":5,"body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment {"issueId":"P-ENG-12","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__create_comment {"issueId":"SKI-1","body":"x"}
+deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_diff_comment {"issueId":"SKI-1","body":"x"}
+deny mcp__jira__create_comment {"issueId":"ABC-1","body":"x"}
+deny mcp__nonlinear__create_comment {"issueId":"SKI-1","body":"x"}
+deny mcp__LinearB__save_comment {"issueId":"SKI-1","body":"x"}
+deny mcp__linear-b__save_comment {"issueId":"SKI-1","body":"x"}
+allow mcp__my_linear__save_comment {"issueId":"SKI-1","body":"x"}
+allow mcp__claude_ai_Linear__save_comment {"issueId":"SKI-1","body":"x"}
+deny mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-comment {"issueId":"SKI-1","body":"x"}
+deny mcp__github__add_issue_comment {"issueId":"1","body":"x"}
+# A write that only creates or changes something passes.
 allow mcp__fibery__createEntity
 allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page
 allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages

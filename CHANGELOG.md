@@ -6,6 +6,24 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.13.0 - unreleased
+
+### Changed
+
+- `eng:issue` can comment on a Linear issue when your latest message asks
+  for that comment, through Linear's `save_comment` with only the issue and
+  the body. Without that ask it drafts the comment to a file. Every other
+  comment, GitHub's included, stays a draft, and so does an edit, a reply,
+  or a comment on a Linear project, document, initiative, milestone or
+  status update. Workflow step 7 says so.
+- The hook lets that comment through the write gate: denied in a subagent,
+  when `eng:issue` has not loaded since your latest message, or when that
+  message says not to comment, and denied when there is no state to read.
+  A comment that mentions someone asks you to confirm it.
+- Linear issue writes, through `save_issue` or the old server's
+  `create_issue` and `update_issue`, now go through the same gate as GitHub
+  issue writes.
+
 ## 0.12.0 - unreleased
 
 ### Changed

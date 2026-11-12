@@ -1,11 +1,12 @@
 # Linear
 
 Read this when step 1 found Linear and Linear's MCP tools are in the session.
-It replaces the `gh` commands in steps 2, 3, 5 and 6. Everything else in
-`SKILL.md` holds: the duplicate check, the draft in files, and filing only
-when the user's latest message asks. A subagent drafts and never calls
-`save_issue`, since a brief is not the user's ask. When the Linear server has
-no `save_issue` or `list_issues`, write copy-paste text instead.
+It replaces the `gh` commands in steps 2, 3, 5 and 6, and says how to comment
+on an issue. Everything else in `SKILL.md` holds: the duplicate check, the
+draft in files, and filing only when the user's latest message asks. A
+subagent drafts and never calls `save_issue` or `save_comment`, since a brief
+is not the user's ask. When the Linear server has no `save_issue` or
+`list_issues`, write copy-paste text instead.
 
 ## Step 2: Look for a duplicate
 
@@ -61,6 +62,26 @@ out. Pass `parentId` and `blockedBy` to `save_issue` in place of its `gh`
 commands and its "Blocked by" line, read each issue back as above, and list
 every URL in the order filed.
 
-An assignee other than the user, or an @mention in the body, reaches another
-person, so add one only when the user's latest message or the repo's guidance
-names that person.
+An assignee other than the user, or an @mention in an issue body or a
+comment, reaches another person, so add one only when the user's latest
+message or the repo's guidance names that person.
+
+## A comment
+
+Comment on a Linear issue only when the user's latest message asks for that
+comment. Call `save_comment` with the issue's identifier as `issueId` and the
+`body`, and no other field. The body says what the message asked it to say,
+following `eng:plain-writing`. Then read it back with `list_comments` on that
+issue and give the comment's URL, or the issue's when no URL comes back, or
+report what the call returned when it failed.
+
+Without that ask, or when the server has no `save_comment`, write the body
+to `comment-<issue>.md` in the draft directory step 5 names, and give the
+path and, where the tool exists, the `save_comment` call that would post it.
+
+Never edit, delete, or reply to a comment, resolve a thread, or comment on a
+project, document, initiative, milestone, or status update. Draft those
+instead, as the workflow's step 7 says. In Claude Code the eng plugin's hook
+also denies them, and denies the comment itself in a subagent, without this
+skill loaded, or when the latest message says not to comment, and asks the
+user to confirm a comment that mentions someone.

@@ -24,9 +24,8 @@ has issue templates, list them with `list_templates`, passing the team and
 sections in the body. Leave `template` off `save_issue`, because it sets
 fields and sub-issues the draft never showed. List the fields the template
 sets, other than people, among the draft's fields instead, as fields the
-guidance names. List the labels with `list_issue_labels`, once for the team
-and once with no team for the workspace's, following `cursor` while
-`hasNextPage` is true, and use only labels that exist and are
+guidance names. List the team's labels with `list_issue_labels`, following
+`cursor` while `hasNextPage` is true, and use only labels that exist and are
 not retired. Set a field only when the guidance or the user names it.
 
 ## Step 5: Draft, then stop
@@ -42,11 +41,11 @@ asked to file it.
 Call `save_issue` with the fields from step 5. Pass `id` only to edit an
 issue, and change only the fields asked for. `labels` replaces the whole set,
 so an edit adds and removes labels with `addLabels` and `removeLabels`. To
-close one, set the `state` the user names, such as Done or Canceled, or mark a
-duplicate with `duplicateOf`. Then read it back with `get_issue`, adding
-`includeRelations` when a blocker or a duplicate was set, and check each field
-against what was asked. `list_issues` with a `parentId` lists the issues
-filed under that parent.
+close one, set the `state` the user names, matched to one of the team's from
+`list_issue_statuses`, or mark a duplicate with `duplicateOf`. Then read it
+back with `get_issue`, adding `includeRelations` when a blocker or a duplicate
+was set, and check each field against what was asked. `list_issues` with a
+`parentId` lists the issues filed under that parent.
 
 For several issues, draft and file in the order [github.md](github.md) sets
 out. Pass `parentId` and `blockedBy` to `save_issue` in place of its `gh`

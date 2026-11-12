@@ -1,7 +1,12 @@
 # Several issues, sub-issues, and blockers
 
-Read this when the user asked to split work into several issues, or to link
-issues as parents, children, or blockers.
+Read this when a split into several issues, or a link between issues as
+parents, children, or blockers, was asked for, as `SKILL.md`'s "When it runs"
+says.
+
+Propose the breakdown first, as vertical slices that each deliver something
+testable, and wait for the user's approval. An approved plan whose Delivery
+names each issue is that approval already.
 
 ## Order
 
@@ -13,8 +18,8 @@ File in dependency order, so every number a later command needs exists:
 
 Draft all of them first, one body file and one title file per issue
 (`issue-<slug>-1.md` and `issue-<slug>-1.title`, and on), with every command
-listed in the reply, and file only after the user approves the breakdown and
-asks to file.
+listed in the reply, and file only once the breakdown is approved and filing
+is asked for.
 
 ## With gh 2.94 or later
 

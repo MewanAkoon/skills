@@ -378,7 +378,10 @@ keeps it. The grant and each push or PR made on its branch are logged to
 `grant-writes.log` in the plugin's data directory. A grant never covers
 merges, releases, tags, deploys or force pushes: they ask as before, and on
 the plan's branch a push of an unreviewed tree through Bash or a shell tool is
-denied whatever its form.
+denied whatever its form. Of issue writes, a grant covers only the ones
+Delivery names: an edit, label change or close by the issue and the change,
+and a new issue by its team or repo and what it is about. It never covers a
+comment.
 
 The hooks catch a slip, not a determined bypass. They read commands the way
 a POSIX shell splits them, so a quoted
@@ -440,7 +443,7 @@ above leaves out the ones you do not want.
 | [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
 | [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
-| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files or comments on a Linear issue only when asked |
+| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and comments on a Linear issue only when asked |
 | [ts-types](skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
 | [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |

@@ -53,7 +53,8 @@ answer. Until then, say so and present it as a draft.
 again: a line `Branch: <branch>`, `feature/`, `fix/` or `chore/` plus a short
 name; the commits, grouped as they will land; push to that branch; the PR, a
 draft until the post-PR review loop and CI are clean unless this says
-otherwise, and its title; the checks that must pass; and the post-PR review
+otherwise, and its title; each issue write, named as `eng:implement`'s
+`references/deliver.md` says; the checks that must pass; and the post-PR review
 loop, with the standing rules for what review may find. Leave out anything
 that should wait for the user. Merges, releases, tags, deploys, force pushes
 and pushes to the default branch never go here.

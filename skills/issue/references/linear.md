@@ -3,7 +3,7 @@
 Read this when step 1 found Linear and Linear's MCP tools are in the session.
 It replaces the `gh` commands in steps 2, 3, 5 and 6, and says how to comment
 on an issue. Everything else in `SKILL.md` holds: the duplicate check, the
-draft in files, and filing only when the user's latest message asks. A
+draft in files, and filing only when asked, as its "When it runs" says. A
 subagent drafts and never calls `save_issue` or `save_comment`, since a brief
 is not the user's ask. When the Linear server has no `save_issue` or
 `list_issues`, write copy-paste text instead.
@@ -39,8 +39,7 @@ or the user names it.
 Write the body and the title to the two files as `SKILL.md` says. In the
 reply give the title, the fields to set, both paths, and the `save_issue` call
 that would file it: the team, the title, the body file's contents as the
-`description`, and each field. Stop there unless the user's latest message
-asked to file it.
+`description`, and each field. Stop there unless filing it was asked for.
 
 ## Step 6: File, edit, or close, when asked
 
@@ -50,12 +49,14 @@ and the body from their files again, since the user may have edited them. Pass
 part of the body goes in `patch`, not a new `description`. `labels` replaces
 the whole set, so an edit adds and removes labels with `addLabels` and
 `removeLabels`. To close one as a duplicate, set `duplicateOf`. To close one
-otherwise, set the `state` the user names, matched to one of the team's from
-`list_issue_statuses`, and when the user names none, ask which of the team's
-completed or canceled states to use. Then read it back with `get_issue`,
-adding `includeRelations` when a blocker or a duplicate was set, and check
-each field against what was asked. `list_issues` with a `parentId` lists the
-issues filed under that parent.
+otherwise, set the `state` the user, or an approved plan's Delivery, names,
+matched to one of the team's from `list_issue_statuses`, and when neither
+names one, ask which of the team's completed or canceled states to use, except
+in a plan's delivery, which skips the close, as `eng:implement`'s
+`references/deliver.md` says. Then read it back with `get_issue`, adding
+`includeRelations` when a blocker or a duplicate was set, and check each field
+against what was asked. `list_issues` with a `parentId` lists the issues filed
+under that parent.
 
 For several issues, draft and file in the order [github.md](github.md) sets
 out. Pass `parentId` and `blockedBy` to `save_issue` in place of its `gh`
@@ -69,11 +70,12 @@ message or the repo's guidance names that person.
 ## A comment
 
 Comment on a Linear issue only when the user's latest message asks for that
-comment. Call `save_comment` with the issue's identifier as `issueId` and the
-`body`, and no other field. The body says what the message asked it to say,
-following `eng:plain-writing`. Then read it back with `list_comments` on that
-issue and give the comment's URL, or the issue's when no URL comes back, or
-report what the call returned when it failed.
+comment. An approved plan's Delivery never asks for one. Call `save_comment`
+with the issue's identifier as `issueId` and the `body`, and no other field.
+The body says what the message asked it to say, following `eng:plain-writing`.
+Then read it back with `list_comments` on that issue and give the comment's
+URL, or the issue's when no URL comes back, or report what the call returned
+when it failed.
 
 Without that ask, or when the server has no `save_comment`, write the body
 to `comment-<issue>.md` in the draft directory step 5 names, and give the

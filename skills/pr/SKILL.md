@@ -73,16 +73,8 @@ gh auth status
 git remote get-url $REMOTE
 ```
 
-A hit on the second command means a merge, rebase, cherry-pick, or revert is
-mid-flight. Stop and say which one. `HEAD` is part way through the operation,
-so the diff you would describe is not the diff that will land, and a rebase
-still to finish rewrites every commit the PR would show. The
-`eng:merge-conflicts` skill finishes the operation once the user asks for it.
-
-Any path the third command lists stops the run the same way, even with no
-operation in flight, which is the state `git apply --3way` leaves behind. That
-probe reports every unmerged path, including the `AA` and `DD` cases that
-carry no `U` in the status output.
+Output from the second or third command stops the run. Read
+[references/in-flight.md](references/in-flight.md) and say what it found.
 
 Uncommitted changes mean asking: "You have uncommitted changes that will not
 be in the PR. Continue? (yes / no)". Stop on no. Untracked working files under
@@ -261,22 +253,30 @@ Then write the title alone to `pr-title.txt` and the body alone to
 your system prompt names, or when it names none, in one directory per run
 from `mktemp -d`. The files keep quotes, backticks, and `$` literal in every
 shell, where a heredoc inside `$( )` breaks macOS's bash 3.2 on one
-apostrophe. Add `--draft` on `/eng:pr draft` or for an approved plan's draft,
-and add no reviewer or assignee the user did not name:
+apostrophe. Add `--draft` on `/eng:pr draft` or for an approved plan's draft.
+Pass the assignees the user names, or none if they ask for none. Otherwise
+pass `--assignee @me`, the account `gh` is signed in as, unless
+`$BASE_REMOTE` is not `$REMOTE`, a fork's upstream. Add no reviewer they did
+not name:
 
 ```bash
 gh pr create --title "$(cat "<title path>")" --body-file "<body path>" \
-  --base $BASE
+  --base $BASE --assignee @me
 ```
 
-When `gh pr create` fails, print what `gh` said and stop. One cause is a PR
-already open for this branch. Name its number so the user can rerun and take
-step 7 instead.
+When `gh pr create` fails, print what `gh` said. When it says a PR already
+exists for this branch, name its number so the user can rerun and take step
+7, and stop. Otherwise `gh` may have opened the PR before the assignee failed,
+so run `gh pr view --json url,state`. An open PR goes on to step 8, and the
+report names what `gh` failed to add. Without one, when the command carried
+the default `--assignee @me`, run it once more without it and say so.
+Otherwise stop.
 
-**Done when:** `gh pr create` printed a URL and the branch now has an upstream
-on `$REMOTE`, or the push ended at one of the reference's other endings, or
-the run has stopped with the output of `gh pr create` printed, which is a PR
-already open for this branch or another error.
+**Done when:** `gh pr create` or `gh pr view` printed an open PR's URL, any
+failure is named, and the branch now has an upstream on `$REMOTE`, or the
+push ended at one of push.md's other endings, or the run has stopped with the
+output of `gh pr create` printed, which is a PR already open for this branch
+or another error.
 
 ## 7. Update, when a PR is open
 

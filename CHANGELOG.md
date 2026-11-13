@@ -6,6 +6,26 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.20.0 - unreleased
+
+### Changed
+
+- A push with an explicit lease,
+  `git push --force-with-lease=refs/heads/<branch>:<sha> origin <branch>`,
+  gets the same decision from the hook as a plain push, so it no longer
+  asks after a restack. That holds when the leased branch and every branch
+  the command names are not the default (`main`, `master`, or a remote's
+  HEAD in the session's directory) and the push is the whole command. A
+  bare `--force`, a lease with no sha or on a bare name, a delete, mirror,
+  prune, tag push or push option, and a lease push to the default branch
+  still ask, and a subagent's push is still denied.
+
+### Fixed
+
+- A unique prefix of a long `git push` option, such as `--force-w=`,
+  `--del`, `--m` for `--mirror`, or `--pu=` for `--push-option`, passed the
+  hook with no prompt. The hook now reads it as the full option.
+
 ## 0.19.0 - unreleased
 
 ### Changed

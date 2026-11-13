@@ -27,8 +27,9 @@
 # The hook decides deny or ask, and never allow. In the main session a post
 # is denied, a write that is hard to take back asks, and a commit, push, pull
 # request or issue write gets no decision, so Claude Code's own permission
-# settings decide it. In a subagent every remote write the hook finds is
-# denied.
+# settings decide it. A push with an explicit lease to a branch other than
+# the default counts as a plain push. In a subagent every remote write the
+# hook finds is denied.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates. review-hash holds a hash of the uncommitted changes as they
@@ -39,17 +40,19 @@
 # when it has none.
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
-# fails open and lets the tool run, except the command parser. When the parser
-# fails on a shell command, or runs past PARSE_SECONDS below, the hook reads
-# what the parser printed before it stopped: a post there is still denied, and
-# so is any write it found from a subagent. Anything else asks, because the
-# command may post or write. The limit sits below the hook's timeout in
-# hooks/hooks.json, so Claude Code does not stop the hook first and run the
-# command unread. A failure, though not a timeout, is written to eng-hook.log
-# in ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor reads, and cut to its last
-# 1000 lines once it passes 2000. A hook stopped by a signal exits 143
-# instead. Needs jq. Without it the session block goes out as plain text,
-# which Claude Code also takes as context, and every other mode does nothing.
+# fails open and lets the tool run, except two. A read of the remote HEADs
+# that finds nothing makes a push with a lease ask. And when the command
+# parser fails on a shell command, or runs past PARSE_SECONDS below, the hook
+# reads what the parser printed before it stopped: a post there is still
+# denied, and so is any write it found from a subagent. Anything else asks,
+# because the command may post or write. The limit sits below the hook's
+# timeout in hooks/hooks.json, so Claude Code does not stop the hook first and
+# run the command unread. A failure, though not a timeout, is written to
+# eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor reads, and
+# cut to its last 1000 lines once it passes 2000. A hook stopped by a signal
+# exits 143 instead. Needs jq. Without it the session block goes out as plain
+# text, which Claude Code also takes as context, and every other mode does
+# nothing.
 
 set -u
 
@@ -486,7 +489,21 @@ skill_call() {
   fi
 }
 
-# Runs the command parser on $1 and prints what it found. A parser still
+# Prints the branches the remote HEADs name in the session's directory, such
+# as main for origin/HEAD, joined by spaces, since a newline in awk's -v
+# value stops macOS awk. git lists only HEADs whose branch exists. Nothing
+# when there is none, or no directory, since git -C "" reads the hook's own.
+remote_heads() {
+  [ -n "$f_cwd" ] || return 0
+  # A pattern's * stops at a slash, so list every remote ref and keep the
+  # HEADs, which keeps a remote named a/b. One sed pass, not a shell loop,
+  # since a clone can hold many thousands of remote branches.
+  git -C "$f_cwd" for-each-ref --format='%(refname) %(symref)' refs/remotes/ 2>/dev/null |
+    sed -n 's|^\(refs/remotes/.*/\)HEAD \1\(..*\)$|\2|p' | tr '\n' ' '
+}
+
+# Runs the command parser on $1, with $2 as the default branches a push with
+# an explicit lease is read against, and prints what it found. A parser still
 # running after the time limit is stopped and the function returns 143, the
 # status of a process stopped by TERM. What it printed before it stopped is
 # kept, though a parser stopped while it was still splitting the command has
@@ -498,7 +515,7 @@ parse_command() {
     '' | *[!0-9]*) ;;
     *) [ "$ENG_HOOK_PARSE_SECONDS" -gt 0 ] && [ "$ENG_HOOK_PARSE_SECONDS" -lt "$limit" ] && limit="$ENG_HOOK_PARSE_SECONDS" ;;
   esac
-  printf '%s' "$1" | awk -f "$root/hooks/classify-command.awk" &
+  printf '%s' "$1" | awk -v defaults="${2:-}" -f "$root/hooks/classify-command.awk" &
   parser=$!
   (
     trap 'kill "$nap" 2>/dev/null; exit 0' TERM
@@ -524,7 +541,11 @@ on_pre_tool() {
       # allows, because a command it could not read may post or write. What
       # it printed before it stopped still counts, so a post it found, or a
       # subagent's write, is still denied.
-      found="$(parse_command "$command")" || {
+      # Only a push with a lease, as --force-w and on, needs the default
+      # branches, so only then does the hook ask git for them.
+      heads=""
+      case "$command" in *force-w*) heads="$(remote_heads)" ;; esac
+      found="$(parse_command "$command" "$heads")" || {
         status=$?
         if [ "$status" -eq 143 ]; then
           failed="The hook's command parser could not read this command within its time limit, so it cannot tell whether it posts or writes outside this machine. Check it before it runs."

@@ -331,12 +331,40 @@ every session and inside subagents. They run in Claude Code only.
 |---|---|
 | A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post`. The `linear comment` CLI, and a Linear comment that edits, replies, or sits on anything but an issue, count too | Denied, with a note to write the draft to a file |
 | A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync or submit, `gt submit`, a GitHub MCP tool that writes files or pushes, an issue, ticket or work item write through any tracker's MCP tool, and a comment on a Linear issue through Linear's `save_comment` with only the issue and the body | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes. A Linear comment that mentions someone also asks you to confirm it, and with no state to read it is denied |
-| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
+| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, apart from a push with an explicit lease as below, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
 | Any other MCP write, one that only creates or changes something, such as a doc, page or sheet edit through Claude Docs, Notion, Google Drive, Sheets or any other server, apart from an issue, ticket or work item write | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
 | Under a plan you approved, a push or a PR write | Through any tool but Bash, MCP tools included, it asks, and on the plan's branch a push or new PR through the terminal tool, Monitor or PowerShell of a tree the review loop did not read is denied. Through Bash, off the plan's branch, a push or a new PR asks. On it, it is denied when HEAD's tree is not the one the review loop last read, and it asks for any push but a plain `git push` of that branch as its own command, which also asks when git's settings would send it elsewhere, push other branches, or push tags or submodules along with it, for any new PR but a `gh pr create` on its own naming no other head or repository, and from the seventh push on. Otherwise it runs |
 | Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review at `high` or above of the PR by number or by a link to the PR or its files after the push counts, and so does a range whose ends meet at or before the merge base with a remote's default branch and that ends at that commit, run after the push or as the last such range before it. Under a plan you approved, on its branch, the stop is blocked instead, once per pushed commit as the reminder is, so the review runs before the hand-back |
+
+What the hook does with each form of `git push`, in the main session. In a
+subagent every push is denied.
+
+- A plain push, such as `git push` or `git push -u origin <branch>`: no
+  decision, so Claude Code's own permission settings decide.
+- A push with an explicit lease,
+  `git push --force-with-lease=refs/heads/<branch>:<sha> origin <branch>`,
+  with `--force-if-includes` or not: no decision, the same as a plain push,
+  when the leased branch and every branch the command names are not the
+  default, and the push is the whole command, with nothing before `git`, no
+  `-C` or other option before `push`, and no `cd`, `;`, pipe or `$( )`
+  around it. A redirection such as `2>&1` is fine. The default branches are
+  `main`, `master`, and every remote's HEAD in the directory Claude Code
+  reports for the session, which may not follow a `cd` from an earlier
+  command, so in another repo only `main` and `master` are sure to count. A
+  lease forces only the branch it names, so any other branch in that push
+  goes as a plain push.
+- Anything else that can force asks: `--force`, `-f`, a `+` refspec, a lease
+  with no sha, a sha that is not hex, a lease on a bare name, which could
+  name a tag, a lease or a named branch that is the default or is built
+  from `$`, `~` or braces, and a lease push in a directory with no remote
+  HEAD, or not run as its own command.
+- `--delete`, `-d`, a `:<branch>` refspec, `--mirror`, `--prune`, `--tags`,
+  `--follow-tags`, a tag refspec, and push options through `-o` or
+  `--push-option` ask too, with a lease or without one. git takes any
+  unique prefix of a long option, such as `--force-w=` or `--del`, and the
+  hook reads it as the full option.
 
 The Claude app's own MCP servers, such as the one a project thread replies
 through, are exempt from every check, because they carry the conversation
@@ -418,7 +446,9 @@ word that names a command the hook has a rule for. A chain of more than 50
 commands behind one another asks. A PowerShell
 command is read by those same rules, so its own quoting and escapes, and a
 command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings outside a grant's plain-push check, a tag pushed
-by its bare name, a commit made by anything but `git commit`, such as
+by its bare name, a remote HEAD left stale after a repo's default branch was
+renamed, the default of a remote with no HEAD or of one reached by a path or
+`--repo=` rather than a remote name, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name and input both hide what it does, or a browser posting through a web
 page. The reminder to review the whole PR reads only the Bash tool. It misses

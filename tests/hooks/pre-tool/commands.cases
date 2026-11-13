@@ -7,8 +7,8 @@
 # in the main session, where a commit, push, pull request or issue write gets
 # no decision, so each result is what the post guard and the confirmation
 # prompt decide. Each runs in a scratch repo whose origin/HEAD is main, which
-# a push with an explicit lease reads for the default branch. The deny on a subagent's writes has its own cases in
-# scripts/test-hooks.sh.
+# a push with an explicit lease reads for the default branch. The deny on a
+# subagent's writes has its own cases in scripts/test-hooks.sh.
 == deny posting
 gh pr comment 5 --body "hi"
 == deny
@@ -196,6 +196,10 @@ git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcde
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD
 == allow git reads a unique prefix as the option
 git push --force-w=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== allow --rep takes the next word as its value, so a URL there is no refspec
+git push --rep git@github.com:o/r.git --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 feature/x
+== allow
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --force-i origin feature/x
 == allow two leases
 git push --force-with-lease=refs/heads/feature/a:0123456789abcdef0123456789abcdef01234567 --force-with-lease=refs/heads/feature/b:0123456789abcdef0123456789abcdef01234567 origin feature/a feature/b
 == allow a redirection is not a refspec
@@ -266,6 +270,8 @@ git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcde
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin refs/tags/v1
 == ask --force-if-includes alone
 git push --force-if-includes origin feature/x
+== ask
+git push --force-i origin feature/x
 == ask git reads a unique prefix as the option
 git push --force-w=main:0123456789abcdef0123456789abcdef01234567 origin main
 == ask
@@ -302,6 +308,8 @@ timeout 30 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x 2>&1 | tail -1
 == ask
 git push --force-with-lease=refs/heads/feature/x:$(git rev-parse HEAD) origin feature/x
+== ask a substitution anywhere in the push
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x 2>$(echo log)
 == ask
 git status; git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
 == allow a refspec with a colon in the middle is a plain push

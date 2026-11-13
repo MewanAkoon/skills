@@ -1,10 +1,25 @@
 # Changelog
 
 Each release of the `eng` plugin, newest first. The version is the one in
-`.claude-plugin/plugin.json`, and a release covers every pull request merged
+`plugins/eng/.claude-plugin/plugin.json`, and a release covers every pull request merged
 while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
+
+## 0.15.0 - unreleased
+
+### Changed
+
+- The plugin now lives in `plugins/eng/`, and the marketplace lists it with
+  `"source": "./plugins/eng"`, so an install copies the skills, hooks,
+  standards, evals and manifest, and none of the repo's scripts, tests or
+  docs. The plugin id `eng@mewanakoon` and its data directory stay the same,
+  so `claude plugin update eng@mewanakoon` moves an install across.
+
+### Added
+
+- An icon at `plugins/eng/.claude-plugin/icon.png`, which the plugin
+  directory asks for.
 
 ## 0.14.0 - unreleased
 

@@ -5,33 +5,37 @@ For any agent working in this repo.
 ## What this repo is
 
 A source of agent skills, not an application, shipped as one Claude Code
-plugin, `eng`. There is nothing to build. The tests that run are the
-fixtures `check.sh` runs for the hook, for `scripts/cloud-setup.sh` and for
-`scripts/stats.mjs`.
-`tests/review-loop/` holds the setup for a check run by hand, and `evals/` the
-cases for `claude plugin eval`, also run by hand. Every
-`SKILL.md` loads into some other repo's session, so a change here changes how
-an agent behaves everywhere.
+plugin, `eng`. There is nothing to build. The tests that run are the fixtures
+`check.sh` runs for the hook, for `scripts/cloud-setup.sh`, for
+`scripts/stats.mjs`, and for `check.sh`'s own version rule and the validator
+wrapper. `tests/review-loop/` holds the setup for a check run by hand, and
+`plugins/eng/evals/` the cases for `claude plugin eval`, also run by hand.
+Every `SKILL.md` loads into some other repo's session, so a change here changes
+how an agent behaves everywhere.
 
-The repo is both the plugin and the marketplace that lists it, the way
-mattpocock/skills ships. `.claude-plugin/plugin.json` names the plugin and
-carries its version; `.claude-plugin/marketplace.json` names the marketplace,
-`mewanakoon`, and lists the one plugin with `"source": "./"`. Claude Code finds
-the skills by its default scan of `skills/`. Inside the plugin each skill is
-`eng:<name>`, and that full name is how skills refer to each other.
+The repo is the marketplace, and the plugin is one folder in it,
+`plugins/eng/`, so an install copies that folder and nothing else.
+`plugins/eng/.claude-plugin/plugin.json` names the plugin and carries its
+version, and `icon.png` beside it is the plugin's icon.
+`.claude-plugin/marketplace.json` at the root names the marketplace,
+`mewanakoon`, and lists the one plugin with `"source": "./plugins/eng"`. Claude
+Code finds the skills by its default scan of the plugin's `skills/`. Inside the
+plugin each skill is `eng:<name>`, and that full name is how skills refer to
+each other.
 
-Seven scripts and no build step: six in bash, and `scripts/stats.mjs` in
+Eight scripts and no build step: seven in bash, and `scripts/stats.mjs` in
 Node. The commands they carry:
 
 | Command | What it does |
 |---|---|
 | `./scripts/check.sh` | Checks the invariants below. CI runs this one. |
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
-| `./scripts/validate-plugin.sh` | Runs `claude plugin validate` and allows only the root `CLAUDE.md` warning. CI runs it on a pinned Claude Code. |
-| `./scripts/test-hooks.sh` | Feeds `hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
+| `./scripts/validate-plugin.sh` | Runs `claude plugin validate` over the root and, with `--strict`, over `plugins/eng`, and fails on any finding, plugin directory warnings included. CI runs it on a pinned Claude Code. |
+| `./scripts/test-hooks.sh` | Feeds `plugins/eng/hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
 | `node scripts/stats.mjs` | Counts, per week, remote writes and whether they were asked for, review passes, drafts, compactions and review cost, from this machine's Claude Code transcripts and the hook's log. `--save` keeps a baseline and `--compare` sets the headline numbers beside one. Its fixtures in `tests/stats/` run in `check.sh` where Node 18.1 or later is installed, and CI also runs them on Node 18.1 itself. |
 | `./link.sh --unlink` | Removes the symlinks an older install of this repo made. |
 | `./link.sh` | Prints how to install the plugin instead, and exits 1. |
+| `./scripts/test-checks.sh` | Runs `check.sh`'s version rule in scratch repos and `validate-plugin.sh` against a stand-in `claude` that prints canned output, since both fail quietly when they break. `check.sh` runs it. |
 | `./scripts/test-cloud-setup.sh` | Runs `cloud-setup.sh` against scratch homes and checks what it writes and what it leaves alone. `check.sh` runs it. |
 | `scripts/cloud-setup.sh` | The setup script for a personal cloud environment, pasted in at claude.ai rather than run here. It writes the attribution and `skillOverrides` settings, and rules that carry them, into the cloud VM's `~/.claude`, and writes nothing unless it runs as root on Linux, the way a cloud VM runs it. `CLOUD_SETUP_HOME` points it at another home on any system, which is how `test-cloud-setup.sh` runs it against scratch ones. |
 
@@ -63,22 +67,22 @@ The plugin is Claude Code packaging, and Claude Code is the harness this repo
 serves first. Two kinds of file travel, both plain markdown readable by any
 harness, and neither carrying machinery of its own:
 
-- Skills under `skills/`, the unit most of the repo is made of.
-- `standards/workflow.md`, the standing workflow every session follows. It
-  names the skill for each step that has a procedure, so every skill it names
-  has to exist and be model-invoked.
+- Skills under `plugins/eng/skills/`, the unit most of the repo is made of.
+- `plugins/eng/standards/workflow.md`, the standing workflow every session
+  follows. It names the skill for each step that has a procedure, so every
+  skill it names has to exist and be model-invoked.
 
-The manifests and `hooks/` are the Claude Code packaging around them. The
-session hook reads `standards/workflow.md` and `plain-writing` at run time and
-adds nothing of its own, so a file read outside the plugin still reads the
-same. The other hooks enforce the workflow's rules on posting, remote writes
-and review, and in places go further. For example, a subagent never runs
-`git commit` or pushes, a PR merge, release or deploy always asks, even when your
-message asked for it, and under a plan you approved, a push of a tree the
+The manifests and `plugins/eng/hooks/` are the Claude Code packaging around
+them. The session hook reads `standards/workflow.md` and `plain-writing` at run
+time and adds nothing of its own, so a file read outside the plugin still reads
+the same. The other hooks enforce the workflow's rules on posting, remote
+writes and review, and in places go further. For example, a subagent never runs
+`git commit` or pushes, a PR merge, release or deploy always asks, even when
+your message asked for it, and under a plan you approved, a push of a tree the
 review loop did not read is denied on the plan's branch, and any push off it
-asks. Where no hook runs, the session reads an
-approval by the rule in `skills/implement/references/deliver.md`, and nothing
-checks the pushed tree.
+asks. Where no hook runs, the session reads an approval by the rule in
+`plugins/eng/skills/implement/references/deliver.md`, and nothing checks the
+pushed tree.
 
 Other plugins stay out, even when useful on the machine you are sitting at.
 Recommendations of that kind live in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md),
@@ -95,7 +99,8 @@ skill takes that trade today. [WRITING-RULES.md](WRITING-RULES.md) under "Tool
 access" holds the trade and the condition on it. And the Cursor rules file
 carries a `description`, which lets Cursor pull it in by relevance where the
 Claude rule has no equivalent; that one adds a way in rather than changing what
-either file says, so both harnesses still get the same body on `skills/**`.
+either file says, so both harnesses still get the same body on
+`plugins/eng/skills/**`.
 
 Maintenance scripts run on one machine rather than in a session, so they may
 read a harness's own files: `link.sh --unlink` removes links under
@@ -164,9 +169,9 @@ Dependabot pull requests are the one exception.
 - The two rules files close their frontmatter, carry a body that is not empty,
   and carry the same body. An unclosed fence reads as an empty body, and two
   empty bodies compare equal.
-- Both rules files still scope themselves to `skills/**`, and the Cursor one
-  still sets `alwaysApply: false`. That scoping is what decides when either
-  rule loads.
+- Both rules files still scope themselves to `plugins/eng/skills/**`, and the
+  Cursor one still sets `alwaysApply: false`. That scoping is what decides when
+  either rule loads.
 - A skill carrying `allowed-tools` or `disallowed-tools` warns rather than
   fails, because whether the body holds without the field is not something a
   script can read. No skill carries one today.
@@ -176,8 +181,8 @@ Dependabot pull requests are the one exception.
   Quoted, it ends on its closing quote with nothing after it, and holds no
   quote or backslash inside that would end or garble it. Claude Code drops the
   whole frontmatter of a file whose YAML fails to parse.
-- `standards/workflow.md` names at least one skill as "the X skill", and
-  every skill named that way exists and is model-invoked.
+- `plugins/eng/standards/workflow.md` names at least one skill as "the X
+  skill", and every skill named that way exists and is model-invoked.
 - Size budgets, because each of these loads into someone's context. A
   model-invoked description is at most 300 bytes, and the set at most 3,900.
   `standards/workflow.md` is at most 3,000 bytes, and the block the session
@@ -186,28 +191,36 @@ Dependabot pull requests are the one exception.
   `implement/references/review.md` at most 3,500. Every other `SKILL.md` and
   every reference file is at most 15,000 bytes, inside the 20,000 characters
   compaction keeps of a skill.
-- `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and `evals/*/scaffold.sh`
-  parse under `bash -n`, because the checker runs few of them. `hooks/eng-hook`
-  parses under `sh -n`, which names a syntax error plainly,
-  `hooks/classify-command.awk` loads in `awk`, and the hook's fixtures
-  and `scripts/test-cloud-setup.sh`'s cases pass. Where Node 18.1 or later is
+- `link.sh`, every `scripts/*.sh`, `tests/*/*.sh`, and
+  `plugins/eng/evals/*/scaffold.sh` parse under `bash -n`, because the checker
+  runs few of them. `plugins/eng/hooks/eng-hook` parses under `sh -n`, which
+  names a syntax error plainly, `plugins/eng/hooks/classify-command.awk` loads
+  in `awk`, and the hook's fixtures, `scripts/test-cloud-setup.sh`'s cases and
+  `scripts/test-checks.sh`'s cases pass. Where Node 18.1 or later is
   installed, `scripts/stats.mjs` parses under `node --check` and its fixtures
   pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
-  name `plugin.json` gives it, with `"source": "./"`, and `plugin.json` carries
-  a `MAJOR.MINOR.PATCH` version. Both give the plugin the same description.
-- The PreToolUse timeout in `hooks/hooks.json` is at least 3 seconds more than
-  the command parser's time limit, which `hooks/eng-hook` sets as `PARSE_SECONDS` on a line
-  of its own, so the hook stops a slow parser and asks before Claude Code stops
-  the hook and runs the command unread.
+  name `plugin.json` gives it, with `"source": "./plugins/eng"`, and
+  `plugin.json` carries a `MAJOR.MINOR.PATCH` version. Both give the plugin the
+  same description.
+- `plugins/eng/.claude-plugin/icon.png` is a PNG, square, 512 to 2048 pixels a
+  side, and under 2 MB. The plugin directory refuses a submission without one,
+  and the validator CI pins does not look for it.
+- The PreToolUse timeout in `plugins/eng/hooks/hooks.json` is at least 3
+  seconds more than the command parser's time limit, which
+  `plugins/eng/hooks/eng-hook` sets as `PARSE_SECONDS` on a line of its own, so
+  the hook stops a slow parser and asks before Claude Code stops the hook and
+  runs the command unread.
 - `README.md`, `AGENTS.md` and `.github/workflows/check.yml` each state the
   oldest Claude Code these skills support, and state the same one as `cc_min`
   in `scripts/check.sh`.
 - When anything the plugin loads changed since the branch left `origin/main`
-  (`skills/`, `standards/`, `hooks/` and `plugin.json` today; `agents/`,
-  `commands/`, `output-styles/`, `themes/`, `monitors/`, `workflows/`, `bin/`,
-  `.mcp.json` and `.lsp.json` once they exist),
-  the version is newer than the one at that point, compared field by field.
+  (under `plugins/eng/`: `skills/`, `standards/`, `hooks/` and
+  `.claude-plugin/` today; `agents/`, `commands/`, `output-styles/`, `themes/`,
+  `monitors/`, `workflows/`, `bin/`, `.mcp.json` and `.lsp.json` once they
+  exist), the version is newer than the one at that point, compared field by
+  field. `evals/` is left out, since no session loads it. A base from before
+  0.15.0 carries `plugin.json` at the root, and the rule reads it there.
   `CHECK_BASE` names another base. A clone without that ref gets a warning
   instead. CI on a push to `main` sets it to `main` as it was before the push,
   so two pull requests that bumped to the same version fail once the second
@@ -271,8 +284,8 @@ own fence with no marker, beside the one that runs anywhere.
 ## Prose
 
 Every file here is prose a human reads, so
-[skills/plain-writing/SKILL.md](skills/plain-writing/SKILL.md) governs this
-repo's own files too.
+[skills/plain-writing/SKILL.md](plugins/eng/skills/plain-writing/SKILL.md)
+governs this repo's own files too.
 
 ## Which file each harness reads
 
@@ -282,10 +295,10 @@ repo's own files too.
 | `CLAUDE.md` | Claude Code, which imports `AGENTS.md` |
 | `.cursor/rules/*.mdc` | Cursor |
 | `.claude/rules/*.md` | Claude Code |
-| `skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is unverified. |
-| `standards/workflow.md` | Claude Code, through the `eng` plugin's SessionStart hook, with `plain-writing`'s Punctuation and Word choice sections |
+| `plugins/eng/skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is unverified. |
+| `plugins/eng/standards/workflow.md` | Claude Code, through the `eng` plugin's SessionStart hook, with `plain-writing`'s Punctuation and Word choice sections |
 
 Anything true for both harnesses belongs in this file. The two rules
 directories carry one body in each harness's own format. Both fire on
-`skills/**`. Cursor can also pull its copy in by description, where the
-Claude rule has no equivalent.
+`plugins/eng/skills/**`. Cursor can also pull its copy in by description, where
+the Claude rule has no equivalent.

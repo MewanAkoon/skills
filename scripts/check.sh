@@ -37,6 +37,10 @@ done
 # it, and the docs and CI that state the minimum are held to it below.
 cc_min=2.1.293
 
+# The plugin's own folder. An install copies this and nothing else, and every
+# path below that names something the plugin carries starts here.
+plugin=plugins/eng
+
 fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 warn() { printf 'WARN  %s\n' "$1" >&2; }
@@ -161,7 +165,7 @@ section() {
 
 # Does one of those sections hold a table row for this skill?
 row_in() {
-  printf '%s\n' "$1" | grep -q "^| \[$2\](skills/$2/SKILL\.md) |"
+  printf '%s\n' "$1" | grep -q "^| \[$2\]($plugin/skills/$2/SKILL\.md) |"
 }
 
 readme_model="$(section 'Model-invoked')"
@@ -185,7 +189,7 @@ reserved=" add-dir agents batch bug claude-api clear code-review compact config
  status statusline tasks terminal-setup theme todos update-config upgrade usage
  verify workflow-authoring "
 
-for dir in skills/*/; do
+for dir in "$plugin"/skills/*/; do
   name="$(basename "$dir")"
   skill="${dir}SKILL.md"
 
@@ -281,24 +285,24 @@ budget() {
 # loaded, counted as characters divided by 4, so a SKILL.md past 20,000
 # characters comes back cut short. 15,000 bytes leaves room under that, and
 # anything only some runs need belongs in references/.
-for skill_file in skills/*/SKILL.md; do
+for skill_file in "$plugin"/skills/*/SKILL.md; do
   budget "$skill_file" 15000
 done
 
 # A reference loads whole when a step reads it, and compaction keeps it the
 # same way, so the same cap applies.
-for reference in skills/*/references/*.md; do
+for reference in "$plugin"/skills/*/references/*.md; do
   [ -f "$reference" ] || continue
   budget "$reference" 15000
 done
 
-budget standards/workflow.md 3000
-budget skills/investigate/SKILL.md 6500
+budget "$plugin/standards/workflow.md" 3000
+budget "$plugin/skills/investigate/SKILL.md" 6500
 for lifecycle in implement pr-feedback; do
-  budget "skills/$lifecycle/SKILL.md" 5000
+  budget "$plugin/skills/$lifecycle/SKILL.md" 5000
 done
-budget skills/implement/references/review.md 3500
-budget skills/issue/SKILL.md 6000
+budget "$plugin/skills/implement/references/review.md" 3500
+budget "$plugin/skills/issue/SKILL.md" 6000
 
 # Every skill the workflow names exists and is model-invoked, since the name
 # is the cue to load it and a user-invoked skill refuses that call. The pattern
@@ -308,30 +312,31 @@ budget skills/issue/SKILL.md 6000
 # reads as a skill called "same" and fails, which is the safe direction.
 # Finding no name at all fails too, because a check that read nothing would
 # otherwise pass.
+workflow="$plugin/standards/workflow.md"
 workflow_names="$(
-  [ -f standards/workflow.md ] && tr '\n' ' ' < standards/workflow.md | tr -d '`' \
+  [ -f "$workflow" ] && tr '\n' ' ' < "$workflow" | tr -d '`' \
     | grep -oE '[Tt]he ([a-z0-9:-]+, )*[a-z0-9:-]+(,? and [a-z0-9:-]+)? skills?' \
     | sed -E 's/^[Tt]he //; s/ skills?$//; s/,? and /,/; s/, /,/g' \
     | tr ',' '\n' | sed 's/^[a-z0-9-]*://' | sort -u
 )"
 [ -n "$workflow_names" ] \
-  || bad "standards/workflow.md names no skill this check can read, so nothing was checked"
+  || bad "$workflow names no skill this check can read, so nothing was checked"
 while IFS= read -r named; do
   [ -n "$named" ] || continue
   case "$model_names" in
     *" $named "*) ;;
-    *) bad "standards/workflow.md names the $named skill, which is not a model-invoked skill here" ;;
+    *) bad "$workflow names the $named skill, which is not a model-invoked skill here" ;;
   esac
 done <<< "$workflow_names"
 
 # Every README row points at a skill that exists.
 while IFS= read -r linked; do
-  [ -f "skills/$linked/SKILL.md" ] || bad "a README table row lists $linked, which has no skills/$linked/SKILL.md"
-done < <(grep -o '](skills/[^/]*/SKILL\.md)' README.md | sed 's#](skills/##; s#/SKILL\.md)##' | sort -u)
+  [ -f "$plugin/skills/$linked/SKILL.md" ] || bad "a README table row lists $linked, which has no $plugin/skills/$linked/SKILL.md"
+done < <(grep -o "]($plugin/skills/[^/]*/SKILL\\.md)" README.md | sed "s#]($plugin/skills/##; s#/SKILL\\.md)##" | sort -u)
 
 # The plugin's two manifests. They are what an install reads, so a broken one
 # breaks every install at once, and nothing else here opens them.
-plugin_json=.claude-plugin/plugin.json
+plugin_json="$plugin/.claude-plugin/plugin.json"
 market_json=.claude-plugin/marketplace.json
 plugin_name=""
 market_name=""
@@ -358,15 +363,16 @@ else
   printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' \
     || bad "$plugin_json: version '$version' is not MAJOR.MINOR.PATCH"
 
-  # One plugin, served from the repo root, under the manifest's own name. A
-  # second entry or another source would install something other than this
-  # tree.
+  # One plugin, served from its own folder, under the manifest's own name. A
+  # second entry or another source would install something other than that
+  # folder, and the root source this repo used before 0.15.0 would install the
+  # whole repo.
   [ "$(jq '.plugins | length' "$market_json")" = 1 ] \
     || bad "$market_json: lists other than exactly one plugin"
   [ "$(jq -r '.plugins[0].name // empty' "$market_json")" = "$plugin_name" ] \
     || bad "$market_json: its plugin is not named $plugin_name, as $plugin_json says"
-  [ "$(jq -r '.plugins[0].source // empty' "$market_json")" = ./ ] \
-    || bad "$market_json: its plugin's source is not ./"
+  [ "$(jq -r '.plugins[0].source // empty' "$market_json")" = "./$plugin" ] \
+    || bad "$market_json: its plugin's source is not ./$plugin"
 
   # Both manifests describe the plugin: plugin.json for the install, and the
   # marketplace entry for the listing someone reads before installing. Two
@@ -375,23 +381,47 @@ else
     || bad "$market_json: its plugin's description differs from the one in $plugin_json"
 fi
 
+# The plugin's icon. The plugin directory refuses a submission without one,
+# and only a validator newer than the pinned one in CI looks for it, so CI
+# reads it here: a PNG, square, 512 to 2048 pixels a side, under 2 MB. The
+# width and height are the first two 4-byte big-endian fields of the IHDR
+# chunk, which a PNG must put first, at bytes 16 to 23.
+icon="$plugin/.claude-plugin/icon.png"
+if [ ! -f "$icon" ]; then
+  bad "$icon is missing"
+elif [ "$(wc -c < "$icon" | tr -d ' ')" -lt 24 ] ||
+     [ "$(od -An -tx1 -N8 "$icon" | tr -d ' \n')" != 89504e470d0a1a0a ] ||
+     [ "$(od -An -c -j12 -N4 "$icon" | tr -d ' \n')" != IHDR ]; then
+  bad "$icon is not a PNG"
+else
+  read -r w1 w2 w3 w4 h1 h2 h3 h4 < <(od -An -tu1 -j16 -N8 "$icon" | tr -s ' \n' '  ')
+  icon_w=$(( (w1 << 24) + (w2 << 16) + (w3 << 8) + w4 ))
+  icon_h=$(( (h1 << 24) + (h2 << 16) + (h3 << 8) + h4 ))
+  icon_bytes="$(wc -c < "$icon" | tr -d ' ')"
+  [ "$icon_w" -eq "$icon_h" ] || bad "$icon is $icon_w by $icon_h pixels, and it must be square"
+  { [ "$icon_w" -ge 512 ] && [ "$icon_w" -le 2048 ]; } \
+    || bad "$icon is $icon_w pixels wide, outside 512 to 2048"
+  [ "$icon_bytes" -lt 2097152 ] || bad "$icon is $icon_bytes bytes, over 2 MB"
+fi
+
 # The hook stops its command parser after PARSE_SECONDS, so it can still
 # answer before Claude Code stops the hook at its PreToolUse timeout and runs
 # the command unread. The limit has to stay under the timeout with 3 seconds
 # to spare, for the hook's own reads of its input and state around the parse.
 # eng-hook sets it on a line of its own, as PARSE_SECONDS=<whole seconds>.
-hooks_json=hooks/hooks.json
-parse_seconds="$(sed -n 's/^PARSE_SECONDS=\([0-9][0-9]*\)$/\1/p' hooks/eng-hook 2>/dev/null | head -1)"
+hooks_json="$plugin/hooks/hooks.json"
+eng_hook="$plugin/hooks/eng-hook"
+parse_seconds="$(sed -n 's/^PARSE_SECONDS=\([0-9][0-9]*\)$/\1/p' "$eng_hook" 2>/dev/null | head -1)"
 if ! command -v jq >/dev/null 2>&1 || ! jq empty "$hooks_json" 2>/dev/null; then
   bad "$hooks_json cannot be read, so the parser limit was not checked against its timeout"
 elif [ -z "$parse_seconds" ]; then
-  bad "hooks/eng-hook sets no PARSE_SECONDS=<seconds> line, so the parser limit was not checked against the PreToolUse timeout"
+  bad "$eng_hook sets no PARSE_SECONDS=<seconds> line, so the parser limit was not checked against the PreToolUse timeout"
 else
   pre_timeout="$(jq -r '[.hooks.PreToolUse[]?.hooks[]? | select((.command // "") | test("eng-hook pre-tool")) | .timeout] | min // empty' "$hooks_json")"
   if [ -z "$pre_timeout" ]; then
     bad "$hooks_json: the pre-tool hook sets no timeout, so the parser limit of $parse_seconds s cannot be checked against it"
   elif ! awk -v t="$pre_timeout" -v p="$parse_seconds" 'BEGIN { exit !(t + 0 >= p + 3) }'; then
-    bad "$hooks_json: the pre-tool timeout is $pre_timeout s, which must be at least 3 s more than the parser limit of $parse_seconds s in hooks/eng-hook"
+    bad "$hooks_json: the pre-tool timeout is $pre_timeout s, which must be at least 3 s more than the parser limit of $parse_seconds s in $eng_hook"
   fi
 fi
 
@@ -415,18 +445,33 @@ done
 # A change to what the plugin loads needs a new version. Claude Code keeps an
 # install on the version it has until the string changes, so an edit without a
 # bump never reaches anyone who installed the plugin from GitHub. plugin.json
-# counts too, since it can declare hooks and servers inline. The base is
+# counts too, since it can declare hooks and servers inline, and so does the
+# icon beside it. evals/ is left out: an install copies it, but no session
+# loads it, so an eval edit needs no release. The base is
 # origin/main unless CHECK_BASE names another ref.
-loaded="skills hooks standards agents commands output-styles themes monitors workflows bin .mcp.json .lsp.json $plugin_json"
+loaded=""
+for part in skills hooks standards agents commands output-styles themes monitors workflows bin .mcp.json .lsp.json .claude-plugin; do
+  loaded="$loaded $plugin/$part"
+done
 base="${CHECK_BASE:-origin/main}"
 if [ -n "$version" ]; then
   if ! git rev-parse --verify -q "$base^{commit}" >/dev/null 2>&1; then
     warn "no $base to compare against, so the version rule was not checked"
   else
     mb="$(git merge-base HEAD "$base" 2>/dev/null || true)"
+    # Before 0.15.0 the manifest sat at the repo root, so a base from then has
+    # it there. Without that second path the rule would find no manifest at
+    # such a base and skip itself on every branch that moves the plugin.
+    old_json=""
+    for candidate in "$plugin_json" .claude-plugin/plugin.json; do
+      if [ -n "$mb" ] && git cat-file -e "$mb:$candidate" 2>/dev/null; then
+        old_json="$candidate"
+        break
+      fi
+    done
     # Before the base had a manifest there is no earlier version to compare.
-    if [ -n "$mb" ] && git cat-file -e "$mb:$plugin_json" 2>/dev/null; then
-      old="$(git show "$mb:$plugin_json" | jq -r '.version // empty')"
+    if [ -n "$old_json" ]; then
+      old="$(git show "$mb:$old_json" | jq -r '.version // empty')"
       # shellcheck disable=SC2086
       if ! git diff --quiet "$mb" -- $loaded ||
          [ -n "$(git ls-files --others --exclude-standard -- $loaded)" ]; then
@@ -443,17 +488,17 @@ fi
 # tells someone to type, uses the full name.
 if [ -n "$plugin_name" ]; then
   while IFS= read -r ref; do
-    [ -f "skills/$ref/SKILL.md" ] \
+    [ -f "$plugin/skills/$ref/SKILL.md" ] \
       || bad "a skill references $plugin_name:$ref, which is not a skill here"
-  done < <(grep -rhoE "(^|[^a-z0-9-])$plugin_name:[a-z0-9-]+" skills --include='*.md' \
+  done < <(grep -rhoE "(^|[^a-z0-9-])$plugin_name:[a-z0-9-]+" "$plugin/skills" --include='*.md' \
              | sed "s/^.*$plugin_name://" | sort -u)
 
-  names="$(find skills -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | paste -sd'|' -)"
+  names="$(find "$plugin/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | paste -sd'|' -)"
   # Inside backticks, quotes or plain prose alike. A path such as skills/why
   # has no space, quote or backtick before the slash, so it does not match.
   while IFS= read -r hit; do
     bad "$hit: types a skill by its bare name; write /$plugin_name:<name>"
-  done < <(grep -rnE '(^|[[:space:]`("'"'"'])/('"$names"')([[:space:]`.,;:)"'"'"']|$)' skills --include='*.md' \
+  done < <(grep -rnE '(^|[[:space:]`("'"'"'])/('"$names"')([[:space:]`.,;:)"'"'"']|$)' "$plugin/skills" --include='*.md' \
              | cut -d: -f1,2 | sort -u)
 fi
 
@@ -516,17 +561,17 @@ done
 diff -q <(body "$claude_rule") <(body "$cursor_rule") >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
-# Both rules files fire on skills/**, which AGENTS.md states as an invariant
+# Both rules files fire on the plugin's skills, which AGENTS.md states as an invariant
 # and nothing checked. Widening either one silently changes when the rule
 # loads, which is the half of this pair that actually decides behaviour.
-grep -q '^  - "skills/\*\*"$' "$claude_rule" \
-  || bad "$claude_rule: paths no longer scopes it to skills/**"
-grep -qx 'globs: skills/\*\*' "$cursor_rule" \
-  || bad "$cursor_rule: globs no longer scopes it to skills/**"
+grep -qx "  - \"$plugin/skills/\\*\\*\"" "$claude_rule" \
+  || bad "$claude_rule: paths no longer scopes it to $plugin/skills/**"
+grep -qx "globs: $plugin/skills/\\*\\*" "$cursor_rule" \
+  || bad "$cursor_rule: globs no longer scopes it to $plugin/skills/**"
 grep -qx 'alwaysApply: false' "$cursor_rule" \
   || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
-# link.sh, scripts/*.sh, tests/*/*.sh and evals/*/scaffold.sh parse as bash,
+# link.sh, scripts/*.sh, tests/*/*.sh and the evals' scaffold.sh files parse as bash,
 # because nothing here runs most of them. This script embeds awk programs in
 # single quotes, so an unbalanced apostrophe in a printed string ends the
 # program and leaves a file that fails only when someone runs it. The plugin's
@@ -538,13 +583,13 @@ grep -qx 'alwaysApply: false' "$cursor_rule" \
 # and shellcheck reports it. This check earns its place by needing only bash,
 # because it runs before a commit, where fetching shellcheck over the network
 # would not.
-for f in link.sh scripts/*.sh tests/*/*.sh evals/*/scaffold.sh; do
+for f in link.sh scripts/*.sh tests/*/*.sh "$plugin"/evals/*/scaffold.sh; do
   # A fork that dropped tests/ or evals/ leaves the pattern unexpanded.
   [ -f "$f" ] || continue
   bash -n "$f" || bad "$f: does not parse"
 done
-sh -n hooks/eng-hook || bad "hooks/eng-hook: does not parse"
-awk -f hooks/classify-command.awk < /dev/null > /dev/null || bad "hooks/classify-command.awk: does not load"
+sh -n "$eng_hook" || bad "$eng_hook: does not parse"
+awk -f "$plugin/hooks/classify-command.awk" < /dev/null > /dev/null || bad "$plugin/hooks/classify-command.awk: does not load"
 
 # The hooks run at every session start and around every command, and a broken
 # check fails open by design, all but the command parser and a Linear comment
@@ -556,6 +601,12 @@ awk -f hooks/classify-command.awk < /dev/null > /dev/null || bad "hooks/classify
 # its cases run here against scratch homes, as the hook's fixtures do above.
 ./scripts/test-cloud-setup.sh >/dev/null \
   || bad "scripts/test-cloud-setup.sh failed; see the lines above"
+
+# The version rule above and the finding count in scripts/validate-plugin.sh
+# both fail quietly, by skipping the rule or reading no finding, so their
+# cases run here against scratch repos and a stand-in claude.
+./scripts/test-checks.sh >/dev/null \
+  || bad "scripts/test-checks.sh failed; see the lines above"
 
 # scripts/stats.mjs reads transcripts that only a machine with a Claude Code
 # history has, so the fixtures under tests/stats stand in for them here and in
@@ -708,11 +759,11 @@ if [ "$doctor" = yes ]; then
     for entry_path in "$skills_dir"/*; do
       [ -e "$entry_path" ] || [ -L "$entry_path" ] || continue
       name="$(basename "$entry_path")"
-      if [ -d "skills/$name" ] || legacy_name "$name"; then
+      if [ -d "$plugin/skills/$name" ] || legacy_name "$name"; then
         # A retired name has no plugin skill to sit beside, but a copy of it
         # still loads as a bare skill nobody maintains.
         what="$plugin_name:$name, and loads beside it"
-        [ -d "skills/$name" ] || what="a skill the plugin retired, which can still load as a bare skill"
+        [ -d "$plugin/skills/$name" ] || what="a skill the plugin retired, which can still load as a bare skill"
         if [ -L "$entry_path" ]; then
           fix "$skills_dir/$name is an old link to $(link_target "$entry_path" || readlink "$entry_path"), a copy of $what. Run ./link.sh --unlink from that clone, or remove it"
         else
@@ -720,7 +771,7 @@ if [ "$doctor" = yes ]; then
         fi
       elif [ -L "$entry_path" ]; then
         case "$(link_target "$entry_path" || true)" in
-          "$repo"/skills/*) fix "$skills_dir/$name links into this clone and loads a second copy of a skill. link.sh did not make it; remove it by hand" ;;
+          "$repo/$plugin"/skills/*) fix "$skills_dir/$name links into this clone and loads a second copy of a skill. link.sh did not make it; remove it by hand" ;;
         esac
       fi
     done
@@ -787,6 +838,6 @@ if [ "$doctor" = yes ]; then
   fi
 fi
 
-printf '%d skills, %d model-invoked\n' "$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "$model_count"
+printf '%d skills, %d model-invoked\n' "$(find "$plugin/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "$model_count"
 [ "$fail" -eq 0 ] && printf 'ok\n'
 exit "$fail"

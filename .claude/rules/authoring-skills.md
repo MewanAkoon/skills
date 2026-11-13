@@ -1,6 +1,6 @@
 ---
 paths:
-  - "skills/**"
+  - "plugins/eng/skills/**"
 ---
 
 You are editing a skill. Skills in this repo load into other repos' sessions,

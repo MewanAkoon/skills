@@ -82,7 +82,7 @@ they no longer collide, move the overlapping part into the existing skill's
 `references/`, or demote something. To print the set as it stands:
 
 ```bash checked
-grep -L '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' skills/*/SKILL.md | xargs -r grep -h '^description:'
+grep -L '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' plugins/eng/skills/*/SKILL.md | xargs -r grep -h '^description:'
 ```
 
 It lists only what an agent can reach on its own, because a user-invoked
@@ -104,13 +104,13 @@ trigger phrases. The flag alone is not a guarantee.
 ### Lifecycle skills
 
 Three skills own the phases of
-[standards/workflow.md](standards/workflow.md): `investigate`, `implement`,
-and `pr-feedback`. Each is model-invoked, and the workflow names it at its
-step, so the change of phase is the cue rather than a search of the listing.
-Step 5's writes go through `commit`, `pr`, and `issue`, named the same way. A
-new skill that claims a phase competes with the one that owns it. Move its
-content into that skill's `references/` instead, which is how `how`,
-`architect`, and `diagnose-bug` became part of `investigate`, and
+[plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md):
+`investigate`, `implement`, and `pr-feedback`. Each is model-invoked, and the
+workflow names it at its step, so the change of phase is the cue rather than a
+search of the listing. Step 5's writes go through `commit`, `pr`, and `issue`,
+named the same way. A new skill that claims a phase competes with the one that
+owns it. Move its content into that skill's `references/` instead, which is how
+`how`, `architect`, and `diagnose-bug` became part of `investigate`, and
 `tdd-node-api` became `implement`'s `references/tdd.md`.
 
 A skill that two phases call, or that answers a question on its own, stays
@@ -249,8 +249,8 @@ and one copy is already stale.
 
 ## Prose style
 
-The full standard is in `skills/plain-writing/SKILL.md` and it applies to
-skill files too. The short version:
+The full standard is in `plugins/eng/skills/plain-writing/SKILL.md` and it
+applies to skill files too. The short version:
 
 - No em dashes. Split the sentence or use a comma. Not parentheses instead.
 - Active voice, name the actor.

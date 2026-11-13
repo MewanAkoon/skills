@@ -13,4 +13,4 @@ node_modules/
 *.zip
 
 # claude plugin eval writes its reports here.
-evals/results/
+plugins/eng/evals/results/

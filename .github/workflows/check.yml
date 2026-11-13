@@ -19,10 +19,11 @@ concurrency:
 # Every job is pinned to a runner release, because ubuntu-latest and
 # macos-latest move on their own: the move to Ubuntu 26.04 brought GNU awk
 # 5.3, which stopped the hook's command classifier with an internal error
-# until hooks/classify-command.awk passed the words it gives base(), and the
-# wrapper entry it gives has(), as values. The check job runs on Ubuntu 24.04
-# and 26.04, so both the older and the newer Linux awk stay covered, and on
-# macOS 15. The other jobs stay on 24.04, and moving them is its own change.
+# until plugins/eng/hooks/classify-command.awk passed the words it gives
+# base(), and the wrapper entry it gives has(), as values. The check job runs
+# on Ubuntu 24.04 and 26.04, so both the older and the newer Linux awk stay
+# covered, and on macOS 15. The other jobs stay on 24.04, and moving them is
+# its own change.
 jobs:
   check:
     # macOS ships bash 3.2, Linux ships 5.x. The scripts target both, so both
@@ -43,33 +44,13 @@ jobs:
           fetch-depth: 0
       - run: bash --version | head -1
       - run: jq --version
-      - run: node --version
       # On a pull request the version rule compares with origin/main. On a
       # push to main it compares with main as it was before the push, so two
       # pull requests that each bumped to the same version fail here once the
       # second lands, rather than shipping its changes to nobody.
-      # check.sh runs the stats fixtures only where Node 18.1 or later is
-      # installed, and warns otherwise. REQUIRE_NODE makes a runner without
-      # it fail rather than skip them.
       - run: ./scripts/check.sh
         env:
-          REQUIRE_NODE: 1
           CHECK_BASE: ${{ github.event_name == 'push' && github.event.before || 'origin/main' }}
-
-  # The check job runs the stats fixtures on whatever Node each runner image
-  # carries, which is newer than the floor. AGENTS.md states Node 18.1 as the
-  # floor for scripts/stats.mjs, because 18.1 is the first with node --test, so
-  # this runs them on exactly that.
-  stats-node-floor:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 18.1.0
-      - run: node --version
-      - run: node --check scripts/stats.mjs
-      - run: npm run test:stats
 
   plugin:
     runs-on: ubuntu-24.04

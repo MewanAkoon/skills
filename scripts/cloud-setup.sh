@@ -10,15 +10,16 @@
 # reach it. The first is there to keep the bare commit and pr skills, built
 # in or a repo's own, from being invoked, and the second drops Claude's
 # commit and PR lines and its session link. This writes both into the VM's
-# own home instead, as rules and as settings:
+# own home instead, as rules and as settings, and adds the Setup's
+# permission rules for gh stack to the settings:
 #
 # - ~/.claude/CLAUDE.md, which the cloud docs say a session loads as user
 #   instructions. It carries both as rules, and the settings reference says a
 #   CLAUDE.md rule on attribution takes precedence over Claude Code's own
 #   commit and PR lines.
-# - ~/.claude/settings.json, with the same keys. The docs do not say a cloud
-#   session reads a file written this way, so this is the second layer, not
-#   the one relied on.
+# - ~/.claude/settings.json, with the same keys and the permission rules. The
+#   docs do not say a cloud session reads a file written this way, so this is
+#   the second layer, not the one relied on.
 #
 # It reads nothing from the repo, because it runs before the session and
 # outside any clone. It never fails the session. The docs say a setup script
@@ -153,11 +154,19 @@ fi
 # one holding only blank space, slurps to an empty list and gets the keys as
 # they are. jq writes into the temporary file, so a failed merge leaves the old
 # file as it was. A deep merge keeps every other key and every other
-# skillOverrides entry.
+# skillOverrides entry. jq's deep merge replaces a list rather than joining
+# it, so permissions.allow and permissions.ask are joined by hand: every rule
+# already there stays, in its place, and a rule this adds goes on the end
+# unless it is there already. A permissions that is not an object, or an
+# allow or ask that is not a list, leaves the file alone.
 settings="$dir/settings.json"
 add='{
   "attribution": { "commit": "", "pr": "", "sessionUrl": false },
-  "skillOverrides": { "commit": "off", "pr": "off" }
+  "skillOverrides": { "commit": "off", "pr": "off" },
+  "permissions": {
+    "allow": ["Bash(gh stack:*)"],
+    "ask": ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]
+  }
 }'
 settings_source=/dev/null
 [ -f "$settings" ] && settings_source="$settings"
@@ -166,13 +175,23 @@ if ! command -v jq >/dev/null 2>&1; then
 elif ! stage "$settings"; then
   warn "cannot write $settings"
 elif jq -s --argjson add "$add" '
+    def union(a; b): reduce b[] as $x (a; if any(.[]; . == $x) then . else . + [$x] end);
     if length == 0 then $add
-    elif length == 1 and (.[0] | type) == "object" then .[0] * $add
+    elif length == 1 and (.[0] | type) == "object" then
+      .[0] as $f
+      | ($f.permissions // {}) as $p
+      | if ($p | type) != "object" then error("permissions is not an object")
+        elif [$p.allow // [], $p.ask // []] | any(type != "array") then error("allow or ask is not a list")
+        else ($f * ($add | del(.permissions)))
+          | .permissions = ($p
+              | .allow = union(.allow // []; $add.permissions.allow)
+              | .ask = union(.ask // []; $add.permissions.ask))
+        end
     else error("not one JSON object") end' "$settings_source" > "$tmp" 2>/dev/null; then
   finish 0 || warn "cannot write $settings"
 else
   finish 1
-  warn "$settings is not one JSON object, or could not be read, so it was left alone"
+  warn "$settings is not one JSON object, holds permissions that are not an object or lists, or could not be read, so it was left alone"
 fi
 
 exit 0

@@ -1,10 +1,46 @@
 # Changelog
 
 Each release of the `eng` plugin, newest first. The version is the one in
-`.claude-plugin/plugin.json`, and a release covers every pull request merged
+`plugins/eng/.claude-plugin/plugin.json`, and a release covers every pull request merged
 while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
+
+## 0.15.0 - unreleased
+
+### Changed
+
+- The plugin now lives in `plugins/eng/`, and the marketplace lists it with
+  `"source": "./plugins/eng"`, so an install copies the skills, hooks,
+  standards, evals, manifest and icon, and none of the repo's scripts, tests or
+  docs. The plugin id `eng@mewanakoon` and its data directory stay the same,
+  so `claude plugin update eng@mewanakoon` moves an install across.
+- `scripts/validate-plugin.sh` validates the root and `plugins/eng --strict`,
+  and fails on any finding, a plugin directory warning included, where it
+  used to allow the root `CLAUDE.md` warning. `check.sh` checks the icon,
+  and its version rule reads `plugins/eng/` and leaves `evals/` out, so an
+  eval-only change needs no release. `scripts/test-checks.sh` covers the
+  rule and the wrapper.
+
+### Added
+
+- An icon at `plugins/eng/.claude-plugin/icon.png`, which the plugin
+  directory asks for.
+- Permission rules for `gh stack` in the README's setup: allow
+  `Bash(gh stack:*)`, and ask for `Bash(gh stack merge:*)` and
+  `Bash(gh stack unstack:*)`. `scripts/cloud-setup.sh` adds them to a cloud
+  VM's settings, joining any permission lists already there, and
+  `./scripts/check.sh --doctor` names any one that is missing.
+
+### Removed
+
+- `link.sh`, which removed the symlinks of the install before the plugin.
+  `./scripts/check.sh --doctor` still names each old link, and the README
+  says how to remove one. `scripts/legacy.sh` went with it, and its list of
+  retired skill names now lives in `check.sh`.
+- `scripts/stats.mjs`, its fixtures, and the `stats` and `test:stats` npm
+  scripts, so `check.sh` no longer needs Node. `npm run lint` and CI's
+  pinned validator still run through npx. The hook still writes its logs.
 
 ## 0.14.0 - unreleased
 

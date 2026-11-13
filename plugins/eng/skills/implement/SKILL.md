@@ -6,25 +6,27 @@ description: Use when the user approves a plan or names the exact change to make
 # Implement
 
 Carry an agreed change into the code, test what changed, correct what it made
-false, review it, and deliver what an approved plan lists. A request to
-investigate or plan goes to `eng:investigate`, and one to review a PR or diff
-goes to `/code-review`.
+false, review it, and deliver it as the Delivery that covers the run allows. A
+request to investigate or plan goes to `eng:investigate`, and one to review a
+PR or diff goes to `/code-review`.
 
 **The fast path.** A change the user names exactly, of a few lines with no
-behaviour to design, skips the test-first loop and the intent check: make it,
-run the repo's checks, correct what it made false, and review it as step 5
-says. Everything else runs every step.
+behaviour to design, skips the test-first loop and the intent check: get onto
+the branch as step 1 says, make it, run the repo's checks, correct what it
+made false, review it as step 5 says, and deliver it as step 6 says.
+Everything else runs every step.
 
 ## Step 1: Name what is being done, and where
 
 Before the first edit, state in one line: the plan or request, the items
 approved, the directory, the branch, the commit work starts from
 (`git rev-parse --short HEAD`), and the files already changed
-(`git status --short`). Do only the items approved. Under a plan whose
-Delivery names a branch, switch to it first, as
-[references/deliver.md](references/deliver.md) says.
+(`git status --short`). Do only the items approved. Then get onto the
+work's branch, as [references/deliver.md](references/deliver.md) says under
+"The branch".
 
-**Done when:** that line is written.
+**Done when:** that line is written and `HEAD` in the work's directory is on
+the work's branch.
 
 ## Step 2: Make the change
 
@@ -77,8 +79,9 @@ the review still runs in the background and the reply says so.
 
 ## Step 6: Deliver
 
-When an approved plan's Delivery lists writes, follow
-[references/deliver.md](references/deliver.md).
+Follow [references/deliver.md](references/deliver.md) for the Delivery that
+covers the run: an approved plan's, the default one for a change the user
+named, or the follow-up one on the user's open PR.
 
 **Done when:** its hand-back is written.
 

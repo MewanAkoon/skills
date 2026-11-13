@@ -85,10 +85,10 @@ open questions.
 
 ## Step 7: Stop
 
-Present the plan and wait. Repo files other than the plan file stay unedited
-until the user approves. A yes that names items approves those items. In
-Claude Code plan mode, call ExitPlanMode with the plan. When several decisions
-are still open, suggest `/eng:grill-me`.
+Present the plan and wait. Repo files other than the plan file stay unedited,
+and the branch stays as it is, until the user approves. A yes that names items
+approves those items. In Claude Code plan mode, call ExitPlanMode with the
+plan. When several decisions are still open, suggest `/eng:grill-me`.
 
 **Done when:** the plan is in front of the user and the turn has ended, or
 ExitPlanMode has returned, approval going to `eng:implement` and feedback back

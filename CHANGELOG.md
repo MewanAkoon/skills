@@ -20,6 +20,11 @@ follow semantic versioning.
 
 - An icon at `plugins/eng/.claude-plugin/icon.png`, which the plugin
   directory asks for.
+- Permission rules for `gh stack` in the README's setup: allow
+  `Bash(gh stack:*)`, and ask for `Bash(gh stack merge:*)` and
+  `Bash(gh stack unstack:*)`. `scripts/cloud-setup.sh` adds them to a cloud
+  VM's settings, joining any permission lists already there, and
+  `./scripts/check.sh --doctor` names any one that is missing.
 
 ### Removed
 

@@ -49,7 +49,9 @@ grep -q 'never a bare commit or pr skill' "$rules" \
 [ -z "$(tail -c 1 "$rules")" ] || bad "rerun: CLAUDE.md does not end in a newline"
 jq -e '.theme == "dark" and .skillOverrides.x == "off"
   and .attribution == {commit: "", pr: "", sessionUrl: false}
-  and .skillOverrides.commit == "off" and .skillOverrides.pr == "off"' \
+  and .skillOverrides.commit == "off" and .skillOverrides.pr == "off"
+  and .permissions.allow == ["Bash(gh stack:*)"]
+  and .permissions.ask == ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]' \
   "$settings" >/dev/null 2>&1 \
   || bad "rerun: settings.json lacks its keys or lost one it did not write"
 [ -n "$(find "$settings" -perm 600)" ] \
@@ -117,12 +119,37 @@ for text in '[1]' '{} {}' 'not json'; do
   cmp -s "$scratch/before" "$settings" || bad "settings.json holding $text: it changed"
 done
 
+# The permission rules join a list already there rather than replace it, keep
+# every other permissions key, and a rerun adds none twice.
+printf '%s\n' '{"permissions":{"allow":["Bash(ls:*)"],"deny":["Bash(rm:*)"],"defaultMode":"plan"}}' > "$settings"
+run "existing permissions"
+run "existing permissions, rerun"
+jq -e '.permissions.allow == ["Bash(ls:*)", "Bash(gh stack:*)"]
+  and .permissions.ask == ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]
+  and .permissions.deny == ["Bash(rm:*)"] and .permissions.defaultMode == "plan"' \
+  "$settings" >/dev/null 2>&1 \
+  || bad "existing permissions: the lists were not joined once each, or a key was lost"
+# A rule already there keeps its place.
+printf '%s\n' '{"permissions":{"ask":["Bash(gh stack unstack:*)","Bash(x:*)"]}}' > "$settings"
+run "a rule already there"
+jq -e '.permissions.ask == ["Bash(gh stack unstack:*)", "Bash(x:*)", "Bash(gh stack merge:*)"]' \
+  "$settings" >/dev/null 2>&1 \
+  || bad "a rule already there: it moved or was added twice"
+# Permissions that are not an object, or lists that are not lists, are left
+# as they were, with the rest of the file.
+for text in '{"permissions":"x"}' '{"permissions":{"allow":"x"}}' '{"permissions":{"ask":{}}}'; do
+  printf '%s\n' "$text" > "$settings"
+  cp "$settings" "$scratch/before"
+  run "settings.json holding $text"
+  cmp -s "$scratch/before" "$settings" || bad "settings.json holding $text: it changed"
+done
+
 # A missing file, and one holding only blank space, both get the keys.
 for text in missing blank; do
   rm -f "$settings" "$rules"
   [ "$text" = blank ] && printf ' \n\n' > "$settings"
   run "$text settings.json"
-  jq -e '.attribution.sessionUrl == false' "$settings" >/dev/null 2>&1 \
+  jq -e '.attribution.sessionUrl == false and .permissions.allow == ["Bash(gh stack:*)"]' "$settings" >/dev/null 2>&1 \
     || bad "$text settings.json: the keys were not written"
   [ "$(head -n 1 "$rules")" = "$begin" ] || bad "$text CLAUDE.md: it does not start with the block"
 done

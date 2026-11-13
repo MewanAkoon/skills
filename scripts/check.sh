@@ -6,9 +6,9 @@
 # Claude Code install to inspect: whether Claude Code is new enough, whether
 # the plugin is installed at user scope at this version, whether bare copies
 # of its skills are still loading beside it, whether the skillOverrides and
-# attribution entries the README asks for are in place, whether this clone's
-# own settings turn attribution back on, and whether the plugin's hooks logged
-# errors.
+# attribution entries the README asks for are in place, whether its
+# permission rules for gh stack are, whether this clone's own settings turn
+# attribution back on, and whether the plugin's hooks logged errors.
 
 set -uo pipefail
 
@@ -821,6 +821,18 @@ if [ "$doctor" = yes ]; then
         "$settings" >/dev/null 2>&1; then
       fix "$settings does not turn attribution off, so Claude Code asks for an AI credit line or a session link on commits and PRs. Set attribution to {\"commit\": \"\", \"pr\": \"\", \"sessionUrl\": false}"
     fi
+    # The README's permission rules for gh stack: the allow rule lets gh stack
+    # run without a prompt, and the two ask rules keep one on a stack merge
+    # and an unstack, which change GitHub and cannot be undone. An ask rule
+    # beats an allow rule, whatever order they sit in. The hook still gates
+    # the stack's push, sync and submit on its own.
+    for perm in 'allow Bash(gh stack:*)' 'ask Bash(gh stack merge:*)' 'ask Bash(gh stack unstack:*)'; do
+      perm_list="${perm%% *}"
+      perm_rule="${perm#* }"
+      jq -e --arg l "$perm_list" --arg r "$perm_rule" \
+        '.permissions[$l] | type == "array" and any(.[]; . == $r)' "$settings" >/dev/null 2>&1 \
+        || fix "$settings does not list $perm_rule under permissions.$perm_list. The README's Setup section has the rules"
+    done
   fi
 
   # A repo's own settings beat the user's, so this clone's can turn the credit

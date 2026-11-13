@@ -32,7 +32,7 @@ Six scripts, all in bash, and no build step. The commands they carry:
 | `./scripts/test-hooks.sh` | Feeds `plugins/eng/hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
 | `./scripts/test-checks.sh` | Runs `check.sh`'s version rule in scratch repos and `validate-plugin.sh` against a stand-in `claude` that prints canned output, since both fail quietly when they break. `check.sh` runs it. |
 | `./scripts/test-cloud-setup.sh` | Runs `cloud-setup.sh` against scratch homes and checks what it writes and what it leaves alone. `check.sh` runs it. |
-| `scripts/cloud-setup.sh` | The setup script for a personal cloud environment, pasted in at claude.ai rather than run here. It writes the attribution and `skillOverrides` settings, and rules that carry them, into the cloud VM's `~/.claude`, and writes nothing unless it runs as root on Linux, the way a cloud VM runs it. `CLOUD_SETUP_HOME` points it at another home on any system, which is how `test-cloud-setup.sh` runs it against scratch ones. |
+| `scripts/cloud-setup.sh` | The setup script for a personal cloud environment, pasted in at claude.ai rather than run here. It writes the attribution and `skillOverrides` settings, and rules that carry them, into the cloud VM's `~/.claude`, and adds the `gh stack` permission rules to its settings, joining any lists already there, and writes nothing unless it runs as root on Linux, the way a cloud VM runs it. `CLOUD_SETUP_HOME` points it at another home on any system, which is how `test-cloud-setup.sh` runs it against scratch ones. |
 
 None of them needs a package installed beyond `jq` and `git`, which macOS 15
 and the CI runners ship, and `claude` for the validator and `--doctor`. The
@@ -238,8 +238,9 @@ runner has no Claude Code install to inspect: that Claude Code is 2.1.293 or
 later; that `eng@mewanakoon` is installed at user scope, enabled and at this
 clone's version; that no old link or personal copy of one of these skills sits
 in `~/.claude/skills`; that `~/.claude/settings.json` is valid JSON and sets
-`skillOverrides` for `commit` and `pr` to `"off"` and turns `attribution` off;
-and that the plugin's hooks have logged no error under
+`skillOverrides` for `commit` and `pr` to `"off"`, turns `attribution` off,
+allows `Bash(gh stack:*)` and asks for `Bash(gh stack merge:*)` and
+`Bash(gh stack unstack:*)`; and that the plugin's hooks have logged no error under
 `~/.claude/plugins/data/eng-mewanakoon/`; and that this clone's own
 `.claude/settings.json` and `.claude/settings.local.json`, where present, are
 valid JSON and turn no AI credit line or session link back on.

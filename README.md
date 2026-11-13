@@ -57,8 +57,8 @@ Then turn off the bare copies of two skills. A project may carry its own
 `commit` and `pr` skills, and those load beside the plugin's today and can take
 a request meant for it. Claude Code also reserves both names for built-in
 skills it keeps switched off for now and can switch on. Turn off the credit
-lines Claude Code adds to commits and PRs as well. Add this to
-`~/.claude/settings.json`:
+lines Claude Code adds to commits and PRs as well, and set how `gh stack` is
+allowed. Add this to `~/.claude/settings.json`:
 
 ```json
 {
@@ -70,9 +70,16 @@ lines Claude Code adds to commits and PRs as well. Add this to
     "commit": "",
     "pr": "",
     "sessionUrl": false
+  },
+  "permissions": {
+    "allow": ["Bash(gh stack:*)"],
+    "ask": ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]
   }
 }
 ```
+
+When the file already has a `permissions.allow` or `permissions.ask` list, add
+these rules to it rather than replacing it.
 
 `skillOverrides` hides a skill by name from you and the model alike, for this
 machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
@@ -93,6 +100,13 @@ One on a single repo, outside a project's threads, reads that repo's committed
 `.claude/settings.json`, where the same `attribution` entry turns the lines
 off. [Cloud sessions](#cloud-sessions) covers the rest.
 
+The `permissions` rules are for stacked pull requests. The allow rule lets
+`gh stack` run without a prompt, and the two ask rules keep a prompt on a stack
+merge and an unstack, which land or remove pull requests on GitHub and cannot
+be undone. An ask rule beats an allow rule, so the pair holds in either order.
+The plugin's hook still gates a stack's push, sync and submit, as it does any
+push or PR, and asks about a merge, an unstack or a link either way.
+
 To confirm it worked from a clone of this repo:
 
 ```bash
@@ -111,9 +125,10 @@ It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
 when an old link or a personal copy of one of these skills is still loading,
 when the `skillOverrides` entry is missing, when `attribution` is not turned
-off, when this clone's own `.claude/settings.json` or `settings.local.json`
-turns it back on, or when one of the plugin's hooks has logged an error. It
-reads no other repo's settings.
+off, when one of the `gh stack` permission rules is missing, when this clone's
+own `.claude/settings.json` or `settings.local.json` turns attribution back
+on, or when one of the plugin's hooks has logged an error. It reads no other
+repo's settings.
 
 ### Updating
 
@@ -150,9 +165,10 @@ So, for the cloud:
    **Project settings > Plugins** as well.
 2. On your own environment, not a shared one, paste
    [scripts/cloud-setup.sh](scripts/cloud-setup.sh) in as the setup script.
-   It writes the `skillOverrides` and `attribution` entries from the setup
-   above into the VM's `~/.claude/settings.json`, and the same two as rules
-   in the VM's `~/.claude/CLAUDE.md`. The docs say a cloud session loads that
+   It writes the `skillOverrides`, `attribution` and `permissions` entries
+   from the setup above into the VM's `~/.claude/settings.json`, adding to any
+   permission rules already there, and the first two as rules in the VM's
+   `~/.claude/CLAUDE.md`. The docs say a cloud session loads that
    `CLAUDE.md`. They say it reads no user settings, meaning the ones on your
    machine, and not whether that covers a `settings.json` written this way,
    so the rules are the layer to rely on.

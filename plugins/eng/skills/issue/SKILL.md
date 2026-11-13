@@ -5,8 +5,8 @@ description: Use when the user's latest message asks to draft, file, edit, label
 
 # Issue
 
-Only a Linear issue takes a comment, and `gh issue close` never gets
-`--comment`.
+A comment is drafted to a file and never posted, on any tracker, so
+`gh issue close` never gets `--comment`.
 
 ## Step 1: Find the tracker
 

@@ -298,8 +298,7 @@ the `gh stack` rules under `permissions` if you no longer want them.
 standing steps: understand first, plan and stop, implement on approval, review
 until clean, commit and open PRs only when asked or when a plan you approved
 lists them, handle PR feedback on evidence and review the unreviewed commits
-after each push, post nothing but a Linear issue comment you ask for, and
-report briefly.
+after each push, post nothing, and report briefly.
 The plugin's SessionStart hook sends it at the start of every session and after
 each compaction. It names the skill for each step that has a procedure, so a
 change of phase is the cue to load it:
@@ -468,7 +467,7 @@ above leaves out the ones you do not want.
 | [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
 | [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
-| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and comments on a Linear issue only when asked |
+| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and drafts every comment to a file |
 | [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
 | [merge-conflicts](plugins/eng/skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |

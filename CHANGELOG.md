@@ -41,6 +41,9 @@ follow semantic versioning.
   reminder any more.
 - Workflow step 5 takes any plain approval, and step 6 reviews only the
   commits no review has read.
+- `eng:issue` drafts a Linear issue comment to a file like every other
+  comment, and workflow step 7 drops its exception, to match the hook that
+  now denies it.
 
 ### Removed
 

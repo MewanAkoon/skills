@@ -1,8 +1,7 @@
 # Linear
 
 This replaces `SKILL.md`'s `gh` commands. A subagent drafts and never calls
-`save_issue` or `save_comment`. Without `save_issue` or `list_issues`, write
-copy-paste text.
+`save_issue`. Without `save_issue` or `list_issues`, write copy-paste text.
 
 - Duplicates: `list_issues` with the team, a `query`, `includeArchived` and a
   `limit` of 250. When `hasNextPage` is true, say only 250 were searched. Read
@@ -26,8 +25,7 @@ copy-paste text.
 
 ## A comment
 
-Only on the user's latest message, never from a plan. Call `save_comment` with
-the identifier as `issueId` and the `body` alone, then give its URL from
-`list_comments`. Otherwise draft it to `comment-<issue>.md` with the call that
-would post it. Never edit, delete or reply to a comment, resolve a thread, or
-comment on a project, document or status update: draft those.
+Draft it to `comment-<issue>.md` with the `save_comment` call that would post
+it, the identifier as `issueId` and the `body` alone, for the user to run.
+An edit, a reply, a thread to resolve, or a comment on a project, document
+or status update is drafted the same way.

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Runs plugins/eng/hooks/eng-hook against the inputs in tests/hooks and checks what comes
 # out: the session block, then the guards, which read the cases in
-# tests/hooks/pre-tool and a scratch repo for the review reminder. The checks read
-# the block's shape rather than a stored copy of it, so editing the contract
-# or the writing rules does not mean editing a fixture.
+# tests/hooks/pre-tool, scratch repos whose remote HEADs name the default
+# branch for a push with an explicit lease, and a scratch repo for the review
+# reminder. The checks read the block's shape rather than a stored copy of
+# it, so editing the contract or the writing rules does not mean editing a
+# fixture.
 # Needs bash, jq, git, and the usual POSIX tools. CI runs it.
 
 set -uo pipefail
@@ -157,12 +159,14 @@ verdict() {
 }
 
 # Runs the pre-tool mode on a Bash command, $2, in session $1, with the JSON
-# object $3, when given, merged into the input.
+# object $3, when given, merged into the input. The command runs in
+# $case_cwd, where a push with an explicit lease reads the default branch.
+case_cwd=/tmp
 bash_call() {
   local extra="${3:-}"
   [ -n "$extra" ] || extra='{}'
-  hook_run pre-tool "$(jq -cn --arg s "$1" --arg c "$2" --argjson x "$extra" \
-    '{session_id: $s, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}} + $x')"
+  hook_run pre-tool "$(jq -cn --arg s "$1" --arg c "$2" --arg d "$case_cwd" --argjson x "$extra" \
+    '{session_id: $s, cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}} + $x')"
 }
 
 # Checks that session $1's Bash command $3 gets decision $2, and when $4 is
@@ -183,8 +187,29 @@ expect_bash() {
 # Claude Code's own permissions, so the command cases, all run in session
 # "all", read what the post guard and the confirmation prompt decide.
 
+# Makes a scratch repo at $1 with one commit and, for each remote and branch
+# pair after it, a remote-tracking branch and that remote's HEAD pointing at
+# it, the way a clone sets origin/HEAD. git lists no HEAD whose branch is
+# missing, so each branch is made too.
+lease_repo() {
+  local dir="$1" remote branch
+  shift
+  mkdir -p "$dir"
+  git -C "$dir" init -q
+  git -C "$dir" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+  while [ "$#" -ge 2 ]; do
+    remote="$1" branch="$2"
+    shift 2
+    git -C "$dir" update-ref "refs/remotes/$remote/$branch" HEAD
+    git -C "$dir" symbolic-ref "refs/remotes/$remote/HEAD" "refs/remotes/$remote/$branch"
+  done
+}
+
 # commands.cases: "== <expect> <note>" starts a case, and the lines after it
-# up to the next one are the command.
+# up to the next one are the command. They run in a repo whose origin/HEAD is
+# main.
+lease_repo "$scratch/lease-main" origin main
+case_cwd="$scratch/lease-main"
 cases=tests/hooks/pre-tool/commands.cases
 count=0
 expect="" command="" started=no
@@ -209,6 +234,40 @@ done < "$cases"
 run_case
 want="$(grep -c '^== ' "$cases")"
 [ "$count" -eq "$want" ] || bad "commands.cases: ran $count of $want cases"
+
+# A push with an explicit lease reads the default branch from the remote
+# HEADs where the session runs, adds main and master, and asks when it finds
+# no remote HEAD at all.
+lease="--force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567"
+lease_repo "$scratch/lease-trunk" origin trunk
+case_cwd="$scratch/lease-trunk"
+expect_bash all ask "git push --force-with-lease=refs/heads/trunk:0123456789abcdef0123456789abcdef01234567 origin trunk"
+expect_bash all ask "git push $lease origin HEAD:trunk"
+expect_bash all ask "git push --force-with-lease=refs/heads/main:0123456789abcdef0123456789abcdef01234567 origin main"
+expect_bash all allow "git push $lease origin feature/x"
+# Two remotes give two names, which reach the parser on one line.
+lease_repo "$scratch/lease-two" origin main up develop
+case_cwd="$scratch/lease-two"
+expect_bash all ask "git push --force-with-lease=refs/heads/develop:0123456789abcdef0123456789abcdef01234567 up develop"
+expect_bash all allow "git push $lease origin feature/x"
+# A remote or a branch with a slash in its name comes out whole.
+lease_repo "$scratch/lease-slash" a/b rel/x
+case_cwd="$scratch/lease-slash"
+expect_bash all ask "git push --force-with-lease=refs/heads/rel/x:0123456789abcdef0123456789abcdef01234567 a/b rel/x"
+expect_bash all allow "git push $lease a/b feature/x"
+# No remote HEAD, no repo, or no cwd: the default is unknown, so it asks.
+lease_repo "$scratch/lease-none"
+case_cwd="$scratch/lease-none"
+expect_bash all ask "git push $lease origin feature/x"
+case_cwd=/tmp
+expect_bash all ask "git push $lease origin feature/x"
+case_cwd="$scratch/lease-main"
+bash_call all "git push $lease origin feature/x" '{"cwd": ""}'
+[ "$(verdict)" = ask ] || bad "pre-tool: a lease push with an empty cwd got $(verdict), want ask"
+# A subagent's lease push is denied like any other push.
+bash_call all "git push $lease origin feature/x" '{"agent_id": "a1", "agent_type": "general-purpose"}'
+[ "$(verdict)" = deny ] || bad "pre-tool: a subagent's lease push got $(verdict), want deny"
+case_cwd=/tmp
 
 # mcp.cases: one "[subagent] <expect> <tool name> [<tool input>]" per line.
 # A line that starts with "subagent" runs with an agent_id, as a subagent's

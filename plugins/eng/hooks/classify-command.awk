@@ -25,9 +25,16 @@
 # it the first four words and any later word that names a command a rule here
 # covers.
 #
+# A push that forces asks, except one whose only forcing is an explicit lease,
+# --force-with-lease=refs/heads/<branch>:<sha>, run as the whole command, with
+# no leased or named branch among the default branches: main, master, and the
+# names eng-hook passes in defaults, the remote HEADs where the session runs.
+# That one is a plain push, since a lease forces only the ref it names. An
+# empty defaults means eng-hook found no remote HEAD, and the push asks.
+#
 # What it cannot see: git aliases, a gh alias set earlier, push settings, a tag
-# pushed by its bare name, a command built at run time, and anything inside a
-# script it calls.
+# pushed by its bare name, a remote HEAD left stale or missing, a command
+# built at run time, and anything inside a script it calls.
 
 BEGIN {
   nseg = 0
@@ -782,7 +789,7 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
   }
 }
 
-function git_command(s, i,    n, j, w, sub_, risky, options, b) {
+function git_command(s, i,    n, j, w, sub_, risky, options, b, k, opt, val, leases, includes, alone, unsafe, pos) {
   valueflags = gitvalue
   n = segn[s]
   j = i + 1
@@ -804,24 +811,91 @@ function git_command(s, i,    n, j, w, sub_, risky, options, b) {
   # glued on, as in -onotify, so a word starting -o is not one.
   if (sub_ != "push" || has_flag(s, j + 1, "^(--dry-run|-[a-np-zA-Z]*n[a-np-zA-Z]*)$")) return
   emit("gate push")
-  risky = 0
+  # A lease push reads as a plain push only when it is the whole command:
+  # the first segment, git its first word with no global option, nothing
+  # queued to split, and every later segment empty, since the split always
+  # ends on one. Otherwise it may run in another repo than the session's.
+  alone = (s == 1 && i == 1 && j == i + 1 && nq + 0 == 0)
+  for (k = 2; k <= nseg; k++) if (segn[k] > 0) alone = 0
+  risky = 0; leases = 0; includes = 0; unsafe = 0; pos = 0
   for (j++; j <= n; j++) {
     w = segw[s, j]
-    if (w ~ /^--(force|force-with-lease|force-if-includes|delete|mirror|prune|tags|follow-tags)(=|$)/) risky = 1
-    else if (w ~ /^--push-option(=|$)/) { options = 1; if (w !~ /=/) j++ }
-    else if (w == "--repo") j++
-    else if (w ~ /^-[A-Za-z]/ && w !~ /^--/) {
+    if (w ~ /^--./) {
+      # git takes any unique prefix of a long option, so name it by that.
+      opt = substr(w, 3); val = ""
+      if (k = index(opt, "=")) { val = substr(opt, k + 1); opt = substr(opt, 1, k - 1) }
+      opt = push_option(opt)
+      if (opt == "force-with-lease") { if (k && explicit_lease(val)) leases++; else risky = 1 }
+      else if (opt == "force-if-includes") includes = 1
+      else if (opt == "risky") risky = 1
+      else if (opt == "push-option") { options = 1; if (!k) j++ }
+      else if (opt == "repo" && !k) j++
+      continue
+    }
+    if (w ~ /^-[A-Za-z]/) {
       # A bundle of short switches: f or d before any o forces or deletes, and
       # o takes the rest of the word as a push option, or the next word when
       # it ends the bundle.
       b = w
       if (match(b, /o/)) { options = 1; if (RSTART == length(b)) j++; b = substr(b, 1, RSTART - 1) }
       if (b ~ /[fd]/) risky = 1
+      continue
     }
-    else if (w ~ /^[+:]/ || w ~ /(^|:)refs\/tags\// || w == "tag") risky = 1
+    # A redirection, alone with its target as the next word, or glued to it.
+    if (w ~ /^[0-9]*(>>?|<|&>>?|>&|<&|<>|>\|)$/) { j++; continue }
+    if (w ~ /^[0-9]*(>>?|<|&>>?|>&|<&|<>|>\|)/ || w ~ /^-/) continue
+    if (w ~ /^[+:]/ || w ~ /(^|:)refs\/tags\// || w == "tag") risky = 1
+    # The remote, then each refspec. The shell expands $, ~, braces and globs
+    # in a word the hook reads as written, so a lease push asks on those, and
+    # on a destination that is the default branch.
+    if (w !~ /^[A-Za-z0-9._\/:-]+$/ || (++pos == 1 && w ~ /:/)) unsafe = 1
+    sub(/^.*:/, "", w)
+    if (default_branch(w)) unsafe = 1
   }
-  if (risky) emit("confirm a push that forces, deletes or pushes tags")
+  # A lease forces only the refs it names, so with no other risky word, a
+  # lease push run alone, with every leased ref and named destination off
+  # the default branch, is a plain push. --force-if-includes only narrows a
+  # lease.
+  if (risky || (includes && !leases) || (leases && (!alone || unsafe || defaults !~ /[^ ]/)))
+    emit("confirm a push that forces, deletes or pushes tags")
   if (options) emit("confirm a push with push options, which the server acts on")
+}
+
+# The push option a long option names, as git reads a unique prefix: an
+# exact name wins, from force-w on it is a lease and from force-i on
+# force-if-includes, from pu on push-option and from rep on repo, and any
+# other prefix of an option that forces, deletes or pushes tags is "risky".
+# A prefix git finds ambiguous fails in git, so reading it as risky costs
+# nothing.
+function push_option(o,    r, k) {
+  if (o == "") return ""
+  if (index("force-with-lease", o) == 1 && length(o) >= 7) return "force-with-lease"
+  if (index("force-if-includes", o) == 1 && length(o) >= 7) return "force-if-includes"
+  if (index("push-option", o) == 1 && length(o) >= 2) return "push-option"
+  if (index("repo", o) == 1 && length(o) >= 3) return "repo"
+  if (o == "force") return "risky"
+  split("force delete mirror prune tags follow-tags", r, " ")
+  for (k in r) if (index(r[k], o) == 1) return "risky"
+  return ""
+}
+
+# True for a lease's value of the form refs/heads/<branch>:<sha>, the branch
+# not the default and the sha 4 to 64 hex digits. A bare name could name a
+# tag on the remote, so only refs/heads/ counts.
+function explicit_lease(v,    k, ref, sha) {
+  if (!(k = index(v, ":"))) return 0
+  ref = substr(v, 1, k - 1)
+  sha = substr(v, k + 1)
+  if (sha !~ /^[0-9a-fA-F]+$/ || length(sha) < 4 || length(sha) > 64) return 0
+  if (ref !~ /^refs\/heads\/[A-Za-z0-9._\/-]+$/) return 0
+  return !default_branch(ref)
+}
+
+# True when a branch name, with refs/heads/ or heads/ before it, is main,
+# master, or a default branch eng-hook found in defaults.
+function default_branch(name) {
+  if (!sub(/^refs\/heads\//, "", name)) sub(/^heads\//, "", name)
+  return name == "main" || name == "master" || index(" " defaults " ", " " name " ") > 0
 }
 
 # True when a word from position from on matches re as a flag, and is not the

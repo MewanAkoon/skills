@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "eng",
-      "source": "./",
+      "source": "./plugins/eng",
       "description": "Engineering skills for Claude Code: commits and PRs only when asked, TypeScript and API practice, debugging, review, and plain writing.",
       "category": "engineering"
     }

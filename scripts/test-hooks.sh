@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs hooks/eng-hook against the inputs in tests/hooks and checks what comes
+# Runs plugins/eng/hooks/eng-hook against the inputs in tests/hooks and checks what comes
 # out: the session block, then the gates, which read the cases in
 # tests/hooks/pre-tool and a scratch repo for the review gate. The checks read
 # the block's shape rather than a stored copy of it, so editing the contract
@@ -19,9 +19,10 @@ bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 # copy's files, so each run below gets only the ones it sets.
 unset CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA
 
-hook=hooks/eng-hook
+plugin=plugins/eng
+hook="$plugin/hooks/eng-hook"
 inputs=tests/hooks/session-start
-contract=standards/workflow.md
+contract="$plugin/standards/workflow.md"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
@@ -87,7 +88,7 @@ grep -q "unknown mode" "$scratch/data-mode/eng-hook.log" 2>/dev/null || bad "unk
 spaced="$scratch/plugin root"
 mkdir -p "$spaced/standards" "$spaced/skills/plain-writing"
 cp "$contract" "$spaced/standards/"
-cp skills/plain-writing/SKILL.md "$spaced/skills/plain-writing/"
+cp "$plugin/skills/plain-writing/SKILL.md" "$spaced/skills/plain-writing/"
 run "$inputs/startup.json" CLAUDE_PLUGIN_ROOT="$spaced"
 [ "$status" -eq 0 ] || bad "spaced root: exited $status"
 check_block "spaced root" "$(jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null)"
@@ -96,7 +97,7 @@ check_block "spaced root" "$(jq -r '.hookSpecificOutput.additionalContext' "$scr
 # lost quote around the root splits the path at the space.
 mkdir -p "$spaced/hooks"
 cp "$hook" "$spaced/hooks/"
-command="$(jq -r '.hooks.SessionStart[0].hooks[0].command' hooks/hooks.json)"
+command="$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$plugin/hooks/hooks.json")"
 for form in expanded written; do
   line="$command"
   # Split around the placeholder rather than substitute, because bash 5.2
@@ -1123,7 +1124,7 @@ for case in 'gh pr create -twip -b x|gate pr open pr' 'gh pr create --web=false 
   'gh pr create -dw|gate push' 'gh pr create --dry-run=true|gate push' 'glab mr create --web=false -t x|gate pr open pr' \
   'glab mr create -yw|gate pr' 'gt submit|gate push gate pr open pr' 'gt submit --dry-run|gate push gate pr' \
   'gh pr create -t x -F b --assignee @me|gate pr open pr'; do
-  said="$(printf '%s' "${case%%|*}" | awk -f hooks/classify-command.awk | tr '\n' ' ')"
+  said="$(printf '%s' "${case%%|*}" | awk -f "$plugin/hooks/classify-command.awk" | tr '\n' ' ')"
   [ "$said" = "${case#*|} " ] || bad "classifier: '${case%%|*}' gave '$said', not '${case#*|}'"
 done
 # A pull request opened through the API counts too, by REST or GraphQL.
@@ -1835,28 +1836,28 @@ grep -q "jq not found" "$scratch/data-nojq-gates/eng-hook.log" 2>/dev/null || ba
 # shellcheck disable=SC2016
 quoted='"${CLAUDE_PLUGIN_ROOT}"/hooks/eng-hook '
 for event in UserPromptSubmit UserPromptExpansion PreToolUse PostToolUse PostToolUseFailure Stop; do
-  command="$(jq -r --arg e "$event" '.hooks[$e][0].hooks[0].command // empty' hooks/hooks.json)"
+  command="$(jq -r --arg e "$event" '.hooks[$e][0].hooks[0].command // empty' "$plugin/hooks/hooks.json")"
   case "$command" in
     "$quoted"*) ;;
     *) bad "hooks.json: $event does not run the quoted eng-hook: $command" ;;
   esac
 done
-[ "$(jq -r '.hooks.PreToolUse[0].matcher' hooks/hooks.json)" = 'Bash|Monitor|PowerShell|Skill|mcp__.*' ] \
+[ "$(jq -r '.hooks.PreToolUse[0].matcher' "$plugin/hooks/hooks.json")" = 'Bash|Monitor|PowerShell|Skill|mcp__.*' ] \
   || bad "hooks.json: PreToolUse does not match Bash, Monitor, PowerShell, Skill and MCP tools"
 
 # A runner's later words are read only when they name a command in the
 # classifier's known list, so every command a rule or a runner pattern names
 # must be in it.
-known="$(sed -nE 's/^  (wrappers|shells|known) = [a-z ]*"(.*)"$/\2/p' hooks/classify-command.awk | tr '\n' ' ')"
+known="$(sed -nE 's/^  (wrappers|shells|known) = [a-z ]*"(.*)"$/\2/p' "$plugin/hooks/classify-command.awk" | tr '\n' ' ')"
 [ -n "$known" ] || bad "classify-command.awk: no known list to check"
 while IFS= read -r name; do
   case " $known " in *" $name "*) ;; *) bad "classify-command.awk: $name has a rule but is not in known" ;; esac
 done < <(
   {
-    grep -o 'cmd == "[a-z0-9._-]*"' hooks/classify-command.awk | sed 's/^cmd == "//; s/"$//'
+    grep -o 'cmd == "[a-z0-9._-]*"' "$plugin/hooks/classify-command.awk" | sed 's/^cmd == "//; s/"$//'
     # The runners, named in the runner patterns as cmd ~ /^(a|b)$/. This
     # comment holds no apostrophe, which bash 3.2 cannot parse inside <( ).
-    grep -oE 'cmd ~ /\^\([a-z0-9|?-]*\)\$/' hooks/classify-command.awk |
+    grep -oE 'cmd ~ /\^\([a-z0-9|?-]*\)\$/' "$plugin/hooks/classify-command.awk" |
       sed -E 's/^cmd ~ \/\^\(//; s/\)\$\/$//; s/4\?//' | tr '|' '\n'
   } | sort -u
 )

@@ -6,10 +6,11 @@ full name: `eng:commit`, `eng:pr`, `eng:why`, and so on. Nothing gets committed
 into working repos.
 
 A skill is a folder holding a `SKILL.md`: a description that decides when it
-applies, and a procedure the agent follows once it does. The plugin is that
-folder of skills plus two small manifests in `.claude-plugin/`, which is the
-packaging the Claude Code docs describe and the one
-[mattpocock/skills](https://github.com/mattpocock/skills) uses.
+applies, and a procedure the agent follows once it does. The plugin is the
+folder [plugins/eng/](plugins/eng), which holds the skills, the hooks, and a
+manifest and an icon in its own `.claude-plugin/`. The marketplace manifest in
+the root `.claude-plugin/` lists it with `"source": "./plugins/eng"`, so an
+install copies that folder and none of the repo's own scripts, tests or docs.
 
 ## Scope
 
@@ -19,12 +20,12 @@ packaging. Cursor support comes later; "If you use Cursor" below says where it
 stands.
 
 One other file ships the same way:
-[standards/workflow.md](standards/workflow.md), the standing workflow every
-session follows. A SessionStart hook in the plugin sends it, with
-`plain-writing`'s core rules, at the start of every session and again after
-each compaction. Other hooks in the plugin enforce the rules that have to hold,
-listed under "What the hooks enforce" below. The hooks are Claude Code
-packaging, like the manifests.
+[plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md), the
+standing workflow every session follows. A SessionStart hook in the plugin
+sends it, with `plain-writing`'s core rules, at the start of every session and
+again after each compaction. Other hooks in the plugin enforce the rules that
+have to hold, listed under "What the hooks enforce" below. The hooks are Claude
+Code packaging, like the manifests.
 
 One narrow exception to "plain markdown", named in [AGENTS.md](AGENTS.md)
 under "What belongs here": the Cursor rules file carries a `description` that
@@ -56,8 +57,8 @@ Then turn off the bare copies of two skills. A project may carry its own
 `commit` and `pr` skills, and those load beside the plugin's today and can take
 a request meant for it. Claude Code also reserves both names for built-in
 skills it keeps switched off for now and can switch on. Turn off the credit
-lines Claude Code adds to commits and PRs as well. Add this to
-`~/.claude/settings.json`:
+lines Claude Code adds to commits and PRs as well, and set how `gh stack` is
+allowed. Add this to `~/.claude/settings.json`:
 
 ```json
 {
@@ -69,9 +70,16 @@ lines Claude Code adds to commits and PRs as well. Add this to
     "commit": "",
     "pr": "",
     "sessionUrl": false
+  },
+  "permissions": {
+    "allow": ["Bash(gh stack:*)"],
+    "ask": ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]
   }
 }
 ```
+
+When the file already has a `permissions.allow` or `permissions.ask` list, add
+these rules to it rather than replacing it.
 
 `skillOverrides` hides a skill by name from you and the model alike, for this
 machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
@@ -92,6 +100,14 @@ One on a single repo, outside a project's threads, reads that repo's committed
 `.claude/settings.json`, where the same `attribution` entry turns the lines
 off. [Cloud sessions](#cloud-sessions) covers the rest.
 
+The `permissions` rules are for stacked pull requests. The allow rule lets
+`gh stack` run without a prompt, and the two ask rules keep a prompt on a stack
+merge, which lands some or all of the stack's pull requests in one step and
+cannot be undone, and on an unstack, which removes the stack on GitHub. Claude
+Code checks ask rules before allow rules, so the pair holds in either order.
+The plugin's hook still gates a stack's push, sync and submit, as it does any
+push or PR, and asks about a merge, an unstack or a link either way.
+
 To confirm it worked from a clone of this repo:
 
 ```bash
@@ -110,9 +126,10 @@ It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
 when an old link or a personal copy of one of these skills is still loading,
 when the `skillOverrides` entry is missing, when `attribution` is not turned
-off, when this clone's own `.claude/settings.json` or `settings.local.json`
-turns it back on, or when one of the plugin's hooks has logged an error. It
-reads no other repo's settings.
+off, when one of the `gh stack` permission rules is missing, when this clone's
+own `.claude/settings.json` or `settings.local.json` turns attribution back
+on, or when one of the plugin's hooks has logged an error. It reads no other
+repo's settings.
 
 ### Updating
 
@@ -123,9 +140,10 @@ it on once in `/plugin`, under Marketplaces, or update by hand:
 claude plugin update eng@mewanakoon
 ```
 
-A release is a new `version` in `.claude-plugin/plugin.json`, with its entry in
-[CHANGELOG.md](CHANGELOG.md) and a `vX.Y.Z` tag on the commit that brought it
-to `main`. An install stays on the version it has until that string changes.
+A release is a new `version` in `plugins/eng/.claude-plugin/plugin.json`, with
+its entry in [CHANGELOG.md](CHANGELOG.md) and a `vX.Y.Z` tag on the commit that
+brought it to `main`. An install stays on the version it has until that string
+changes.
 
 ### Cloud sessions
 
@@ -148,9 +166,10 @@ So, for the cloud:
    **Project settings > Plugins** as well.
 2. On your own environment, not a shared one, paste
    [scripts/cloud-setup.sh](scripts/cloud-setup.sh) in as the setup script.
-   It writes the `skillOverrides` and `attribution` entries from the setup
-   above into the VM's `~/.claude/settings.json`, and the same two as rules
-   in the VM's `~/.claude/CLAUDE.md`. The docs say a cloud session loads that
+   It writes the `skillOverrides`, `attribution` and `permissions` entries
+   from the setup above into the VM's `~/.claude/settings.json`, adding to any
+   permission rules already there, and the first two as rules in the VM's
+   `~/.claude/CLAUDE.md`. The docs say a cloud session loads that
    `CLAUDE.md`. They say it reads no user settings, meaning the ones on your
    machine, and not whether that covers a `settings.json` written this way,
    so the rules are the layer to rely on.
@@ -167,16 +186,19 @@ new cloud session shows the new version.
 
 ### Moving from the old symlinks
 
-Before the plugin, `link.sh` symlinked each skill into `~/.claude/skills`.
-Those links are personal skills with bare names, and they would load beside
-the plugin's copies. From the clone:
+Before the plugin, a `link.sh` script in this repo symlinked each skill into
+`~/.claude/skills`. Those links are personal skills with bare names, and they
+would load beside the plugin's copies. The script is gone, so from the clone:
 
-1. Run `./link.sh --unlink`. It removes the links this clone made and leaves
-   anything else alone. If you linked with `SKILLS_DEST` set, run it with the
-   same value. A `.skillsignore` in the clone no longer does anything, so
+1. Run `./scripts/check.sh --doctor`. It names each old link in
+   `~/.claude/skills`, under the names that install used as well as today's.
+   Remove each one with `rm` on the link's path, which leaves the clone alone.
+   The doctor does not read `~/.agents/skills` or `~/.cursor/skills`, which
+   an older install also linked into, or a `SKILLS_DEST` you set, so look in
+   those by hand. A `.skillsignore` in the clone no longer does anything, so
    delete it.
-2. Install the plugin and add the `skillOverrides` and `attribution` entries,
-   as above.
+2. Install the plugin and add the `skillOverrides`, `attribution` and
+   `permissions` entries, as above.
 3. If your `~/.claude/CLAUDE.md`, or a hook of yours, names a path under
    `~/.claude/skills`, point it at the skill's full name instead, such as
    `eng:plain-writing`. Those paths no longer exist.
@@ -200,7 +222,7 @@ shows up after `/reload-plugins`. To try the working tree for one session
 without installing anything:
 
 ```bash
-claude --plugin-dir .
+claude --plugin-dir plugins/eng
 ```
 
 ### If you use Cursor
@@ -240,12 +262,12 @@ commit `.claude/settings.json` on purpose. Skip this step if that is you.
 
 ### Taking a subset
 
-A plugin installs as a unit, and it loads every folder under `skills/`. To
-take part of it, fork the repo, delete the skill folders you do not want along
-with their README rows, and install from your fork. `./scripts/check.sh` names
-anything left pointing at a skill you removed. Listing skills in `plugin.json`
-does not narrow the set, because that field adds to the `skills/` scan rather
-than replacing it.
+A plugin installs as a unit, and it loads every folder under
+`plugins/eng/skills/`. To take part of it, fork the repo, delete the skill
+folders you do not want along with their README rows, and install from your
+fork. `./scripts/check.sh` names anything left pointing at a skill you
+removed. Listing skills in `plugin.json` does not narrow the set, because that
+field adds to the `skills/` scan rather than replacing it.
 
 ### Sharing one skill with a team
 
@@ -267,18 +289,20 @@ claude plugin marketplace remove mewanakoon
 ```
 
 Remove the `skillOverrides` entry too if you want Claude Code's own `commit`
-and `pr` back, and the `attribution` entry if you want its credit lines back.
+and `pr` back, the `attribution` entry if you want its credit lines back, and
+the `gh stack` rules under `permissions` if you no longer want them.
 
 ## The workflow
 
-[standards/workflow.md](standards/workflow.md) is eight standing steps:
-understand first, plan and stop, implement on approval, review until clean,
-commit and open PRs only when asked or when a plan you approved lists them,
-handle PR feedback on evidence and review the unreviewed commits after each
-push, post nothing but a Linear issue comment you ask for, and report briefly.
-The plugin's SessionStart hook sends it at the start of every session and
-after each compaction. It names the skill for each step that has a procedure,
-so a change of phase is the cue to load it:
+[plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md) is eight
+standing steps: understand first, plan and stop, implement on approval, review
+until clean, commit and open PRs only when asked or when a plan you approved
+lists them, handle PR feedback on evidence and review the unreviewed commits
+after each push, post nothing but a Linear issue comment you ask for, and
+report briefly.
+The plugin's SessionStart hook sends it at the start of every session and after
+each compaction. It names the skill for each step that has a procedure, so a
+change of phase is the cue to load it:
 
 | Step | Skill |
 |---|---|
@@ -307,7 +331,7 @@ every session and inside subagents. They run in Claude Code only.
 |---|---|
 | A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post`. The `linear comment` CLI, and a Linear comment that edits, replies, or sits on anything but an issue, count too | Denied, with a note to write the draft to a file |
 | A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync or submit, `gt submit`, a GitHub MCP tool that writes files or pushes, a Linear issue write through MCP, and a comment on a Linear issue through Linear's `save_comment` with only the issue and the body | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes. A Linear comment that mentions someone also asks you to confirm it, and with no state to read it is denied |
-| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [hooks/eng-hook](hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
+| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
 | Any other MCP write, one that only creates or changes something, such as a doc, page, sheet or issue edit through Claude Docs, Notion, Google Drive, Sheets or any other server but GitHub's and Linear's issue writes | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
@@ -362,8 +386,9 @@ go-ahead such as "Thanks" is fine. So "I approve it", "approve the plan",
 it" and a message that opens like a question grant nothing. A message also
 does not approve when it asks for changes or sets a condition: a question
 mark, a negation, a word in `NOT_APPROVAL` in
-[hooks/eng-hook](hooks/eng-hook), such as "but", "before", "wait", "once",
-"until" or "if", a change, changes, an edit, edits or a tweak, unless a phrase
+[plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook), such as "but",
+"before", "wait", "once", "until" or "if", a change, changes, an edit, edits
+or a tweak, unless a phrase
 that ends its clause has the run finish them ("finalize the changes" or
 "finalize the changes and the PR" is fine, while "commit the changes and push"
 is read as asking for changes, so give each step its own clause), or a no to a
@@ -407,8 +432,8 @@ as a post, and otherwise asks before the command runs, because it cannot tell
 whether the command posts or writes. A comment on a Linear issue is the
 other exception: with no state to read, the gate denies it, since without the
 gate it is a post. The parser has a time limit,
-`PARSE_SECONDS` in [hooks/eng-hook](hooks/eng-hook), set below the hook's
-timeout in [hooks/hooks.json](hooks/hooks.json). A command it cannot read in
+`PARSE_SECONDS` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook), set below the hook's
+timeout in [plugins/eng/hooks/hooks.json](plugins/eng/hooks/hooks.json). A command it cannot read in
 time, such as one with a couple of thousand nested `$( )`, is handled the same way, so
 it asks, and a post the parser found before it stopped is still denied. A
 megabyte in a quoted string or a heredoc reads in a second or two. Only a hook run
@@ -437,18 +462,18 @@ above leaves out the ones you do not want.
 
 | Skill | Fires on | What it does |
 |---|---|---|
-| [investigate](skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
-| [implement](skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, test-first unless it is a small named change, corrects docs it makes false, reviews it through `/code-review` |
-| [pr-feedback](skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
-| [plain-writing](skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
-| [commit](skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
-| [pr](skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
-| [issue](skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and comments on a Linear issue only when asked |
-| [ts-types](skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
-| [api-boundaries](skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
-| [merge-conflicts](skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |
-| [why](skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code that the request did not name, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
-| [blast-radius](skills/blast-radius/SKILL.md) | Planning a change to something shared, or a question about what a change breaks | What a change breaks elsewhere, with evidence levels |
+| [investigate](plugins/eng/skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
+| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, test-first unless it is a small named change, corrects docs it makes false, reviews it through `/code-review` |
+| [pr-feedback](plugins/eng/skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
+| [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
+| [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
+| [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
+| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and comments on a Linear issue only when asked |
+| [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
+| [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
+| [merge-conflicts](plugins/eng/skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |
+| [why](plugins/eng/skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code that the request did not name, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
+| [blast-radius](plugins/eng/skills/blast-radius/SKILL.md) | Planning a change to something shared, or a question about what a change breaks | What a change breaks elsewhere, with evidence levels |
 
 ### User-invoked
 
@@ -456,8 +481,8 @@ Only fire when typed. Zero context cost.
 
 | Skill | Invoke | What it does |
 |---|---|---|
-| [grill-me](skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
-| [handoff](skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
+| [grill-me](plugins/eng/skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
+| [handoff](plugins/eng/skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
 
 To see a change working in the running app, Claude Code's built-in `/run`
 launches and drives it, and `eng:implement`'s review names it when a change
@@ -490,26 +515,28 @@ a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
 including every command case under `tests/hooks/pre-tool/`, and checks what
 they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
-against scratch homes, and, where Node 18.1 or later is installed, the
-fixtures for `scripts/stats.mjs`. CI also runs the validator on a pinned
-Claude Code, and the stats fixtures on Node 18.1, the oldest they support.
+against scratch homes, and `./scripts/test-checks.sh`, which runs the version
+rule against scratch repos and the validator wrapper against canned output. CI
+also runs the validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
-`.claude-plugin/plugin.json`, or the checker fails. Without it, nobody who
-installed from GitHub would receive the change. Bump past whatever `main`
-carries when you merge: CI checks `main` again after each push, so two pull
-requests that picked the same version fail there.
+`plugins/eng/.claude-plugin/plugin.json`, or the checker fails. Without it,
+nobody who installed from GitHub would receive the change. A change to
+`plugins/eng/evals/` alone needs none, since no session loads an eval. Bump
+past whatever `main` carries when you merge: CI checks `main` again after each
+push, so two pull requests that picked the same version fail there.
 
 ### Evals
 
-`evals/` holds cases for `claude plugin eval`: each workflow skill loads at its
-moment, a request to open a PR among them, `eng:issue` stays out of "look into issue 42", the contract is in
-context at the start, looking into a repo commits nothing, a commit waits for
-`eng:commit`, and an unreviewed hand-back gets the review gate's reminder. Every run is a
-model call on your account, so they stay out of CI. Run them before a release:
+`plugins/eng/evals/` holds cases for `claude plugin eval`: each workflow skill
+loads at its moment, a request to open a PR among them, `eng:issue` stays out
+of "look into issue 42", the contract is in context at the start, looking into
+a repo commits nothing, a commit waits for `eng:commit`, and an unreviewed
+hand-back gets the review gate's reminder. Every run is a model call on your
+account, so they stay out of CI. Run them before a release:
 
 ```bash
-claude plugin eval . --ablation none --runs 1 --scaffold --allow-tools Bash \
+claude plugin eval plugins/eng --ablation none --runs 1 --scaffold --allow-tools Bash \
   --no-publish --max-cost-usd 2
 ```
 
@@ -525,7 +552,7 @@ clone, then:
 
 ```bash
 claude -p "The plan in PLAN.md is approved. Implement it." \
-  --plugin-dir <clone> --allowedTools "Read Glob Grep Edit Write Bash Skill Agent" \
+  --plugin-dir <clone>/plugins/eng --allowedTools "Read Glob Grep Edit Write Bash Skill Agent" \
   --output-format stream-json --verbose
 ```
 
@@ -540,28 +567,10 @@ A skill stays whether or not it fires. To see how often each one has fired,
 run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
 when it last ran, and what its description costs on every turn.
 
-To see whether the workflow holds, run `npm run stats`. It reads this
-machine's Claude Code transcripts and the hook's log, and prints per week the
-remote writes nobody asked for, those made from subagents, commits and PRs
-made without their skill, posts, requests for another review pass, drafts,
-compactions, and what code-review cost. The counts are heuristics, and the
-script's `DEFINITIONS` say how each one is made. It saves a baseline, with
-those definitions, and sets its headline numbers beside a later run, saying
-when a definition has changed since:
-
-```bash
-npm run stats -- --since 2026-07-01 --until 2026-10-08 --save <baseline.json>
-npm run stats -- --since <date> --compare <baseline.json>
-```
-
-It holds counts only, never message text, but keep a baseline out of the
-repo all the same: it describes one person's work.
-
 Every script you run while working here is also an `npm run` target, which is
-the only reason `package.json` exists. It declares no dependencies.
-`scripts/legacy.sh` has none, because `link.sh` and `--doctor` load it, and
-neither do the setup scripts under `tests/` and `evals/`, which build scratch
-repos for one check each.
+the only reason `package.json` exists. It declares no dependencies. The setup
+scripts under `tests/` and `plugins/eng/evals/` have none, because each builds
+a scratch repo for one check.
 
 ## Optional extras
 

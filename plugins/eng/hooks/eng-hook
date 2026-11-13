@@ -59,8 +59,8 @@
 # write. The limit sits below the hook's timeout in hooks/hooks.json, so Claude
 # Code does not stop the hook first and run the command unread. A failure,
 # though not a timeout, is written to eng-hook.log in ${CLAUDE_PLUGIN_DATA},
-# which check.sh --doctor reads and stats.mjs counts, and cut to its last 1000
-# lines once it passes 2000. A hook stopped by a signal exits 143 instead.
+# which check.sh --doctor reads, and cut to its last 1000 lines once it passes
+# 2000. A hook stopped by a signal exits 143 instead.
 # Needs jq. Without it the session block goes out as plain text, which Claude
 # Code also takes as context, and every other mode does nothing.
 
@@ -791,10 +791,9 @@ plan_field() {
   sed -n "s/^$2:[[:space:]]*//p" "$1" 2>/dev/null | head -n 1 | tr -d '`\r' | sed 's/[[:space:]]*$//'
 }
 
-# Appends one line to the log of writes made under a grant, which the stats
-# script is to count (it does not read it yet):
-# the time, the session, the plan, its branch, the kind of write, $1, and its
-# commit, $2.
+# Appends one line to the log of writes made under a grant, which nothing
+# reads yet: the time, the session, the plan, its branch, the kind of write,
+# $1, and its commit, $2.
 log_write() {
   printf '%s %s %s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$f_sid" \
     "$(sed -n 2p "$state/grant")" "$(sed -n 1p "$state/grant")" "$1" "$2" \

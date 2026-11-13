@@ -6,7 +6,8 @@
 # The first 42 cases are the old block-pr-comments.sh battery. Every case runs
 # in the main session, where a commit, push, pull request or issue write gets
 # no decision, so each result is what the post guard and the confirmation
-# prompt decide. The deny on a subagent's writes has its own cases in
+# prompt decide. Each runs in a scratch repo whose origin/HEAD is main, which
+# a push with an explicit lease reads for the default branch. The deny on a subagent's writes has its own cases in
 # scripts/test-hooks.sh.
 == deny posting
 gh pr comment 5 --body "hi"
@@ -161,7 +162,7 @@ git push -f origin feature/x
 git push -uf origin feature/x
 == ask
 git push --force-with-lease origin feature/x
-== ask
+== ask a lease by a bare name could name a tag
 git push --force-with-lease=feature/x:abc123 origin feature/x
 == ask
 git push origin +feature/x
@@ -181,6 +182,128 @@ git push --mirror backup
 git push --prune origin
 == ask
 git -C ../other push --force origin feature/x
+== allow an explicit lease on a branch other than the default is a plain push
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== allow
+git push --force-with-lease=refs/heads/feature/x:abc1 origin HEAD:refs/heads/feature/x
+== allow
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --force-if-includes origin feature/x
+== allow
+git push -u --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== allow with no remote or refspec only the leased ref is forced
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567
+== allow
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD
+== allow git reads a unique prefix as the option
+git push --force-w=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== allow two leases
+git push --force-with-lease=refs/heads/feature/a:0123456789abcdef0123456789abcdef01234567 --force-with-lease=refs/heads/feature/b:0123456789abcdef0123456789abcdef01234567 origin feature/a feature/b
+== allow a redirection is not a refspec
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x 2>&1
+== allow
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x >/dev/null
+== ask a lease does not cover a force alongside it
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --force origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 -f origin feature/x
+== ask a lease ref that is not refs/heads/
+git push --force-with-lease=heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+git push --force-with-lease=tags/v1:0123456789abcdef0123456789abcdef01234567 origin HEAD:v1
+== ask
+git push --force-with-lease=refs/tags/v1:0123456789abcdef0123456789abcdef01234567 origin HEAD:v1
+== ask
+git push --force-with-lease=refs/remotes/origin/x:0123456789abcdef0123456789abcdef01234567 origin x
+== ask
+git push --force-with-lease=HEAD:0123456789abcdef0123456789abcdef01234567 origin HEAD
+== ask a lease with no sha
+git push --force-with-lease=refs/heads/feature/x origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x: origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:origin/feature/x origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:$sha origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:xyz1234 origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:abc origin feature/x
+== ask the shell expands what the hook reads literally
+git push --force-with-lease=refs/heads/${b:-main}:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+git push --force-with-lease=refs/heads/{main,x}:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD:$d
+== ask a lease does not cover a delete, mirror, prune, tags or push options
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --delete origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --del origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --mirror origin
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --mirr origin
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --m origin
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --tags origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --follow-tags origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --fol origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --prune origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 -o ci.skip origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --pu=ci.skip origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --push=ci.skip origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin +feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin :feature/y
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin refs/tags/v1
+== ask --force-if-includes alone
+git push --force-if-includes origin feature/x
+== ask git reads a unique prefix as the option
+git push --force-w=main:0123456789abcdef0123456789abcdef01234567 origin main
+== ask
+git push --del origin x
+== ask
+git push --mirr backup
+== ask
+git push --m origin
+== ask
+git push --pu=ci.skip origin x
+== ask a lease push to the default branch
+git push --force-with-lease=refs/heads/main:0123456789abcdef0123456789abcdef01234567 origin main
+== ask
+git push --force-with-lease=refs/heads/master:0123456789abcdef0123456789abcdef01234567 origin master
+== ask
+git push --force-with-lease=refs/heads/main:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD:main
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD:heads/main
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD:refs/heads/main
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x main
+== ask a lease push that is not the whole command
+cd ../o && git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+git -C ../o push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+GIT_DIR=x git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+timeout 30 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x 2>&1 | tail -1
+== ask
+git push --force-with-lease=refs/heads/feature/x:$(git rev-parse HEAD) origin feature/x
+== ask
+git status; git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
 == allow a refspec with a colon in the middle is a plain push
 git push origin HEAD:refs/heads/feature/x
 == allow local history operations

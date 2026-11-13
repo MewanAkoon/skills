@@ -21,6 +21,16 @@ follow semantic versioning.
 - An icon at `plugins/eng/.claude-plugin/icon.png`, which the plugin
   directory asks for.
 
+### Removed
+
+- `link.sh`, which removed the symlinks of the install before the plugin.
+  `./scripts/check.sh --doctor` still names each old link, and the README
+  says how to remove one. `scripts/legacy.sh` went with it, and its list of
+  retired skill names now lives in `check.sh`.
+- `scripts/stats.mjs`, its fixtures, and the `stats` and `test:stats` npm
+  scripts, so nothing here needs Node any more. The hook still writes its
+  logs.
+
 ## 0.14.0 - unreleased
 
 ### Changed

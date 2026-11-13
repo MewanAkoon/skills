@@ -169,14 +169,15 @@ new cloud session shows the new version.
 
 ### Moving from the old symlinks
 
-Before the plugin, `link.sh` symlinked each skill into `~/.claude/skills`.
-Those links are personal skills with bare names, and they would load beside
-the plugin's copies. From the clone:
+Before the plugin, a `link.sh` script in this repo symlinked each skill into
+`~/.claude/skills`. Those links are personal skills with bare names, and they
+would load beside the plugin's copies. The script is gone, so from the clone:
 
-1. Run `./link.sh --unlink`. It removes the links this clone made and leaves
-   anything else alone. If you linked with `SKILLS_DEST` set, run it with the
-   same value. A `.skillsignore` in the clone no longer does anything, so
-   delete it.
+1. Run `./scripts/check.sh --doctor`. It names each old link in
+   `~/.claude/skills`, under the names that install used as well as today's.
+   Remove each one with `rm` on the link's path, which leaves the clone alone.
+   If you linked with `SKILLS_DEST` set, look in that directory too. A
+   `.skillsignore` in the clone no longer does anything, so delete it.
 2. Install the plugin and add the `skillOverrides` and `attribution` entries,
    as above.
 3. If your `~/.claude/CLAUDE.md`, or a hook of yours, names a path under
@@ -493,11 +494,9 @@ a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
 including every command case under `tests/hooks/pre-tool/`, and checks what
 they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
-against scratch homes, `./scripts/test-checks.sh`, which runs the version rule
-against scratch repos and the validator wrapper against canned output, and,
-where Node 18.1 or later is installed, the
-fixtures for `scripts/stats.mjs`. CI also runs the validator on a pinned
-Claude Code, and the stats fixtures on Node 18.1, the oldest they support.
+against scratch homes, and `./scripts/test-checks.sh`, which runs the version
+rule against scratch repos and the validator wrapper against canned output. CI
+also runs the validator on a pinned Claude Code.
 
 A change to anything the plugin loads needs a new `version` in
 `plugins/eng/.claude-plugin/plugin.json`, or the checker fails. Without it,
@@ -547,28 +546,10 @@ A skill stays whether or not it fires. To see how often each one has fired,
 run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
 when it last ran, and what its description costs on every turn.
 
-To see whether the workflow holds, run `npm run stats`. It reads this
-machine's Claude Code transcripts and the hook's log, and prints per week the
-remote writes nobody asked for, those made from subagents, commits and PRs
-made without their skill, posts, requests for another review pass, drafts,
-compactions, and what code-review cost. The counts are heuristics, and the
-script's `DEFINITIONS` say how each one is made. It saves a baseline, with
-those definitions, and sets its headline numbers beside a later run, saying
-when a definition has changed since:
-
-```bash
-npm run stats -- --since 2026-07-01 --until 2026-10-08 --save <baseline.json>
-npm run stats -- --since <date> --compare <baseline.json>
-```
-
-It holds counts only, never message text, but keep a baseline out of the
-repo all the same: it describes one person's work.
-
 Every script you run while working here is also an `npm run` target, which is
-the only reason `package.json` exists. It declares no dependencies.
-`scripts/legacy.sh` has none, because `link.sh` and `--doctor` load it, and
-neither do the setup scripts under `tests/` and `evals/`, which build scratch
-repos for one check each.
+the only reason `package.json` exists. It declares no dependencies. The setup
+scripts under `tests/` and `plugins/eng/evals/` have none, because each builds
+a scratch repo for one check.
 
 ## Optional extras
 

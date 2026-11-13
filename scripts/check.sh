@@ -571,7 +571,7 @@ grep -qx "globs: $plugin/skills/\\*\\*" "$cursor_rule" \
 grep -qx 'alwaysApply: false' "$cursor_rule" \
   || bad "$cursor_rule: alwaysApply is not false, so it loads in every session"
 
-# link.sh, scripts/*.sh, tests/*/*.sh and the evals' scaffold.sh files parse as bash,
+# scripts/*.sh, tests/*/*.sh and the evals' scaffold.sh files parse as bash,
 # because nothing here runs most of them. This script embeds awk programs in
 # single quotes, so an unbalanced apostrophe in a printed string ends the
 # program and leaves a file that fails only when someone runs it. The plugin's
@@ -583,7 +583,7 @@ grep -qx 'alwaysApply: false' "$cursor_rule" \
 # and shellcheck reports it. This check earns its place by needing only bash,
 # because it runs before a commit, where fetching shellcheck over the network
 # would not.
-for f in link.sh scripts/*.sh tests/*/*.sh "$plugin"/evals/*/scaffold.sh; do
+for f in scripts/*.sh tests/*/*.sh "$plugin"/evals/*/scaffold.sh; do
   # A fork that dropped tests/ or evals/ leaves the pattern unexpanded.
   [ -f "$f" ] || continue
   bash -n "$f" || bad "$f: does not parse"
@@ -607,22 +607,6 @@ awk -f "$plugin/hooks/classify-command.awk" < /dev/null > /dev/null || bad "$plu
 # cases run here against scratch repos and a stand-in claude.
 ./scripts/test-checks.sh >/dev/null \
   || bad "scripts/test-checks.sh failed; see the lines above"
-
-# scripts/stats.mjs reads transcripts that only a machine with a Claude Code
-# history has, so the fixtures under tests/stats stand in for them here and in
-# CI. It needs Node 18.1 or later, which the CI runners carry, for node --test.
-# A machine without it warns rather than fails, as the rest of this script
-# needs only bash and jq. REQUIRE_NODE=1, which CI sets, makes it fail.
-if command -v node >/dev/null 2>&1 \
-  && node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 18 || (a === 18 && b >= 1) ? 0 : 1)'; then
-  node --check scripts/stats.mjs || bad "scripts/stats.mjs: does not parse"
-  node --test tests/stats/*.test.mjs >/dev/null 2>&1 \
-    || bad "tests/stats failed; run npm run test:stats for the details"
-elif [ -n "${REQUIRE_NODE:-}" ]; then
-  bad "node 18.1 or later not found, and REQUIRE_NODE is set"
-else
-  warn "node 18.1 or later not found, so scripts/stats.mjs and its fixtures went unchecked"
-fi
 
 # Every command block marked runnable actually runs. A block opts in with
 # `bash checked` on its fence, because most blocks in this repo are templates
@@ -747,14 +731,42 @@ if [ "$doctor" = yes ]; then
   # A personal skill with the same name as one of the plugin's loads beside
   # it, and two skills then claim one moment. That holds wherever it points:
   # a link into another clone of this repo loads just the same. A link into
-  # this clone under any other name loads a second copy too, but link.sh did
-  # not make it, so it is left for whoever did.
+  # this clone under any other name loads a second copy too, but no install
+  # of this repo made it, so it is left for whoever did.
   skills_dir="$config/skills"
-  # The names an older install linked, and how to resolve a link, both shared
-  # with link.sh. Several of those names stop being folders here once skills
-  # move, and a link left for one still loads.
-  # shellcheck source=scripts/legacy.sh
-  . scripts/legacy.sh
+
+  # Every skill the symlink install this repo used before the plugin could
+  # have linked into $skills_dir. Several stop existing as folders once the
+  # plugin reorganises them, and a link left behind for one of those dangles,
+  # so the names are listed here rather than read from the plugin's skills.
+  legacy=" api-boundaries architect blast-radius commit diagnose-bug grill-me
+   handoff how merge-conflicts plain-writing pr review-diff tdd-node-api
+   ts-types verify-app wayfinder why "
+  legacy_name() {
+    case "$legacy" in
+      *[[:space:]]"$1"[[:space:]]*) return 0 ;;
+    esac
+    return 1
+  }
+
+  # Where a symlink points, as a physical path comparable with the clone's
+  # own. Reading the target with `readlink` alone is not enough: it returns
+  # whatever string was stored, which may be relative, and may spell a path
+  # through a symlink that the clone's path spells directly, so the comparison
+  # silently never matches. Resolving the parent rather than the whole path
+  # keeps this working for a link left dangling by a skill that has since been
+  # removed, which is most of what it finds.
+  link_target() {
+    local raw dir
+    raw="$(readlink "$1")" || return 1
+    case "$raw" in
+      /*) ;;
+      *) raw="$(dirname "$1")/$raw" ;;
+    esac
+    dir="$(cd -P "$(dirname "$raw")" 2>/dev/null && pwd)" || return 1
+    printf '%s/%s\n' "$dir" "$(basename "$raw")"
+  }
+
   if [ -d "$skills_dir" ]; then
     for entry_path in "$skills_dir"/*; do
       [ -e "$entry_path" ] || [ -L "$entry_path" ] || continue
@@ -765,13 +777,13 @@ if [ "$doctor" = yes ]; then
         what="$plugin_name:$name, and loads beside it"
         [ -d "$plugin/skills/$name" ] || what="a skill the plugin retired, which can still load as a bare skill"
         if [ -L "$entry_path" ]; then
-          fix "$skills_dir/$name is an old link to $(link_target "$entry_path" || readlink "$entry_path"), a copy of $what. Run ./link.sh --unlink from that clone, or remove it"
+          fix "$skills_dir/$name is an old link to $(link_target "$entry_path" || readlink "$entry_path"), a copy of $what. Remove the link"
         else
           fix "$skills_dir/$name is a personal copy of $what"
         fi
       elif [ -L "$entry_path" ]; then
         case "$(link_target "$entry_path" || true)" in
-          "$repo/$plugin"/skills/*) fix "$skills_dir/$name links into this clone and loads a second copy of a skill. link.sh did not make it; remove it by hand" ;;
+          "$repo/$plugin"/skills/*) fix "$skills_dir/$name links into this clone and loads a second copy of a skill. Remove it by hand" ;;
         esac
       fi
     done

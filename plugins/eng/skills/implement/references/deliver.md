@@ -16,8 +16,12 @@ rulings.
   default branch. Anything Delivery leaves out needs the user's latest
   message.
 - An issue write is covered only when Delivery names it with every value
-  `eng:issue` would ask for. A comment is never covered, nor an @mention
-  or an assignee other than the user unless the repo's guidance names them.
+  `eng:issue` would ask for. A new issue names its tracker and target,
+  title, labels, assignee, and each value of the section in `eng:issue`'s
+  [estimate.md](../../issue/references/estimate.md), which the run files as
+  approved. An edit, label change or close names the issue and the change.
+  A comment is never covered, nor an @mention or an assignee other than the
+  user unless the repo's guidance names them.
 
 ## Rulings
 

@@ -92,7 +92,8 @@ drops the `Co-Authored-By` trailer, an empty `pr` drops the "Generated with
 Claude Code" footer, and `sessionUrl: false` drops the claude.ai session link
 that a Remote Control session adds to both. Setting `"attribution": false`
 instead drops all three. `eng:commit` and `eng:pr` keep all three out either
-way, and a `Claude-Session` trailer too, so the setting is the second lock. A
+way, and a `Claude-Session` trailer too, so the setting is the second lock.
+`eng:issue` keeps them out of issues and comments. A
 repo's own `.claude/settings.json` or `.claude/settings.local.json` beats this
 file, so one that sets `attribution` can turn the lines back on there. A cloud
 session reads neither this file nor the plugin installed on your machine.
@@ -467,7 +468,7 @@ above leaves out the ones you do not want.
 | [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
 | [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
-| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and drafts every comment to a file |
+| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, assigns you and sizes, prioritises and dates each new issue, files only when asked or when an approved plan's Delivery names the write, and drafts every comment to a file |
 | [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
 | [merge-conflicts](plugins/eng/skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |
@@ -529,19 +530,21 @@ push, so two pull requests that picked the same version fail there.
 
 `plugins/eng/evals/` holds cases for `claude plugin eval`: each workflow skill
 loads at its moment, a request to open a PR among them, `eng:issue` stays out
-of "look into issue 42", the contract is in context at the start, looking into
-a repo commits nothing, a commit waits for `eng:commit`, and an unreviewed
-hand-back gets the review gate's reminder. Every run is a model call on your
-account, so they stay out of CI. Run them before a release:
+of "look into issue 42", an issue draft carries its assignee and estimate, the
+contract is in context at the start, looking into a repo commits nothing, a
+commit waits for `eng:commit`, and an unreviewed hand-back gets the review
+gate's reminder. Every run is a model call on your account, so they stay out
+of CI. Run them before a release:
 
 ```bash
-claude plugin eval plugins/eng --ablation none --runs 1 --scaffold --allow-tools Bash \
-  --no-publish --max-cost-usd 2
+claude plugin eval plugins/eng --ablation none --runs 1 --scaffold --allow-tools Bash Write Edit \
+  --no-publish --max-cost-usd 3
 ```
 
-`--scaffold` builds the scratch repo one case needs. Bash is a gated tool, so a
-case gets it only when it lists Bash in `allowed_tools` and the run passes
-`--allow-tools Bash`; the case that forbids `git commit` does both.
+`--scaffold` builds the scratch repo one case needs. Bash, Write and Edit are
+gated tools, so a case gets one only when it lists it in `allowed_tools` and
+the run passes it to `--allow-tools`; the case that forbids `git commit` does
+both for Bash, and the issue draft case for Write.
 
 The eval sandbox blocks `git`, so two things are checked by hand: the review
 loop, and whether Claude acts on the reminder to review the whole PR after a

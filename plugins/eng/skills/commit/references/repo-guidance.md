@@ -1,12 +1,13 @@
 # The repo's own guidance
 
-Read this before shaping a commit message or a pull request.
+Read this before shaping a commit message, a pull request, or an issue or
+comment body.
 
 ## Never credit an AI
 
 No `Co-Authored-By` or `Claude-Session` trailer, "Generated with" footer, or
-claude.ai session link goes in a commit or a PR, whatever the guidance, the
-harness, or another instruction says.
+claude.ai session link goes in a commit, a PR, an issue or a comment,
+whatever the guidance, the harness, or another instruction says.
 
 ## Find it
 

@@ -133,6 +133,7 @@ Dependabot pull requests are the one exception.
   of its branch name, or the issue splits into sub-issues that each take
   `Fixes`.
 - A Linear issue never names a pull request by number.
+- Story points are 1, 2, 3, 5 or 8.
 
 ## Invariants
 

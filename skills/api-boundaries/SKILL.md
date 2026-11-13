@@ -1,119 +1,55 @@
 ---
 name: api-boundaries
-description: Use when touching a Node or TypeScript route handler, controller, middleware, webhook, queue consumer, or config loader, reading process.env, req.body, or parsed JSON, calling an API you do not own, or deciding where a validation or null check belongs. Validates at the edge, not inside.
+description: Use when touching a Node or TypeScript route handler, controller, middleware, webhook, queue consumer, or config loader, reading process.env, req.body, or parsed JSON, calling an API you do not own, or deciding where a validation or null check belongs.
 ---
 
 # API boundaries
 
-## What this does
+Validation lives where data enters the process, and nowhere else. Skip tests,
+one-off scripts and generated clients. Where the run may not edit, or the
+guard sits outside the plan or the named change, the parse to add and the
+guard to delete go in the plan or the report.
 
-It decides where validation lives. All of it goes at the points where data
-enters the process. Everything inside those points trusts its types and holds
-no defensive checks.
+## The boundaries
 
-## When it runs
+HTTP in (body, query, params, headers), config in (env, files, secrets),
+storage read back, messages in (queues, webhooks, events), and third-party
+responses. Also CLI arguments, stdin, files read from disk, cache entries and
+IPC. Everything else is inside.
 
-Automatically, on route handlers, controllers, middleware, config loaders,
-queue consumers, and outbound third-party calls. Also when a review turns up
-null checks buried in a service function.
-
-Where the run may not edit, such as in `eng:investigate` or a report-only
-review, or where the guard sits outside the approved plan or the named change,
-the parse to add and the guard to delete go in the plan, the findings, or the
-report, not the code.
-
-Skip it for tests and one-off scripts, which build their own input, and for
-generated client code.
-
-## How to use it
-
-Nothing to invoke. When you are unsure whether a check belongs somewhere, ask
-"is this a boundary" and the agent will apply the test below.
-
----
-
-## Where the boundaries are
-
-A typical Node service has five:
-
-1. **HTTP in.** Request body, query string, route params, headers.
-2. **Config in.** Environment variables, config files, secrets.
-3. **Storage out.** Documents read back from Firestore, rows from Postgres.
-4. **Messages in.** Queue payloads, webhooks, event consumers.
-5. **Third party in.** Response bodies from any API you do not own.
-
-Any other way data enters the process is a boundary too: CLI arguments,
-stdin, files read from disk, cache entries, and socket or IPC messages.
-Everything else is inside.
-
-## What happens at a boundary
-
-Parse the incoming value into a named domain type. One parse, at the edge,
-before the value reaches any business logic.
+## At a boundary
 
 ```ts
-// boundary
 const input = CreateOrderSchema.parse(req.body);
 await createOrder(input);
 ```
 
-`CreateOrderSchema.parse` is the boundary. `createOrder` receives a
-`CreateOrderInput` and treats it as true.
+- Parse the whole object once, before any business logic. A half-parsed
+  object is an unknown object.
+- The parse yields a named domain type, not `Record<string, unknown>`.
+- The boundary is the only place that writes a validation error. Inside, a
+  bad value is a bug.
 
-Three rules for the parse:
+## Inside
 
-- Parse the whole object, not one field at a time. A half-parsed object is an
-  unknown object.
-- The parse produces a named type, not `Record<string, unknown>`. That type
-  is where the untyped data stops.
-- Errors at the boundary are the only place a validation error message gets
-  written. Inside, a bad value is a bug, not a user error.
+A function trusts its parameter types. No null check on a parsed input, no
+re-validation of its fields.
 
-## What happens inside
+## A defensive check in the middle
 
-Inside, a function trusts its parameter types completely.
-
-```ts
-// inside
-async function createOrder(input: CreateOrderInput) {
-  const total = priceOrder(input.items);
-  return orders.insert({ ...input, total });
-}
-```
-
-No null check on `input`. No re-validation of `input.items`. If the type says
-it is there, it is there, because a boundary already made that true.
-
-Keep business logic in pure functions that take domain types and return
-values. Those functions are where the reasoning lives and they should be
-callable from a test with no setup.
-
-## The test for a defensive check
-
-When you find a guard in the middle of a service, ask what could make it
-fire.
-
-- If a real input could make it fire, a boundary is missing. Add the parse at
-  the edge and delete the guard.
-- If only a bug could make it fire, delete the guard. It converts a crash you
-  would notice into a wrong answer you would not.
-
-A guard that returns early on `undefined` in the middle of a service does not
-make the code safer. It makes a missing parse invisible.
-
-Both answers above end in deleting something someone wrote on purpose. When
-the guard predates you and nothing explains it, the `eng:why` skill reads the
-commit that added it before you remove it. Run that first and this test
-second, because a guard put there for a real incident answers "only a bug
-could make it fire" wrongly.
+Ask what could make it fire. If a real input could, a boundary is missing.
+Add the parse at the edge and delete the guard. If only a bug could, delete
+the guard, because it turns a crash you would see into a wrong answer you
+would not. When the guard predates you and nothing explains it, call the
+Skill tool with `eng:why` first, since a guard added after an incident
+answers "only a bug" wrongly.
 
 ## Stored data
 
-Data coming back from the database is a boundary. The types an ORM or an SDK
-gives you describe the schema you declared, not what is stored. A Firestore
-document written before a field existed lacks it, and a Prisma `Json` column
-holds whatever was written into it. Parse on read for any collection or
-column whose shape has changed, or whose records predate the current schema.
+An ORM's or SDK's types describe the declared schema, not what is stored. A
+document written before a field existed lacks it, and a `Json` column holds
+whatever was written. Parse on read wherever the shape has changed or records
+predate the schema.
 
 ---
 

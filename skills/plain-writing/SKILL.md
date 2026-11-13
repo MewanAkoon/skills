@@ -1,37 +1,15 @@
 ---
 name: plain-writing
-description: Use before writing prose a person will read outside this chat, such as a doc, README, commit message, PR or issue body, code comment, changelog, or message draft, and before a reply longer than three paragraphs. Removes AI tells and makes writing read like a person wrote it.
+description: Use before writing prose a person will read outside this chat, such as a doc, README, commit message, PR or issue body, code comment, changelog, or message draft, and before a reply longer than three paragraphs. Removes AI tells.
 ---
 
 # Plain writing
 
-## What this does
-
-It strips the patterns that make writing sound machine-generated, and it
-replaces them with plain language. It covers punctuation, word choice,
-sentence shape, and structure.
-
-## When it runs
-
-Whenever prose is being written or edited. With the `eng` plugin installed,
-the Punctuation and Word choice sections below already reach every session,
-so every reply follows them. Load the whole skill for prose that outlives the
-chat, and for a reply longer than three paragraphs, where sentence shape,
-structure, and the self-audit matter too.
-
-Commit messages, PR descriptions, issue bodies, and code comments count, and
-people forget those are prose as well.
-
-Skip text a program reads, such as JSON, a config value, or a log line a
-parser matches, and text quoted word for word, such as an error message or a
-line cited from a source.
-
-## How to use it
-
-Nothing to invoke. The self-audit at the bottom runs on the text before it is
-sent, not after someone complains about it.
-
----
+The Punctuation and Word choice sections reach every session through the
+`eng` plugin's hook. The rest applies to prose that outlives the chat,
+commit messages, PR and issue bodies and code comments included, and to a
+reply longer than three paragraphs. Skip text a program reads, and text
+quoted word for word.
 
 ## Punctuation
 
@@ -72,14 +50,9 @@ question", "Good catch", "You're absolutely right", "Certainly".
 ## Sentences
 
 Write in active voice and name the actor. "The compiler validates the query",
-not "the query is validated". Passive is fine only when the actor genuinely
-does not matter.
+not "the query is validated".
 
-One idea per sentence. If a reader has to go back to parse a sentence, break
-it in two.
-
-Cut adverbs or use a stronger verb. "Runs quickly" becomes "is fast" or the
-actual number. An adverb propping up a weak verb means the verb is wrong.
+One idea per sentence. Cut adverbs: "runs quickly" becomes the number.
 
 Cut a trailing -ing clause that carries no fact: "highlighting the need
 for", "ensuring reliability", "reflecting the team's priorities". State the
@@ -104,12 +77,10 @@ when the third item was invented to fill the pattern.
 Pick one term for a thing and repeat it. Cycling through synonyms for the
 same concept makes the reader wonder whether you mean something different.
 
-Write "**Schema in TypeScript.** Tables live in one file." That is a bold
-lead-in followed by new detail, which is fine. Do not write "**Performance:**
-Performance improved by 20%", where the label restates the line. Convert
-those to prose.
-
-Bold sparingly. Not every proper noun and acronym.
+A bold lead-in earns its place by adding new detail after it:
+"**Schema in TypeScript.** Tables live in one file." A label that restates
+its line, as in "**Performance:** Performance improved by 20%", becomes prose.
+Bold sparingly.
 
 ## Named sources only
 
@@ -122,13 +93,10 @@ closers say nothing.
 
 ## Code comments
 
-A comment in source code has to pass two checks the rest of this file does
-not cover: whether it earns its place at all, and whether every reference in
-it still resolves for someone with a fresh clone.
-
-Read [references/code-comments.md](references/code-comments.md) before
-writing or editing any comment in code. Skip it for every other kind of
-prose.
+Before writing or editing a comment in code, read
+[references/code-comments.md](references/code-comments.md). It holds two
+checks: whether the comment earns its place, and whether everything it points
+at resolves from a fresh clone.
 
 ## Self-audit
 

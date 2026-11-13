@@ -6,6 +6,38 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.19.0 - unreleased
+
+### Changed
+
+- `eng:issue` assigns every new issue to you: `--assignee @me` on GitHub,
+  `assignee: "me"` in Linear, the signed-in user in Jira. Your message or
+  the repo's guidance naming someone else, or nobody, wins, and an edit
+  leaves the assignee alone. When the assignee fails, the issue is filed
+  without it and the report says so.
+- Every new issue ends with an "Estimate and priority" section: priority
+  with a reason, effort and story points, a time estimate across plan,
+  implement, test, PR and review, merge and final test, a due date set by
+  priority, and the recommended approach, the one place the body names the
+  implementation. The new `issue/references/estimate.md` holds the rules,
+  calibrates time from the repo's merged pull requests and points from
+  closed issues, and falls back to about 2 hours per pull request. The
+  tracker's own fields carry the same values where they exist: Linear's
+  priority, estimate and due date, Jira's priority, story points and due
+  date, and a GitHub Project's fields when the guidance names one.
+- Jira with Atlassian's MCP tools is handled like Linear, in the new
+  `issue/references/jira.md`. Without tools, the copy-paste draft adds a
+  fields file.
+- No AI credit line, "Generated with" footer or session link goes in an
+  issue or a comment, the same rule as commits and pull requests.
+- A new issue in an approved plan's Delivery names its assignee and every
+  estimate value, so the run files it without asking.
+
+### Added
+
+- The `issue-draft-fields` eval case checks that an issue draft carries its
+  assignee, the estimate section, and no AI credit.
+
 ## 0.18.0 - unreleased
 
 ### Fixed

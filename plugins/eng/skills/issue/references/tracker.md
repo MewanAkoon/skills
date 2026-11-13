@@ -17,8 +17,13 @@ keys in branch names.
 Linear with no team named: ask, listing `list_teams`. Under a plan, Delivery
 names both.
 
-- GitHub: `SKILL.md` as written.
+- GitHub: `SKILL.md` as written, with [github.md](github.md)'s fields.
 - Linear with its MCP tools, loaded or deferred: know them by description,
   since a server can be named by an id, and follow [linear.md](linear.md).
-- Anything else: call no tools, skip search, labels and filing, and write
-  copy-paste text. A comment asked for there is a `comment-<issue>.md` draft.
+- Jira with Atlassian's MCP tools: follow [jira.md](jira.md).
+- Anything else, Jira without its tools included: call no tracker tools, and
+  skip search, labels and filing. Step 5's draft is the copy-paste text, with
+  a third file, `issue-<slug>.fields`, with one `Name: value` line each for
+  the tracker and project, the assignee step 5 names, priority, effort,
+  story points, due date, and labels. A comment
+  asked for there is a `comment-<issue>.md` draft.

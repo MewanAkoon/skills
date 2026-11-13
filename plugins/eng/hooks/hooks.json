@@ -1,5 +1,5 @@
 {
-  "description": "Sends the eng workflow contract and the core writing rules at session start and after each compaction, and enforces the workflow: nothing is posted but a Linear issue comment through eng:issue; commits, pushes, PRs and issues go only through their skills, and not when your latest message says not to; risky remote writes, such as a delete, share, send, deploy or merge, ask first, while plain edits through MCP tools are left to Claude Code's own permissions; changed code gets a review reminder before hand-back; a push or a new PR gets a reminder to review the whole PR; and under a plan you approved, a push or a new PR asks off the plan's branch or through any tool but Bash, and on that branch through Bash or a shell tool is denied for a tree the review did not read, and the stop after it keeps the PR's review going.",
+  "description": "Sends the eng workflow contract and the core writing rules at session start and after each compaction, and adds a few categorical guards: no comment, review or reply is posted; every remote write the hook finds from a subagent is denied: a shell command's, a post through any MCP tool, an MCP write whose name asks, and the GitHub and git MCP writes it maps to commits, pushes, PRs and issues; merges, releases, deploys, force pushes and other writes that are hard to take back ask first, while commits, pushes, PRs and issues are left to Claude Code's own permissions; code-review never runs with --comment or --post, and the model never runs it with --fix or ultra; and changed code that has not been reviewed gets one reminder before hand-back.",
   "hooks": {
     "SessionStart": [
       {
@@ -49,19 +49,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Skill|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/eng-hook post-tool",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "matcher": "Bash",
+        "matcher": "Skill",
         "hooks": [
           {
             "type": "command",

@@ -46,6 +46,50 @@ follow semantic versioning.
 
 - `eng:wayfinder`.
 
+## 0.16.0 - unreleased
+
+### Removed
+
+- The hook no longer reads your messages. Gone with that: the plan grants
+  and `grant-writes.log`, the check for a "no" in your latest message, the
+  rule that a commit, push, PR or issue write waits for its skill to load,
+  and the hints for a pull request link, a review comment link and a git
+  conflict.
+- The reminder to review the whole PR after a push, and the
+  `PostToolUseFailure` hook that fed it. Nothing checks any more that a
+  pushed tree is the one the review read.
+- The exception for a comment on a Linear issue. It is a post like any other
+  now, and denied.
+- The MCP checks that read a tool's input, and the nouns, such as
+  `permission`, `payment` or `token`, that made a name ask.
+- The `commit-gate-on-request` eval, which tested the skill-loaded gate.
+
+### Changed
+
+- In the main session the hook decides only that a post is denied and a
+  write that is hard to take back asks, apart from the code-review flag
+  guard and the ask when its command parser fails. A commit, push, PR or
+  issue write gets no decision, so Claude Code's own permission settings
+  decide it. That covers `gh stack push`, `sync` and `submit`; `gh stack merge`,
+  `unstack` and `link` ask.
+- Every remote write the hook finds from a subagent is denied, with one
+  reason: a commit, push, PR or issue write, a post, and every write that
+  asks in the main session, such as `gh stack merge` or a deploy. That holds
+  for shell commands, for a post through any MCP tool, and for the GitHub and
+  git MCP writes the hook maps to commits, pushes, PRs and issues. Other MCP
+  writes, such as a Linear issue, a Notion page or a GitHub repository or
+  gist, pass unless their name is one that asks, which a subagent is
+  denied.
+- An MCP tool asks only when its name deletes, merges, releases, deploys,
+  sends or publishes, or when it closes, reopens or updates the branch of a
+  GitHub PR. A share, trash, move, assignment or invite no longer asks, and
+  neither does an input that deletes inside a generic tool. GitHub and git
+  writes through MCP still count as commits, pushes, PRs and issue writes,
+  so a GitHub `delete_issue` gets no decision and a subagent's is denied.
+- The review reminder keeps one hash. Any code-review the main session runs
+  clears it, whatever it was pointed at, and a tree gets the reminder once:
+  a second stop on the same changes passes.
+
 ## 0.15.0 - unreleased
 
 ### Changed

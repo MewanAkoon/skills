@@ -407,7 +407,7 @@ fi
 # The hook stops its command parser after PARSE_SECONDS, so it can still
 # answer before Claude Code stops the hook at its PreToolUse timeout and runs
 # the command unread. The limit has to stay under the timeout with 3 seconds
-# to spare, for the hook's own reads of its input and state around the parse.
+# to spare, for the hook's own reads of its input around the parse.
 # eng-hook sets it on a line of its own, as PARSE_SECONDS=<whole seconds>.
 hooks_json="$plugin/hooks/hooks.json"
 eng_hook="$plugin/hooks/eng-hook"
@@ -592,9 +592,9 @@ sh -n "$eng_hook" || bad "$eng_hook: does not parse"
 awk -f "$plugin/hooks/classify-command.awk" < /dev/null > /dev/null || bad "$plugin/hooks/classify-command.awk: does not load"
 
 # The hooks run at every session start and around every command, and a broken
-# check fails open by design, all but the command parser and a Linear comment
-# the hook has no state for, so their fixtures run here as well as in CI. The
-# script holds the 5,000-byte budget for the block the session hook sends.
+# check fails open by design, all but the command parser, so their fixtures
+# run here as well as in CI. The script holds the 5,000-byte budget for the
+# block the session hook sends.
 ./scripts/test-hooks.sh >/dev/null || bad "scripts/test-hooks.sh failed; run it for the details"
 
 # scripts/cloud-setup.sh runs only on a cloud VM, where nobody watches it, so
@@ -789,10 +789,10 @@ if [ "$doctor" = yes ]; then
     done
   fi
 
-  # The hooks fail open, all but the command parser and a Linear comment with
-  # no state, so a broken one mostly shows only in their log. Claude Code
-  # names the data directory after the plugin id, with every character other
-  # than a letter, a digit, _ or - turned into -.
+  # The hooks fail open, all but the command parser, so a broken one mostly
+  # shows only in their log. Claude Code names the data directory after the
+  # plugin id, with every character other than a letter, a digit, _ or -
+  # turned into -.
   data_root="${CLAUDE_CODE_PLUGIN_CACHE_DIR:-$config/plugins}/data"
   hook_log="$data_root/$(printf '%s' "$id" | sed 's/[^A-Za-z0-9_-]/-/g')/eng-hook.log"
   if [ -s "$hook_log" ]; then
@@ -825,8 +825,8 @@ if [ "$doctor" = yes ]; then
     # run without a prompt, and the two ask rules keep one on a stack merge,
     # which lands pull requests and cannot be undone, and on an unstack, which
     # removes the stack on GitHub. Ask rules win over allow rules, whatever
-    # order they sit in. The hook still gates the stack's push, sync and
-    # submit on its own.
+    # order they sit in. The hook denies a stack's push, sync and submit from
+    # a subagent, and leaves them to these rules in the main session.
     for perm in 'allow Bash(gh stack:*)' 'ask Bash(gh stack merge:*)' 'ask Bash(gh stack unstack:*)'; do
       perm_list="${perm%% *}"
       perm_rule="${perm#* }"

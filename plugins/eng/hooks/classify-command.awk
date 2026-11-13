@@ -3,10 +3,11 @@
 #
 #   post <what>            a comment, review or reply; always denied
 #   gate commit|push|pr|issue
-#                          a write the matching eng skill runs
-#   confirm <what>         any other write outside this machine; always asks
-#   open pr                a pull or merge request it opens, beside its gate
-#                          line, for the reminder to review the whole PR
+#                          a commit, push, pull request or issue write;
+#                          denied in a subagent, and otherwise left to Claude
+#                          Code's own permission settings
+#   confirm <what>         any other write outside this machine; asks, and
+#                          denied in a subagent
 #
 # It prints nothing for a command that writes nowhere else. Plain POSIX awk,
 # because the hook runs on macOS's awk and on Linux's.
@@ -293,7 +294,7 @@ function substitution(i, n,    k) {
 # Each line goes out as soon as it is found, so the hook still reads it when
 # awk dies on a signal later in the command.
 function emit(line) {
-  if (postsonly && line !~ /^(post|gate|open) /) return
+  if (postsonly && line !~ /^(post|gate) /) return
   if (!(line in seen)) { seen[line] = 1; print line; fflush() }
 }
 
@@ -655,12 +656,9 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
     w = segw[s, i + 1] " " segw[s, i + 2]
     # --fill implies --push, which pushes the branch.
     # -f is --fill; it may sit among glab's other one-letter switches, -y and -w.
-    # A create opens a merge request, unless --web or -w, alone or among those
-    # switches, leaves it to the browser.
     if (w ~ /^mr (create|new|update|ready)$/) {
       emit("gate pr")
       if (has_flag(s, i + 3, "^(--push|--fill|-[yw]*f[A-Za-z]*)$")) emit("gate push")
-      if (w ~ /^mr (create|new)$/ && !has_flag(s, i + 3, "^(--web(=true)?|-[yf]*w[yf]*)$")) emit("open pr")
     }
     else if (w ~ /^(issue (create|new|update|close|reopen|delete)|label (create|delete|edit))$/) emit("gate issue")
     else if (w ~ /^(mr (merge|close|reopen|delete|revoke|rebase)|release (create|delete|upload)|repo (create|delete|fork|archive)|ci (run|retry|cancel|delete)|variable (set|update|delete)|schedule (create|delete|run))$/) emit("confirm glab " w)
@@ -736,7 +734,7 @@ function classify(s, from,    i, n, w, cmd, j, list, k, m) {
   if (cmd == "gt") {
     for (j = i + 1; j <= n && segw[s, j] ~ /^-/; j++) if (segw[s, j] == "--cwd") j++
     if (segw[s, j] ~ /^(stack|branch|upstack|downstack)$/) j++
-    if (segw[s, j] ~ /^(submit|ss|s)$/) { emit("gate push"); emit("gate pr"); if (!has_flag(s, j + 1, "^--dry-run$")) emit("open pr") }
+    if (segw[s, j] ~ /^(submit|ss|s)$/) { emit("gate push"); emit("gate pr") }
     else if (segw[s, j] == "merge") emit("confirm gt merge")
     return
   }
@@ -859,7 +857,7 @@ function gh_command(s, i,    g, c, from, comment, at) {
     else if (c == "create") {
       # --web and --dry-run open no pull request, but either can push the branch.
       # -w may sit among the other switches that take no value, -d and -f.
-      if (has_flag(s, from, "^(--web(=true)?|--dry-run(=true)?|-[df]*w[df]*)$")) emit("gate push"); else { emit("gate pr"); emit("open pr") }
+      if (has_flag(s, from, "^(--web(=true)?|--dry-run(=true)?|-[df]*w[df]*)$")) emit("gate push"); else emit("gate pr")
     }
     else if (c ~ /^(edit|ready|lock|unlock)$/) emit("gate pr")
     else if (c ~ /^(merge|close|reopen|update-branch|revert)$/) emit("confirm gh pr " c)
@@ -896,7 +894,7 @@ function gh_command(s, i,    g, c, from, comment, at) {
   # also opens its pull requests, and the rest change them on GitHub.
   if (g == "stack") {
     if (c ~ /^(push|sync)$/) emit("gate push")
-    else if (c == "submit") { emit("gate push"); emit("gate pr"); emit("open pr") }
+    else if (c == "submit") { emit("gate push"); emit("gate pr") }
     else if (c ~ /^(merge|unstack|link)$/) emit("confirm gh stack " c)
     return
   }
@@ -1037,7 +1035,7 @@ function api_write(method, path, text) {
     }
     if (text ~ /(addComment|addPullRequestReview|submitPullRequestReview|updatePullRequestReview|deletePullRequestReview|resolveReviewThread|unresolveReviewThread|updateIssueComment|deleteIssueComment|addDiscussionComment|updateDiscussionComment|addReaction|removeReaction|minimizeComment)/) emit("post a GraphQL comment or review mutation")
     else if (text ~ /(createIssue|updateIssue|closeIssue|reopenIssue|deleteIssue|transferIssue|pinIssue|unpinIssue|lockLockable|unlockLockable|LabelsToLabelable|LabelsFromLabelable|createLabel|updateLabel|deleteLabel|SubIssue|AssigneesToAssignable|AssigneesFromAssignable|BlockedBy)/) emit("gate issue")
-    else if (text ~ /(createPullRequest|updatePullRequest|markPullRequestReadyForReview|convertPullRequestToDraft)/) { emit("gate pr"); if (text ~ /createPullRequest/) emit("open pr") }
+    else if (text ~ /(createPullRequest|updatePullRequest|markPullRequestReadyForReview|convertPullRequestToDraft)/) emit("gate pr")
     else emit("confirm a GraphQL mutation")
     return
   }
@@ -1048,6 +1046,6 @@ function api_write(method, path, text) {
   if (path ~ /(^|\/)git\/refs(\/|$)/ && method == "DELETE") { emit("confirm " method " " path); return }
   if (path ~ /(^|\/)(contents|git\/(refs|commits|trees|blobs|tags))(\/|$)/) { emit("gate push"); return }
   if (path ~ /(^|\/)(issues|labels|milestones|sub_issues|sub_issue|dependencies|assignees)(\/|$)/) { emit("gate issue"); return }
-  if (path ~ /(^|\/)pulls(\/|$)/) { emit("gate pr"); if (path ~ /(^|\/)pulls\/?$/ && method == "POST") emit("open pr"); return }
+  if (path ~ /(^|\/)pulls(\/|$)/) { emit("gate pr"); return }
   emit("confirm " method " " path)
 }

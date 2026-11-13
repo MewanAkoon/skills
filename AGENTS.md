@@ -7,10 +7,10 @@ For any agent working in this repo.
 A source of agent skills, not an application, shipped as one Claude Code
 plugin, `eng`. There is nothing to build. The tests that run are the fixtures
 `check.sh` runs for the hook, for `scripts/cloud-setup.sh`, and for
-`check.sh`'s own version rule and the validator wrapper. `tests/review-loop/` holds the setup for a check run by hand, and
-`plugins/eng/evals/` the cases for `claude plugin eval`, also run by hand.
-Every `SKILL.md` loads into some other repo's session, so a change here changes
-how an agent behaves everywhere.
+`check.sh`'s own version rule and the validator wrapper. `tests/review-loop/`
+holds the setup for a check run by hand, and `plugins/eng/evals/` the cases for
+`claude plugin eval`, also run by hand. Every `SKILL.md` loads into some other
+repo's session, so a change here changes how an agent behaves everywhere.
 
 The repo is the marketplace, and the plugin is one folder in it,
 `plugins/eng/`, so an install copies that folder and nothing else.
@@ -172,12 +172,12 @@ Dependabot pull requests are the one exception.
   skill", and every skill named that way exists and is model-invoked.
 - Size budgets, because each of these loads into someone's context. A
   model-invoked description is at most 300 bytes, and the set at most 3,900.
-  `standards/workflow.md` is at most 3,000 bytes, and the block the session
-  hook sends at most 5,000. `investigate`'s `SKILL.md` is at most 6,500 bytes,
-  `issue`'s 6,000, and `implement`'s and `pr-feedback`'s 5,000 each, with
-  `implement/references/review.md` at most 3,500. Every other `SKILL.md` and
-  every reference file is at most 15,000 bytes, inside the 20,000 characters
-  compaction keeps of a skill.
+  `plugins/eng/standards/workflow.md` is at most 3,000 bytes, and the block the
+  session hook sends at most 5,000. `investigate`'s `SKILL.md` is at most 6,500
+  bytes, `issue`'s 6,000, and `implement`'s and `pr-feedback`'s 5,000 each,
+  with `implement/references/review.md` at most 3,500. Every other `SKILL.md`
+  and every reference file is at most 15,000 bytes, inside the 20,000
+  characters compaction keeps of a skill.
 - Every `scripts/*.sh`, `tests/*/*.sh`, and `plugins/eng/evals/*/scaffold.sh`
   parses under `bash -n`, because the checker runs few of them.
   `plugins/eng/hooks/eng-hook` parses under `sh -n`, which names a syntax error
@@ -189,7 +189,7 @@ Dependabot pull requests are the one exception.
   `plugin.json` carries a `MAJOR.MINOR.PATCH` version. Both give the plugin the
   same description.
 - `plugins/eng/.claude-plugin/icon.png` is a PNG, square, 512 to 2048 pixels a
-  side, and under 2 MB. The plugin directory refuses a submission without one,
+  side, and under 2 MB. 2.1.318's plugin directory checks warn without one,
   and the validator CI pins does not look for it.
 - The PreToolUse timeout in `plugins/eng/hooks/hooks.json` is at least 3
   seconds more than the command parser's time limit, which
@@ -270,7 +270,7 @@ own fence with no marker, beside the one that runs anywhere.
 ## Prose
 
 Every file here is prose a human reads, so
-[skills/plain-writing/SKILL.md](plugins/eng/skills/plain-writing/SKILL.md)
+[plugins/eng/skills/plain-writing/SKILL.md](plugins/eng/skills/plain-writing/SKILL.md)
 governs this repo's own files too.
 
 ## Which file each harness reads

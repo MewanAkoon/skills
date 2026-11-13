@@ -104,14 +104,13 @@ trigger phrases. The flag alone is not a guarantee.
 ### Lifecycle skills
 
 Three skills own the phases of
-[standards/workflow.md](plugins/eng/standards/workflow.md): `investigate`,
-`implement`, and `pr-feedback`. Each is model-invoked, and the workflow names
-it at its step, so the change of phase is the cue rather than a search of the
-listing.
-Step 5's writes go through `commit`, `pr`, and `issue`, named the same way. A
-new skill that claims a phase competes with the one that owns it. Move its
-content into that skill's `references/` instead, which is how `how`,
-`architect`, and `diagnose-bug` became part of `investigate`, and
+[plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md):
+`investigate`, `implement`, and `pr-feedback`. Each is model-invoked, and the
+workflow names it at its step, so the change of phase is the cue rather than a
+search of the listing. Step 5's writes go through `commit`, `pr`, and `issue`,
+named the same way. A new skill that claims a phase competes with the one that
+owns it. Move its content into that skill's `references/` instead, which is how
+`how`, `architect`, and `diagnose-bug` became part of `investigate`, and
 `tdd-node-api` became `implement`'s `references/tdd.md`.
 
 A skill that two phases call, or that answers a question on its own, stays

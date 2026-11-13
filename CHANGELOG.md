@@ -12,9 +12,15 @@ follow semantic versioning.
 
 - The plugin now lives in `plugins/eng/`, and the marketplace lists it with
   `"source": "./plugins/eng"`, so an install copies the skills, hooks,
-  standards, evals and manifest, and none of the repo's scripts, tests or
+  standards, evals, manifest and icon, and none of the repo's scripts, tests or
   docs. The plugin id `eng@mewanakoon` and its data directory stay the same,
   so `claude plugin update eng@mewanakoon` moves an install across.
+- `scripts/validate-plugin.sh` validates the root and `plugins/eng --strict`,
+  and fails on any finding, a plugin directory warning included, where it
+  used to allow the root `CLAUDE.md` warning. `check.sh` checks the icon,
+  and its version rule reads `plugins/eng/` and leaves `evals/` out, so an
+  eval-only change needs no release. `scripts/test-checks.sh` covers the
+  rule and the wrapper.
 
 ### Added
 
@@ -33,8 +39,8 @@ follow semantic versioning.
   says how to remove one. `scripts/legacy.sh` went with it, and its list of
   retired skill names now lives in `check.sh`.
 - `scripts/stats.mjs`, its fixtures, and the `stats` and `test:stats` npm
-  scripts, so nothing here needs Node any more. The hook still writes its
-  logs.
+  scripts, so `check.sh` no longer needs Node. `npm run lint` and CI's
+  pinned validator still run through npx. The hook still writes its logs.
 
 ## 0.14.0 - unreleased
 

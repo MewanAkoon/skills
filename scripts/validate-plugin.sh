@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Runs `claude plugin validate` twice and fails on any finding: once over the
 # repo root, which reads the marketplace, and once over plugins/eng with
-# --strict, which reads the plugin and, from 2.1.318, runs the plugin
-# directory checks.
+# --strict, which reads the plugin. From 2.1.318 the second run also brings
+# the plugin directory checks, which run on any plugin folder.
 #
 # --strict alone is not enough. On 2.1.318 it exits 0 with a plugin directory
 # warning showing, so this reads the summary counts too.

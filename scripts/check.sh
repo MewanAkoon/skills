@@ -381,9 +381,9 @@ else
     || bad "$market_json: its plugin's description differs from the one in $plugin_json"
 fi
 
-# The plugin's icon. The plugin directory refuses a submission without one,
-# and only a validator newer than the pinned one in CI looks for it, so CI
-# reads it here: a PNG, square, 512 to 2048 pixels a side, under 2 MB. The
+# The plugin's icon. 2.1.318's plugin directory checks warn without one, and
+# only a validator newer than the pinned one in CI looks for it, so CI reads
+# it here: a PNG, square, 512 to 2048 pixels a side, under 2 MB. The
 # width and height are the first two 4-byte big-endian fields of the IHDR
 # chunk, which a PNG must put first, at bytes 16 to 23.
 icon="$plugin/.claude-plugin/icon.png"
@@ -822,10 +822,11 @@ if [ "$doctor" = yes ]; then
       fix "$settings does not turn attribution off, so Claude Code asks for an AI credit line or a session link on commits and PRs. Set attribution to {\"commit\": \"\", \"pr\": \"\", \"sessionUrl\": false}"
     fi
     # The README's permission rules for gh stack: the allow rule lets gh stack
-    # run without a prompt, and the two ask rules keep one on a stack merge
-    # and an unstack, which change GitHub and cannot be undone. An ask rule
-    # beats an allow rule, whatever order they sit in. The hook still gates
-    # the stack's push, sync and submit on its own.
+    # run without a prompt, and the two ask rules keep one on a stack merge,
+    # which lands pull requests and cannot be undone, and on an unstack, which
+    # removes the stack on GitHub. Ask rules win over allow rules, whatever
+    # order they sit in. The hook still gates the stack's push, sync and
+    # submit on its own.
     for perm in 'allow Bash(gh stack:*)' 'ask Bash(gh stack merge:*)' 'ask Bash(gh stack unstack:*)'; do
       perm_list="${perm%% *}"
       perm_rule="${perm#* }"

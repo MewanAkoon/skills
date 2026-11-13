@@ -48,9 +48,8 @@
 # command unread. A failure, though not a timeout, is written to eng-hook.log
 # in ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor reads, and cut to its last
 # 1000 lines once it passes 2000. A hook stopped by a signal exits 143
-# instead. Needs jq. Without it the session block goes
-# out as plain text, which Claude Code also takes as context, and every other
-# mode does nothing.
+# instead. Needs jq. Without it the session block goes out as plain text,
+# which Claude Code also takes as context, and every other mode does nothing.
 
 set -u
 

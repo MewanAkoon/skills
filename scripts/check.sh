@@ -825,8 +825,8 @@ if [ "$doctor" = yes ]; then
     # run without a prompt, and the two ask rules keep one on a stack merge,
     # which lands pull requests and cannot be undone, and on an unstack, which
     # removes the stack on GitHub. Ask rules win over allow rules, whatever
-    # order they sit in. The hook still gates the stack's push, sync and
-    # submit on its own.
+    # order they sit in. The hook denies a stack's push, sync and submit from
+    # a subagent, and leaves them to these rules in the main session.
     for perm in 'allow Bash(gh stack:*)' 'ask Bash(gh stack merge:*)' 'ask Bash(gh stack unstack:*)'; do
       perm_list="${perm%% *}"
       perm_rule="${perm#* }"

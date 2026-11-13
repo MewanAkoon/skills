@@ -241,7 +241,7 @@ DATABASE_URL=x pnpm prisma migrate deploy
 npx prisma migrate dev --name init
 == allow
 terraform plan
-== allow write gate commands with the skill loaded and asked for
+== allow issue and PR writes get no decision
 gh issue create --title x --body-file body.md
 == allow
 gh issue edit 5 --add-label bug

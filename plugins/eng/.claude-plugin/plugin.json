@@ -1,7 +1,7 @@
 {
   "name": "eng",
-  "version": "0.19.0",
-  "description": "Engineering skills for Claude Code: commits and PRs only when asked, TypeScript and API practice, debugging, review, and plain writing.",
+  "version": "0.20.0",
+  "description": "Engineering skills for Claude Code: commits and PRs once you approve or name the work, TypeScript and API practice, debugging, review, and plain writing.",
   "author": {
     "name": "MewanAkoon",
     "url": "https://github.com/MewanAkoon"

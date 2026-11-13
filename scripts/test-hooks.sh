@@ -210,22 +210,32 @@ run_case
 want="$(grep -c '^== ' "$cases")"
 [ "$count" -eq "$want" ] || bad "commands.cases: ran $count of $want cases"
 
-# mcp.cases: one "<expect> <tool name> [<tool input>]" per line.
+# mcp.cases: one "[subagent] <expect> <tool name> [<tool input>]" per line.
+# A line that starts with "subagent" runs with an agent_id, as a subagent's
+# call does. Every line that is neither blank nor a comment is a case, so a
+# misspelt one fails the count rather than being skipped.
 count=0
 while IFS=' ' read -r expect tool tool_input; do
+  case "$expect" in '' | '#'*) continue ;; esac
+  extra='{}' as=""
+  if [ "$expect" = subagent ]; then
+    extra='{"agent_id": "a1", "agent_type": "general-purpose"}' as=" as a subagent"
+    read -r expect tool tool_input <<< "$tool $tool_input"
+  fi
   case "$expect" in deny | ask | allow) ;; *) continue ;; esac
   [ -n "$tool_input" ] || tool_input='{}'
-  if ! call="$(jq -cn --arg t "$tool" --argjson i "$tool_input" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: $i}' 2>/dev/null)"; then
+  if ! call="$(jq -cn --arg t "$tool" --argjson i "$tool_input" --argjson x "$extra" \
+    '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: $i} + $x' 2>/dev/null)"; then
     bad "mcp.cases: the input for $tool is not JSON: $tool_input"
     count=$((count + 1))
     continue
   fi
   hook_run pre-tool "$call"
   got="$(verdict)"
-  [ "$got" = "$expect" ] || bad "pre-tool: got $got, want $expect, for $tool $tool_input"
+  [ "$got" = "$expect" ] || bad "pre-tool: got $got, want $expect, for $tool $tool_input$as"
   count=$((count + 1))
 done < tests/hooks/pre-tool/mcp.cases
-want="$(grep -Ec '^(deny|ask|allow) ' tests/hooks/pre-tool/mcp.cases)"
+want="$(grep -Evc '^[[:space:]]*(#|$)' tests/hooks/pre-tool/mcp.cases)"
 [ "$count" -eq "$want" ] || bad "mcp.cases: ran $count of $want cases"
 
 # The terminal tool that runs a command is read as a shell command.
@@ -324,7 +334,9 @@ long_post "a quoted string cut up by escapes"
 
 # Every remote write the hook finds from a subagent is denied, with the one
 # reason: a shell command's, a post through any MCP tool, an MCP write whose
-# name asks, and the GitHub and git MCP writes it maps. Its reads still pass.
+# name asks, the GitHub and git MCP writes it maps, and any tracker's issue,
+# ticket or work item writes. Its reads still pass. mcp.cases holds more
+# subagent cases for MCP tools.
 subagent='{"agent_id": "a1", "agent_type": "general-purpose"}'
 for command in 'gh stack push' 'gh stack sync' 'gh stack submit --auto' 'gh stack merge 42 --yes' \
   'gh stack unstack' 'gh stack link 41 42' 'git commit -m x' 'git push origin x' 'gh pr create --fill' \
@@ -366,8 +378,8 @@ for tool in mcp__github__push_files mcp__github__create_or_update_file mcp__gith
 done
 expect_mcp all allow mcp__github__get_issue '{}' '' "$subagent"
 expect_mcp all allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__list_comments '{}' '' "$subagent"
-# Linear's issue writes have no mapping, so a subagent's passes.
-expect_mcp all allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue '{"team":"SKI","title":"x"}' '' "$subagent"
+# Linear's issue writes are issue writes, so a subagent's is denied.
+expect_mcp all deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue '{"team":"SKI","title":"x"}' 'A subagent does not' "$subagent"
 # A push option is not a tag or a force, and a force among short options is.
 bash_call all 'git push -o tag origin main'
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'push options' \

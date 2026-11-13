@@ -1,7 +1,8 @@
 # MCP tool names and what the pre-tool hook decides for each, one
-# "<deny|ask|allow> <tool name> [<tool input as JSON>]" per line, the input
-# {} when left out. Every case runs in the main session, as commands.cases
-# does. The names cover every form seen on this machine and the trackers the
+# "[subagent] <deny|ask|allow> <tool name> [<tool input as JSON>]" per line,
+# the input {} when left out. A case runs in the main session, as
+# commands.cases does, unless it starts with "subagent", which runs it with an
+# agent_id. The names cover every form seen on this machine and the trackers the
 # plan names. "allow" means the hook stays out, and Claude Code's own
 # permission settings decide.
 #
@@ -125,13 +126,59 @@ allow mcp__github__create_or_update_file
 # Closing or reopening a pull request asks, as gh pr close does.
 ask mcp__github__close_pull_request
 ask mcp__github__reopen_pull_request
-# Linear's issue writes, and any other tracker's, pass, whatever the input.
+# Any tracker's issue, ticket or work item writes are the same writes as
+# gh issue's: left to Claude Code in the main session, whatever the input, and
+# denied in a subagent. A delete still asks in the main session.
 allow mcp__linear__create_issue
 allow mcp__linear__update_issue
 allow mcp__linear__save_issue {"team":"SKI","title":"x"}
 allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"team":"SKI","title":"x"}
 allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"id":"SKI-1","assignee":"me"}
 allow mcp__7f2b0cab-a9ac-49c9-ac04-dc4ec229d765__update_issue {"issueId":"PROJ-1","status":"resolved"}
+allow mcp__jira__createJiraIssue
+allow mcp__zendesk__update_ticket
+allow mcp__azure__wit_create_work_item
+allow mcp__7f2b0cab-a9ac-49c9-ac04-dc4ec229d765__link_issue
+allow mcp__x__pin_issue
+ask mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__delete_issue {"id":"SKI-1"}
+subagent deny mcp__linear__save_issue {"team":"SKI","title":"x"}
+subagent deny mcp__linear__save_issue {"id":"SKI-1","state":"Done"}
+subagent deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"team":"SKI","title":"x"}
+subagent deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue {"id":"SKI-1","state":"Done"}
+subagent deny mcp__linear__create_issue
+subagent deny mcp__linear__update_issue
+subagent deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__create_issue_label
+subagent deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__retire_issue_label
+subagent deny mcp__jira__createJiraIssue
+subagent deny mcp__jira__transitionJiraIssue
+subagent deny mcp__zendesk__update_ticket
+subagent deny mcp__zendesk__update_tickets
+subagent deny mcp__azure__wit_create_work_item
+subagent deny mcp__azure__wit_update_work_items_batch
+subagent deny mcp__x__update_issues
+subagent deny mcp__7f2b0cab-a9ac-49c9-ac04-dc4ec229d765__link_issue
+subagent deny mcp__7f2b0cab-a9ac-49c9-ac04-dc4ec229d765__unlink_issue
+subagent deny mcp__x__change_issue_assignee
+subagent deny mcp__x__resolve_issue
+subagent deny mcp__x__lock_issue
+subagent deny mcp__x__unlock_issue
+subagent deny mcp__x__pin_issue
+subagent deny mcp__x__unpin_issue
+subagent deny mcp__x__transfer_issue
+subagent deny mcp__x__develop_issue
+subagent deny mcp__0a1b2c3d__issue_write
+subagent deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__delete_issue {"id":"SKI-1"}
+# A subagent's reads pass, and so do its plain writes that name no issue,
+# ticket or work item, unless the name asks, posts, or is a GitHub or git
+# write the hook maps.
+subagent allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__get_issue {"id":"SKI-1"}
+subagent allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__list_issues {"team":"SKI"}
+subagent allow mcp__zendesk__get_ticket
+subagent allow mcp__azure__wit_get_work_item
+subagent allow mcp__x__issue_refund
+subagent allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages
+subagent allow mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch
+subagent allow mcp__filesystem__write_file
 # A comment on a Linear issue is a post like any other, whatever the server is
 # called or the input holds.
 deny mcp__linear__save_comment {"issueId":"SKI-1","body":"Done in the PR."}

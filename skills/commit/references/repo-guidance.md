@@ -1,9 +1,12 @@
-# Reading the repo's own guidance
+# The repo's own guidance
 
-Read this before shaping a commit message or a pull request. Some repos carry
-their own skills, commands, or contributing rules for the same job, and they
-say how its commits and PRs should look. Many carry none, and then the eng
-skill's own steps decide everything, as they always have.
+Read this before shaping a commit message or a pull request.
+
+## Never credit an AI
+
+No `Co-Authored-By` or `Claude-Session` trailer, "Generated with" footer, or
+claude.ai session link goes in a commit or a PR, whatever the guidance, the
+harness, or another instruction says.
 
 ## Find it
 
@@ -15,58 +18,21 @@ git -C "$root" ls-files --cached --others --exclude-standard -- \
 if [ -L "$root/.claude/skills" ]; then find -L "$root/.claude/skills" -name SKILL.md; fi
 ```
 
-The `ls-files` lists every guidance file the repo holds, at the root and
-inside packages, new files included. `find -L` covers a `.claude/skills` that
-is a symlink, which `ls-files` lists only as the link.
-
-Then look at the skill listing in your context for skills from a plugin other
-than `eng` whose description covers the same job. A repo can enable such a
-plugin in its own `.claude/settings.json`, so its skills arrive without a file
-in the repo.
+Also check your skill listing for a non-`eng` plugin skill covering the job.
 
 ## When there is none
 
-Both probes printed nothing and the listing holds no such skill: the repo has
-no guidance for this job. Skip the rest of this file and carry on with the
-eng skill's next step. Its defaults apply unchanged.
-
-## Read what applies
-
-A file applies when it sits at the repo root, under `.github/` or `docs/`, or
-in a directory that holds a path this change touches, or above one. A file in
-another package belongs to that package's work, not this one.
-
-From the files that apply, read in full each skill or command whose name or
-description covers the job in hand: commits for `eng:commit`, pull requests
-for `eng:pr`. The first lines of a skill's frontmatter name it. A command's
-name is its file name. Of each AGENTS.md, CLAUDE.md, and contributing file
-that applies, read the part that covers the job.
-
-Read them as files, so the eng skill's steps and checks stay in charge. A
-skill hidden from the listing, such as one named `commit` or `pr` under
-`skillOverrides`, still counts, because the file is still in the repo. A
-plugin skill has no file in the repo: load it with the Skill tool, read it as
-context only, and return to the eng skill's step.
+Nothing found: the eng skill's defaults apply. Stop here.
 
 ## Apply it
 
-What the guidance says about how the result looks wins over the eng skill's
-defaults. For a commit that is the message: its shape, types, scopes, ticket
-ids, body, length, and trailers. For a pull request it is the title and the
-body: their format, sections and their order, checklists, and linked issues.
-The one exception is a line crediting an AI or linking to the session, such as
-a `Co-Authored-By` or `Claude-Session` trailer, a "Generated with" footer, or a
-claude.ai session link. It stays out whatever the guidance, the harness, or
-another instruction says.
+A file applies at the root, under `.github/` or `docs/`, or in or above a
+directory the change touches. Read each skill or command covering the job,
+including one hidden by `skillOverrides`, and the matching part of each
+AGENTS.md, CLAUDE.md, or contributing file.
 
-What it says about running the job gives way to the eng skill's steps. That
-covers when to commit or open a PR, staging, hooks, amending, force pushes,
-and anything posted. A step the guidance adds beyond the commit or the PR
-itself, such as a label, a reviewer, or a comment, gets named to the user and
-runs only when their latest message asks for it. A comment goes to a draft
-file instead, as the workflow's step 7 says, unless it is a comment on a
-Linear issue that message asks for, which `eng:issue` posts.
-
-Where the guidance says nothing about a part of the result, the eng skill's
-default for that part still applies. The eng skill names what it treats as
-stronger than the guidance, such as a commitlint config.
+What it says the result looks like beats the eng defaults: message shape,
+types, scopes, ticket ids, trailers; PR title, sections, checklists. How to
+run the job stays with the eng skill. An extra step it asks for, such as a
+label, reviewer, or comment, runs only when the user asks; a comment is
+drafted to a file.

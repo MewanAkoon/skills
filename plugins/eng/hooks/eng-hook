@@ -27,9 +27,10 @@
 # The hook decides deny or ask, and never allow. In the main session a post
 # is denied, a write that is hard to take back asks, and a commit, push, pull
 # request or issue write gets no decision, so Claude Code's own permission
-# settings decide it. A push with an explicit lease to a branch other than
-# the default counts as a plain push. In a subagent every remote write the
-# hook finds is denied.
+# settings decide it. A push with an explicit lease that names no default
+# branch, as the lease, source or destination, counts as a plain push, with
+# a source read as classify-command.awk says. In a subagent every remote
+# write the hook finds is denied.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates. review-hash holds a hash of the uncommitted changes as they

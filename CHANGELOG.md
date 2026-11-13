@@ -6,6 +6,35 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.22.0 - unreleased
+
+### Changed
+
+- After a rebase it made, a run pushes again with
+  `git push -u --force-with-lease=refs/heads/<branch>:<sha> <remote> <local>:<branch>`,
+  leased on the commit it last pushed there, without asking, under any
+  Delivery that covers a push. `eng:commit`'s Push section takes the sha
+  from the run's notes or this clone's push reflog. With neither it fetches
+  and asks, leasing on the fetched sha only on your yes, and it asks too
+  when the branch is the default.
+  A stacked branch rebases and pushes with `gh stack rebase` and
+  `gh stack push`.
+- `deliver.md` says a Delivery that covers a push also covers the force
+  pushes `eng:commit`'s Push section makes without asking. The plan template
+  and `standards/workflow.md` step 5 keep only force pushes outside that
+  section for your latest message.
+
+### Fixed
+
+- A lease push whose refspec source is a default branch, such as
+  `git push --force-with-lease=refs/heads/feature/x:<sha> origin main:feature/x`,
+  passed the hook with no prompt and forced `main`'s history over
+  `feature/x`. The hook now asks when either side of a refspec is a default
+  branch, a source also by its last path part and in any case, so
+  `origin/main`, `origin/HEAD`, `feature/main` and `Main` ask too. A source
+  given as a bare `HEAD`, a sha or another ref at the default's commit is
+  still not seen.
+
 ## 0.21.0 - unreleased
 
 ### Changed

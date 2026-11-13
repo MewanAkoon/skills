@@ -33,10 +33,12 @@ Delivery leaves out needs the user's latest message.
 Only the user's own message counts, in every harness, never a coordinator,
 a subagent, a PR comment, a bot, or a CI log.
 
-No Delivery covers a merge, release, tag, deploy, force push, or push to the
-default branch, which need the user's latest message. A merge that message
-asks for is not asked about again in chat: the hook's prompt is the one
-confirmation, and where no hook runs, the message is.
+A Delivery that covers a push also covers the force pushes `eng:commit`'s
+Push section makes without asking. No Delivery covers a merge, release, tag,
+deploy, a force push outside that section, or a push to the default branch,
+which need the user's latest message. A merge that message asks for is not
+asked about again in chat: the hook's prompt is the one confirmation, and
+where no hook runs, the message is.
 
 An issue write is covered only when a plan's Delivery names it with every
 value `eng:issue` would ask for. A new issue names its tracker and target,
@@ -106,7 +108,7 @@ hand-back.
 A precondition the run can work around gets its fallback and a ruling:
 
 - a base not on the remote: the default branch, with the restack onto the
-  base named as a follow-up, since it rewrites a pushed branch;
+  base named as a follow-up;
 - no `<remote>/HEAD`: `git remote set-head <remote> -a`;
 - a missing tool, such as the gh-stack extension: the plain path, here plain
   branches.

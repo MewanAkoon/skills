@@ -33,8 +33,9 @@
 # empty defaults means eng-hook found no remote HEAD, and the push asks.
 #
 # What it cannot see: git aliases, a gh alias set earlier, push settings, a tag
-# pushed by its bare name, a remote HEAD left stale or missing, a command
-# built at run time, and anything inside a script it calls.
+# pushed by its bare name, a remote HEAD left stale or missing, a default
+# branch's history pushed as a bare HEAD, a sha or another ref at its commit,
+# a command built at run time, and anything inside a script it calls.
 
 BEGIN {
   nseg = 0
@@ -847,15 +848,20 @@ function git_command(s, i,    n, j, w, sub_, risky, options, b, k, opt, val, lea
     if (w ~ /^[+:]/ || w ~ /(^|:)refs\/tags\// || w == "tag") risky = 1
     # The remote, then each refspec. The shell expands $, ~, braces and globs
     # in a word the hook reads as written, so a lease push asks on those, and
-    # on a destination that is the default branch.
+    # on a default branch on either side of a refspec, since a default source
+    # forces its history over the destination. default_source also reads a
+    # source by its last path part and in any case.
     if (w !~ /^[A-Za-z0-9._\/:-]+$/ || (++pos == 1 && w ~ /:/)) unsafe = 1
-    sub(/^.*:/, "", w)
+    if (k = index(w, ":")) {
+      if (default_source(substr(w, 1, k - 1))) unsafe = 1
+      sub(/^.*:/, "", w)
+    }
     if (default_branch(w)) unsafe = 1
   }
   # A lease forces only the refs it names, so with no other risky word, a
-  # lease push run alone, with every leased ref and named destination off
-  # the default branch, is a plain push. --force-if-includes only narrows a
-  # lease.
+  # lease push run alone, with every leased ref and both sides of every
+  # refspec off the default branch, is a plain push. --force-if-includes
+  # only narrows a lease.
   if (risky || (includes && !leases) || (leases && (!alone || unsafe || defaults !~ /[^ ]/)))
     emit("confirm a push that forces, deletes or pushes tags")
   if (options) emit("confirm a push with push options, which the server acts on")
@@ -896,6 +902,21 @@ function explicit_lease(v,    k, ref, sha) {
 function default_branch(name) {
   if (!sub(/^refs\/heads\//, "", name)) sub(/^heads\//, "", name)
   return name == "main" || name == "master" || index(" " defaults " ", " " name " ") > 0
+}
+
+# True for a refspec source that is a default branch, read in any case, since
+# git on a case-insensitive file system resolves Main to main, and by its last
+# path part, so origin/main, refs/remotes/origin/main, a remote's HEAD such as
+# origin/HEAD, and feature/main all count.
+function default_source(name,    d, n, k) {
+  name = tolower(name)
+  n = split("main master " tolower(defaults), d, " ")
+  for (k = 1; k <= n; k++)
+    if (name == d[k] || name == "refs/heads/" d[k] || name == "heads/" d[k]) return 1
+  if (!sub(/^.*\//, "", name)) return 0
+  if (name == "head") return 1
+  for (k = 1; k <= n; k++) if (name == d[k]) return 1
+  return 0
 }
 
 # True when a word from position from on matches re as a flag, and is not the

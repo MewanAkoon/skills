@@ -14,26 +14,30 @@ progress, or an unmerged path, hand the run to `eng:merge-conflicts` and
 stop. Stop too on a detached `HEAD` or no remote.
 
 Uncommitted changes, other than untracked `.claude/plans/` and
-`.claude/handoffs/` files: without a plan, ask whether to continue without
-them; under a plan, leave them out and name them in the hand-back as a
-ruling.
+`.claude/handoffs/` files: without a Delivery, as `eng:implement`'s
+[deliver.md](../implement/references/deliver.md) names one, ask whether to
+continue without them; under one, leave them out and name them in the
+hand-back as a ruling.
 
-With `gh` unusable or a remote that is not GitHub, take the base from the
-message or Delivery's `Base:`, else the default from
-`git remote set-head <remote> -a` then
-`git symbolic-ref --short refs/remotes/<remote>/HEAD`, run steps 3 to 5, print
-the title and body, and say nothing was created. An open PR is updated as
+With a remote that is not GitHub, take the base from the message or
+Delivery's `Base:`, else the default from `git remote set-head <remote> -a`
+then `git symbolic-ref --short refs/remotes/<remote>/HEAD`, run steps 3 to 5,
+print the title and body, and say nothing was created. On a GitHub remote
+with `gh` missing or not signed in, do the same, then stop and name the fix,
+installing `gh` or `gh auth login`. An open PR is updated as
 [references/update.md](references/update.md) says, on its `baseRefName`.
 
 **Done when:** the run knows whether it creates or updates.
 
 ## 2. Resolve the base
 
-The base is the one the user's message names, or under a plan, Delivery's
-`Base:`, logged as a ruling. Under a plan, when
+The base is the one the user's message names. Otherwise it is Delivery's
+`Base:`, else the stack parent, else the default branch, logged as a ruling.
+The stack parent comes from `gh stack view --json` when it lists this branch:
+the `name` of the entry below it in `branches[]`, bottom first, or `trunk`
+for the bottom one, since each `base` there is a SHA. When
 `git ls-remote --exit-code --heads <remote> <base>` fails, use the default
-branch and log that as a ruling; without a plan, ask. With no base named, ask,
-offering the default, since a stacked branch needs another base.
+branch and log that as a ruling.
 
 `gh repo view --json defaultBranchRef,parent` gives the default. A set
 `parent` means a fork: the base lives on the remote whose URL holds the
@@ -90,12 +94,13 @@ diff touching migrations, Terraform, Docker, Kubernetes, workflows, or an
 ## 6. Create
 
 Push as `eng:commit`'s Push section says, unless the upstream holds `HEAD`.
-Write title and body to files in the scratchpad, or `mktemp -d`. Add
-`--draft` when asked, or under a plan unless Delivery says otherwise. Assign
-whoever the user names, else `@me`; add no reviewer.
+Write title and body to files in the scratchpad, or `mktemp -d`. Every PR
+opens as a draft. Assign whoever the user names, else `@me`; add no
+reviewer. A stack opens through `gh stack submit --auto`, which drafts each
+new PR.
 
 ```bash
-gh pr create --title "$(cat <title file>)" --body-file <body file> --base <base> --assignee @me
+gh pr create --draft --title "$(cat <title file>)" --body-file <body file> --base <base> --assignee @me
 ```
 
 On failure print what `gh` said; an existing PR goes to update.md. Then run
@@ -106,8 +111,13 @@ failed; with none, retry once without `--assignee` and say so.
 
 ## 7. Confirm
 
-Read back `gh pr view --json state,title,url` and print the URL. Name the
-post-PR review, `/code-review high <from>..HEAD`, where `<from>` is the plan's
-`Reviewed:` commit, else `git merge-base <base remote>/<base> HEAD`.
+Read back `gh pr view --json state,title,url` and print the URL. Then
+finish as deliver.md's steps 8 and 9 say, a plain request to open a PR
+included: the post-PR review, `/code-review high <from>..HEAD`, where
+`<from>` is the `Reviewed:` commit, else
+`git merge-base <base remote>/<base> HEAD`, then ready by its Ready section.
+Without a Delivery, fixes the review finds wait for the user, and the PR
+stays a draft until they land.
 
-**Done when:** the read-back title is the drafted one.
+**Done when:** the read-back title is the drafted one, and the PR is ready
+or the hand-back says why it is a draft.

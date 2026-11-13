@@ -36,17 +36,18 @@ level when it ran, and any conflict with an ADR.
 **Open questions.** Each with options and a recommendation. Until each has an
 answer, the plan is a draft.
 
-**Delivery.** What approval lets the run do without asking again:
-`Branch: <feature/, fix/ or chore/ plus a short name>`; `Base: <branch>`, with
-the default branch as fallback when the base is not on origin yet; the
-commits as they will land; the push; the PR and its title, a draft unless this
-says otherwise; each issue write, named as `eng:implement`'s
-`references/deliver.md` says, a new issue sized now with the values in
-`eng:issue`'s [estimate.md](../../issue/references/estimate.md) so the run
-asks nothing; the checks that must pass; and standing rules
-for what review may find. Delivery names no start condition that waits on
-work outside the session. Merges, releases, tags, deploys, force pushes and
-pushes to the default branch never go here.
+**Delivery.** What approval lets the run do without asking again: `Branch:
+<feature/, fix/ or chore/><ticket key>-<short name>`, lowercase, or
+`<type>/<short name>` without a ticket; `Base: <branch>`, with the default
+branch as fallback when the base is not on origin yet; the commits as they
+will land; the push; the PR and its title, opened as a draft and marked ready
+by `eng:implement`'s `references/deliver.md`; each issue write, named as
+`eng:implement`'s `references/deliver.md` says, a new issue sized now with the
+values in `eng:issue`'s [estimate.md](../../issue/references/estimate.md) so
+the run asks nothing; the checks that must pass; and standing rules for what
+review may find. Delivery names no start condition that waits on work outside
+the session. Merges, releases, tags, deploys, force pushes and pushes to the
+default branch never go here.
 
 **Progress.** Empty at first. The run adds each ruling, each pushed commit,
 and `Reviewed: <sha>` for the last pushed commit the review loop read.

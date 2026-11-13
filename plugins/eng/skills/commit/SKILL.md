@@ -26,9 +26,10 @@ staged path as it is, and add files in the same module or that import one
 another. Stage by name, never `git add -A` or `.` unless told. Leave
 untracked `.claude/plans/` and `.claude/handoffs/` files out unless named.
 
-A file that fits no group: without a plan, ask. Under a plan, Delivery's
-grouping decides, and the file stays uncommitted, named in the hand-back as a
-ruling. Commit unrelated groups one at a time.
+A file that fits no group: without a Delivery, as `eng:implement`'s
+`references/deliver.md` names one, ask. Under one, its grouping decides, and
+the file stays uncommitted, named in the hand-back as a ruling. Commit
+unrelated groups one at a time.
 
 Stop and name the file when a path starts with `.env`, other than
 `.env.example` or `.env.sample`, or matches `*.pem`, `*.key`, `id_rsa`, or
@@ -109,8 +110,8 @@ git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"
 ```
 
 `<remote>/<branch>`: `git push`. Empty: `git push -u <remote> <branch>`.
-Another branch, such as `origin/main`: under a plan, push with `-u` to
-Delivery's `Branch:` and log a ruling; otherwise ask first.
+Another branch, such as `origin/main`: under a Delivery, push with `-u` to
+its branch and log a ruling; otherwise ask first.
 
 A push rejected after a rebase this run made proposes
 `git push --force-with-lease`, run only on the user's yes. Any other

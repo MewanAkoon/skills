@@ -6,7 +6,7 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
-## 0.20.0 - unreleased
+## 0.21.0 - unreleased
 
 ### Changed
 
@@ -25,6 +25,43 @@ follow semantic versioning.
 - A unique prefix of a long `git push` option, such as `--force-w=`,
   `--del`, `--m` for `--mirror`, or `--pu=` for `--push-option`, passed the
   hook with no prompt. The hook now reads it as the full option.
+
+## 0.20.0 - unreleased
+
+### Changed
+
+- Approved or named work finishes without asking. `eng:implement`'s
+  `deliver.md` now names three Deliveries: an approved plan's, a default one
+  for a change you name directly (branch, commit, push, draft PR, review,
+  ready), and a follow-up one for a later change or valid review fix on your
+  own open PR, in any session. A message such as "only make the edit"
+  narrows it, and none covers a merge, release, tag, deploy, force push or
+  push to the default branch. A merge your latest message asks for is not
+  asked about again in chat.
+- Work starts on the ticket's branch, `<type>/<ticket-key>-<slug>` with the
+  type from the ticket's labels, checked out or created from the default
+  branch, or from a harness branch such as `claude/...`. Unrelated
+  uncommitted changes stay put, and the work and its own changes move to a
+  worktree by patch. Investigation switches no branch.
+- A precondition with a workaround gets its fallback and a ruling: the
+  default branch for a missing base, `git remote set-head` for a missing
+  `origin/HEAD`, plain branches without gh-stack. Only a missing credential
+  or a hook deny stops a run.
+- `eng:pr` opens every PR as a draft, takes the base from your message,
+  Delivery, the stack parent or the default branch without asking, and
+  finishes with the post-PR review and ready. The title and body are
+  refreshed after each push when the new commits made them false, and
+  `update.md` accepts a branch this run rebased when `git range-diff` shows
+  the same changes.
+- A PR goes ready once the local check and review are clean and CI has
+  started, read once with `gh pr checks`, replacing the 600-second CI wait.
+  A failing check is fixed like a finding.
+- `eng:pr-feedback` runs `gh pr checkout` on another branch instead of
+  asking you to switch.
+- The plan template's `Branch:` carries the ticket key, and
+  `standards/workflow.md` step 5 names the new Deliveries.
+- The manifest description says commits and PRs follow work you approve or
+  name.
 
 ## 0.19.0 - unreleased
 

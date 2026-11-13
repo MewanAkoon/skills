@@ -297,9 +297,10 @@ the `gh stack` rules under `permissions` if you no longer want them.
 
 [plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md) is eight
 standing steps: understand first, plan and stop, implement on approval, review
-until clean, commit and open PRs only when asked or when a plan you approved
-lists them, handle PR feedback on evidence and review the unreviewed commits
-after each push, post nothing, and report briefly.
+until clean, commit, push and open PRs when asked or when the work you
+approved or named, or a follow-up on your open PR, covers them, handle PR
+feedback on evidence and review the unreviewed commits after each push, post
+nothing, and report briefly.
 The plugin's SessionStart hook sends it at the start of every session and after
 each compaction. It names the skill for each step that has a procedure, so a
 change of phase is the cue to load it:
@@ -307,7 +308,7 @@ change of phase is the cue to load it:
 | Step | Skill |
 |---|---|
 | 1 and 2, understand and plan | `eng:investigate` |
-| 3, implement, and the delivery an approved plan lists | `eng:implement`, and its `references/deliver.md` |
+| 3, implement, and the delivery an approved plan, a named change or a follow-up on your open PR covers | `eng:implement`, and its `references/deliver.md` |
 | 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
 | 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
 | 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the commits no review has read |
@@ -493,11 +494,11 @@ above leaves out the ones you do not want.
 | Skill | Fires on | What it does |
 |---|---|---|
 | [investigate](plugins/eng/skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
-| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, test-first unless it is a small named change, corrects docs it makes false, reviews it through `/code-review` |
+| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, test-first unless it is a small named change, corrects docs it makes false, reviews it through `/code-review`, then delivers it: the ticket's branch, commits, a push, a draft PR, and ready once checks and review are clean and CI has started |
 | [pr-feedback](plugins/eng/skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
 | [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
-| [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
+| [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base without asking, writes title and body from the diff in the repo's own PR format, opens it as a draft or updates it, and marks it ready by `eng:implement`'s rule |
 | [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, assigns you and sizes, prioritises and dates each new issue, files only when asked or when an approved plan's Delivery names the write, and drafts every comment to a file |
 | [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |

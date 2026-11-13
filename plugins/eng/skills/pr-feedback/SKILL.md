@@ -26,7 +26,10 @@ Judging and fixing read the code on disk, so the checkout must be the PR's
 `headRefName` and contain `headRefOid`
 (`git merge-base --is-ancestor <headRefOid> HEAD`). Local commits ahead of the
 PR are fine, and a comment they answer is "already addressed". On another
-branch, stop and ask the user to switch, such as `gh pr checkout <n>`.
+branch with a clean tree, run `gh pr checkout <n>` and log it as a ruling.
+With uncommitted changes, add a worktree where `eng:implement`'s
+[deliver.md](../implement/references/deliver.md) puts one, with
+`git worktree add --detach <dir>`, and run `gh pr checkout <n>` inside it.
 
 **Done when:** every unresolved thread, review body, and issue comment is
 listed with its id, and the checkout holds the PR's head commit.
@@ -46,9 +49,10 @@ user before any fix.
 
 A table: comment (author, `file:line`, the point in a few words), class,
 evidence, and the proposed action with its test's level. Then wait, unless
-the user's message asked to address or fix them, or an approved plan's
-Delivery covers this PR's review, when each fix inside the plan goes ahead. A
-fix that would change the plan waits.
+the user's message asked to address or fix them, or a Delivery covers this
+PR, an approved plan's or the follow-up one on the user's own PR, and the
+message did not ask only to triage or verify, when each valid fix goes
+ahead. A fix that would change an approved plan waits.
 
 **Done when:** the table is presented, and the fixes are approved or the turn
 has ended.
@@ -77,8 +81,9 @@ report says none needs one.
 ## Step 6: Report
 
 The verdict per comment, what was fixed, the checks run, the drafts file's
-path, and what comes next: under a plan, the commit and push follow its
-Delivery; otherwise they wait for the user's request. For each deferred
+path, and what comes next: the commit, push, body refresh and ready follow
+the Delivery that covers the PR, a follow-up on the user's own PR included;
+with none, they wait for the user's request. For each deferred
 comment, offer an issue draft through `eng:issue`. The user posts the
 replies.
 

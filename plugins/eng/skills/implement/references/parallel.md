@@ -1,63 +1,30 @@
 # Splitting work across subagents
 
-Read this before giving parts of an approved change to parallel subagents.
+Read this before giving parts of a change to parallel subagents.
 
-## What can split
+Split only parts that touch disjoint files. When two parts add the same
+concept, such as a field, a message key, or an event name, the brief fixes its
+exact name for both. A file every part touches, such as a barrel export or a
+route table, stays with the main session.
 
-Split only parts that touch disjoint files. Two implementers that edit the
-same file, or each name the same new thing differently, produce work that
-cannot be merged without a second pass.
-
-- When two parts add the same concept, such as a field, a message key, an
-  event name, or a helper, the brief fixes its exact name for both.
-- A file every part would touch, such as a barrel export, a route table, a
-  message catalogue, or a dependency injection registration, stays with the
-  main session, which edits it while integrating.
-
-## Where each part runs
-
-By default each part works in this working tree, on a strict list of files it
-may change.
-
-A separate worktree (`isolation: worktree` in Claude Code) suits a part only
-when this tree is clean, because a new worktree starts from a commit and
-carries none of the uncommitted work. Record the starting commit with `git
-rev-parse HEAD` and put it in the brief. Before its first edit, the part checks
-its own `HEAD` and runs `git checkout --detach <sha>` when it differs, since a
-worktree can start from the default branch instead. The part leaves its change
-uncommitted, with `git add -N :/` so new files show. The main session then
-applies it, unstaged:
+Each part works in this tree on a strict list of files by default. A separate
+worktree suits a part only when this tree is clean: put `git rev-parse HEAD`
+in the brief, and the part runs `git checkout --detach <sha>` when its own
+`HEAD` differs, makes its change uncommitted, and runs `git add -N :/` so new
+files show. Apply it from the top of the tree, since a subdirectory `git
+apply` skips paths outside it and still exits 0:
 
 ```bash
 git -C <worktree> diff --binary <sha> | git -C "$(git rev-parse --show-toplevel)" apply
 ```
 
-`:/` and `--show-toplevel` name the top of the tree, because from a
-subdirectory `git add -N .` marks only that directory, and `git apply` skips
-every path outside it and still exits 0. `--binary` carries binary files, and
-`--3way` is only for when the plain apply fails, because it stages what it
-applies.
+A worktree lacks ignored files such as `.env` and `node_modules`, so only the
+main session's test run counts.
 
-A worktree also lacks ignored files such as `.env`, fixtures, and
-`node_modules`, so its tests can skip or pass for the wrong reason. The part
-lists any test it skipped, and only the main session's run on the integrated
-whole counts.
+The brief names the task, pointers rather than summaries, the files it may
+change, and the limits: no subagents, no commits, no review, nothing written
+outside this machine. Integrate every part, then run steps 3 to 5 on the
+whole.
 
-## The brief
-
-- The task, in a sentence or two.
-- Pointers: the plan file and section, and the files to read. Never a pasted
-  summary.
-- The files it may change, by path, and the exact names fixed above.
-- For a worktree, the starting commit.
-- What to return: the files changed, every check run with its result, and any
-  test skipped.
-- The limits: no subagents, no commits, and nothing posted or written outside
-  this machine. No `eng:implement` and no review either: the part makes its
-  change and stops.
-
-Integrate every part in the main session, then run `eng:implement`'s steps 3
-to 5 on the whole, so the review sees the parts together.
-
-**Done when:** every part has come back and is integrated, or a part failed
-and its output is in the report.
+**Done when:** every part is integrated, or a part failed and its output is in
+the report.

@@ -1,299 +1,113 @@
 ---
 name: pr
-description: Use when the user's latest message asks to open, raise, or update a pull request or its description. Resolves the base branch, drafts a title and body from the real diff, and creates or updates the pull request.
+description: Use when the user's latest message asks to open, raise, or update a pull request or its description. Resolves the base, drafts the title and body from the real diff, and creates or updates the PR.
 ---
 
 # PR
 
-## What this does
+## 1. Check the state
 
-It reads everything the branch changed against its base, writes a title and a
-description from the diff, and either opens a pull request or updates the one
-that is already open.
+Run `git status`, `git status --porcelain -uall`, `gh auth status`, and
+`gh pr view --json number,url,state,baseRefName,headRefName,headRefOid,title,body`.
+When the plain `git status` reports a merge, rebase, cherry-pick, or revert in
+progress, or an unmerged path, hand the run to `eng:merge-conflicts` and
+stop. Stop too on a detached `HEAD` or no remote.
 
-## When it runs
+Uncommitted changes, other than untracked `.claude/plans/` and
+`.claude/handoffs/` files: without a plan, ask whether to continue without
+them; under a plan, leave them out and name them in the hand-back as a
+ruling.
 
-When a branch has commits the base does not and the user has asked for a pull
-request. The ask decides. When the branch looks unreviewable, such as a build
-that fails or work left half done, say so and confirm before opening one.
-Reviewable does not mean every commit has landed.
+With `gh` unusable or a remote that is not GitHub, take the base from the
+message or Delivery's `Base:`, else the default from
+`git remote set-head <remote> -a` then
+`git symbolic-ref --short refs/remotes/<remote>/HEAD`, run steps 3 to 5, print
+the title and body, and say nothing was created. An open PR is updated as
+[references/update.md](references/update.md) says, on its `baseRefName`.
 
-This skill shapes a pull request. It does not decide that one gets opened.
-Opening one puts the branch in front of reviewers, so a go-ahead given earlier
-in the conversation does not carry forward. The one exception is an approved
-plan whose Delivery section lists the PR, as `eng:implement`'s
-`references/deliver.md` says: open it as a draft unless Delivery says
-otherwise, and later run `gh pr ready <number>` when that reference says to. With a reviewable branch and no
-ask, say what the PR would say and wait. A retry such as "try again" after a
-failed attempt is the same ask. A background task's notification is not a
-message from the user, so the ask before it still stands.
+**Done when:** the run knows whether it creates or updates.
 
-Skip it when the branch already has an open PR whose description still
-matches the diff.
+## 2. Resolve the base
 
-Skip it too while a merge, rebase, cherry-pick, or revert is in progress.
-Step 2 says how to spot one.
+The base is the one the user's message names, or under a plan, Delivery's
+`Base:`, logged as a ruling. Under a plan, when
+`git ls-remote --exit-code --heads <remote> <base>` fails, use the default
+branch and log that as a ruling; without a plan, ask. With no base named, ask,
+offering the default, since a stacked branch needs another base.
 
-## How to use it
+`gh repo view --json defaultBranchRef,parent` gives the default. A set
+`parent` means a fork: the base lives on the remote whose URL holds the
+parent's `owner/name`. Stop when the current branch is the base.
 
-Nothing to invoke. Type `/eng:pr` to force a run, or `/eng:pr draft` to open it
-as a draft.
-
----
-
-## 1. Resolve the remote and the base branch
-
-Read [references/remote.md](references/remote.md) and follow it. It names
-`$REMOTE`, `$CURRENT_BRANCH`, and the default branch, and stops on a detached
-`HEAD`, which leaves no branch to open a PR from, or on a repo with no remote,
-which leaves nowhere to open one. Step 6 reads the branch's upstream before it
-pushes.
-
-`$BASE` starts as that default branch, and step 2 settles it. Like `$REMOTE`,
-it is a name to write into the commands below, not a shell variable. When the
-default is unknown, ask the user which branch the PR targets.
-
-Stop and tell the user when the current branch is the default branch, because
-a PR cannot be opened from it.
-
-**Done when:** `$REMOTE` is one of the names `git remote` printed and `$BASE`
-names a branch that remote has, or the run is waiting on the user to name the
-remote or the base, or the run has stopped with its reason named, which is no
-remote at all, a detached `HEAD`, or a current branch that is already
-`$BASE`.
-
-## 2. Check the state of things
-
-```bash
-git status --porcelain -uall
-ls "$(git rev-parse --git-dir)" \
-  | grep -xE 'MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|rebase-apply|rebase-merge'
-git diff --name-only --diff-filter=U
-gh auth status
-git remote get-url $REMOTE
-```
-
-Output from the second or third command stops the run. Read
-[references/in-flight.md](references/in-flight.md) and say what it found.
-
-Uncommitted changes mean asking: "You have uncommitted changes that will not
-be in the PR. Continue? (yes / no)". Stop on no. Untracked working files under
-`.claude/plans/` and `.claude/handoffs/` do not count, because `eng:commit`
-leaves them out on purpose.
-
-When `gh` is missing, unauthenticated, or the remote is not GitHub, skip the
-rest of this step, work through steps 3 to 5, print the title and body for the
-user to paste in themselves, and stop there. Say plainly that you did not
-create anything.
-
-Otherwise look for an existing PR in one call:
-
-```bash
-gh pr view --json baseRefName,headRefName,headRefOid,headRepository,number,url,title,body,state 2>/dev/null || true
-```
-
-Call the result `PR_DATA`.
-
-- `PR_DATA` has content and `state` is `OPEN`: take `baseRefName` as the
-  base, work through steps 3 to 5, then update the PR in step 7. First check
-  the branch against `headRefOid`, the commit the PR shows, as
-  [references/update.md](references/update.md) says under "In step 2". When
-  the user declines to push local commits, steps 3 to 5 describe only what
-  the PR holds, so write `<headRefOid>` wherever their commands say `HEAD`.
-- `PR_DATA` is empty, or `state` is `CLOSED` or `MERGED`: take the base the
-  user's message named, or else ask "What is the base branch for this PR?
-  (default: <resolved default>)" and take their answer, or the resolved
-  default on an empty reply. A stacked branch needs a base other than the
-  default, which is why this asks. Work through steps 3 to
-  5, then create the PR in step 6.
-
-**Done when:** `PR_DATA` is on the record, or the run is waiting on the
-user's answer about the base or about pushing, or `gh` is unusable and the
-run goes on to steps 3 to 5 only to print the title and body, or the run has
-stopped with its reason named, which is an operation in flight, an unmerged
-path, a declined prompt, a PR head this branch does not contain, no remote
-for the PR's head repository, or a failed push.
+**Done when:** the base and its remote are named.
 
 ## 3. Read the diff
 
-First name `$BASE_REMOTE` as remote.md's "The base repository" says. It is
-`$REMOTE`, unless `$REMOTE` is a fork and the PR targets the repository it
-was forked from.
-
 ```bash
-git fetch $BASE_REMOTE $BASE
-git log --oneline $BASE_REMOTE/$BASE..HEAD
-git diff --stat $BASE_REMOTE/$BASE...HEAD
+git fetch <base remote> <base>
+git log --oneline <base remote>/<base>..HEAD
+git diff --stat <base remote>/<base>...HEAD
 ```
 
-The fetch matters, because a stale base describes a diff that no longer
-exists. `git log` takes two dots, for only this branch's commits, and
-`git diff` three, to compare against the merge base.
+With no commits ahead, stop. Past about 20 files or 500 lines, read one
+package at a time.
 
-Stop and tell the user there is nothing to open a PR for when no commits are
-ahead of the base.
-
-Read the full diff when the stat line shows 20 files or fewer:
-
-```bash
-git diff $BASE_REMOTE/$BASE...HEAD
-```
-
-Above 20 files, or above roughly 500 changed lines, read it one directory or
-one package at a time and summarise per unit instead of per line.
-
-**Done when:** you can name what every changed file does in the change, or
-you have deliberately grouped it under a unit you can name, or the run has
-stopped with its reason named, which is no commits ahead of the base or no
-single remote for the base repository.
+**Done when:** every changed file has a named role.
 
 ## 4. Pick the format
 
-First read the `eng:commit` skill's
-[../commit/references/repo-guidance.md](../commit/references/repo-guidance.md) and
-follow it for pull requests. The repo's own template wins whenever one exists,
-and when the guidance's format differs, keep the template's headings and fill
-them as the guidance says:
+Follow `eng:commit`'s [repo-guidance.md](../commit/references/repo-guidance.md),
+then look for a template:
 
 ```bash
-find "$(git rev-parse --show-toplevel)" -maxdepth 3 -ipath '*pull_request_template*' \
-  -not -path '*/.git/*' -not -path '*/node_modules/*'
+find "$(git rev-parse --show-toplevel)" -maxdepth 3 -ipath '*pull_request_template*' -not -path '*/node_modules/*'
 ```
 
-Found one, or a body format in the guidance? Fill in its sections and its
-checkboxes, keep any headings exactly as they are, and skip the body template
-in step 5. The title guidance in step 5 still applies. When it has no section
-for test evidence or for merge risk, add the Evidence or Merge danger section
-from [references/body.md](references/body.md) at its end, or, when the
-guidance allows no extra sections, put them in its closest section.
+A template wins: keep its headings, and add Evidence and Merge danger from
+[references/body.md](references/body.md) when it lacks them. With neither,
+use that file.
 
-Found neither? Use the body template in step 5.
-
-**Done when:** the guidance the reference found is read, or it found none, the `find` has run,
-and either a template or the guidance's format is on the record with its
-headings to be kept as they are, or neither exists and step 5's body template
-applies.
+**Done when:** the format is chosen.
 
 ## 5. Draft the title and body
 
-The title and the body both describe what the code does. The ticket and the
-branch name are not evidence of what landed.
+Describe what the diff does. Match the shape most of
+`gh pr list --state merged --limit 20 --json title` share; with none, use
+`[Type] Title Case Description` in 70 characters, the type `[Feat]`, `[Fix]`,
+`[Chore]`, `[Refactor]`, or `[Docs]`.
 
-For the title, follow step 4's guidance when it sets a format, or else match
-the convention already in use:
+Evidence is a before and after from this session's runs, or the tests run
+now with the before marked unseen.
 
-```bash
-gh pr list --state merged --limit 20 --json title --jq '.[].title'
-```
+Merge danger names the door and blast radius. A one-way door is one a revert
+does not undo: a destructive migration, changed data, a removed public API,
+sent messages. Take the blast radius from the plan or `eng:blast-radius`. A
+diff touching migrations, Terraform, Docker, Kubernetes, workflows, or an
+`.env` example names the infrastructure, env variables, and rollback.
 
-When most of those titles share a shape, such as a `[Type]` prefix, a
-`type:` prefix, or a ticket id, write the new title in that shape. When they
-share nothing, or the command returns nothing, use `[Type] Short description`
-at 70 characters or fewer, picking the type from:
+**Done when:** no placeholder survives.
 
-- `[Feat]` for a new feature or an improvement
-- `[Fix]` for a bug fix
-- `[Chore]` for maintenance, config, tooling, or dependencies
-- `[Refactor]` for a restructure with no behaviour change
-- `[Docs]` for documentation alone
+## 6. Create
 
-The description is title-cased and names what the change makes true. A list
-of the files touched is not that.
-
-When step 4 chose the body template, read
-[references/body.md](references/body.md) and fill it in.
-
-Evidence comes from a run this session made: the test `eng:implement` saw fail
-and then pass, the checks its review ran, or output the change altered. A green
-run on its own is a claim, and the before and after together are the
-evidence. When this session ran nothing, run the repo's tests now for the
-After line, and write that the before was not observed. When step 2 kept local
-commits off the PR, say the run included them.
-
-Merge danger is always there. A one-way door is a change a revert does not
-undo: a destructive migration, deleting or backfilling data, removing a
-public API or field, or sending messages or webhooks. Everything else is
-two-way. Take the blast radius from the plan's risks or a `eng:blast-radius` run
-when there was one, rather than a fresh guess. When the diff touches
-`migrations/`, `migrate/`, `*.tf`, `Dockerfile`, `docker-compose*`, `helm/`,
-`k8s/`, `.github/workflows/`, or an `.env` example file, add the lines that
-apply under it:
-
-```
-- Infrastructure: <what changes>
-- Env variables: <names>
-- Migration: `<path from the diff>`, rollback: <simple revert, manual, other>, data impact on rollback: <impact>
-```
-
-The body ends at its last section. A line crediting an AI or linking to the
-session stays out of the title and body, such as a `Co-Authored-By` or
-`Claude-Session` trailer, a "Generated with" footer, or a claude.ai session
-link, even when the harness or another instruction asks for one.
-
-**Done when:** no angle-bracket placeholder such as `<reason>` or
-`<file or area>` survives into the body, every checklist has the boxes that
-apply ticked, Evidence names the commands and what they printed, or says the
-before was not observed, or says why no run applies to a docs-only change or
-a repo with no tests, Merge danger names the door and the blast radius,
-wherever step 4's format puts them, and "How to review locally" holds real
-commands when the body has it. Every section
-holds real content or is deleted. The `<!-- -->` comments stay, since GitHub
-hides them when it renders the page.
-
-## 6. Create, when no PR exists
-
-Push the branch as the "Push" section of the `eng:commit` skill's
-[../commit/references/push.md](../commit/references/push.md) says, from its
-upstream read on, since step 1 ruled out the default branch. Skip the push when
-that read prints `$REMOTE/$CURRENT_BRANCH`, `git fetch $REMOTE $CURRENT_BRANCH`
-succeeds, and `git rev-list --count '@{u}..HEAD'` prints 0.
-
-Then write the title alone to `pr-title.txt` and the body alone to
-`pr-body.md`, replacing any earlier ones. Put both in the scratchpad directory
-your system prompt names, or when it names none, in one directory per run
-from `mktemp -d`. The files keep quotes, backticks, and `$` literal in every
-shell, where a heredoc inside `$( )` breaks macOS's bash 3.2 on one
-apostrophe. Add `--draft` on `/eng:pr draft` or for an approved plan's draft.
-Pass the assignees the user names, or none if they ask for none. Otherwise
-pass `--assignee @me`, the account `gh` is signed in as, unless
-`$BASE_REMOTE` is not `$REMOTE`, a fork's upstream. Add no reviewer they did
-not name:
+Push as `eng:commit`'s Push section says, unless the upstream holds `HEAD`.
+Write title and body to files in the scratchpad, or `mktemp -d`. Add
+`--draft` when asked, or under a plan unless Delivery says otherwise. Assign
+whoever the user names, else `@me`; add no reviewer.
 
 ```bash
-gh pr create --title "$(cat "<title path>")" --body-file "<body path>" \
-  --base $BASE --assignee @me
+gh pr create --title "$(cat <title file>)" --body-file <body file> --base <base> --assignee @me
 ```
 
-When `gh pr create` fails, print what `gh` said. When it says a PR already
-exists for this branch, name its number so the user can rerun and take step
-7, and stop. Otherwise `gh` may have opened the PR before the assignee failed,
-so run `gh pr view --json url,state`. An open PR goes on to step 8, and the
-report names what `gh` failed to add. Without one, when the command carried
-the default `--assignee @me`, run it once more without it and say so.
-Otherwise stop.
+On failure print what `gh` said; an existing PR goes to update.md. Then run
+`gh pr view --json url,state`, since the PR may exist with only the assignee
+failed; with none, retry once without `--assignee` and say so.
 
-**Done when:** `gh pr create` or `gh pr view` printed an open PR's URL, any
-failure is named, and the branch now has an upstream on `$REMOTE`, or the
-push ended at one of push.md's other endings, or the run has stopped with the
-output of `gh pr create` printed, which is a PR already open for this branch
-or another error.
+**Done when:** `gh pr view` shows the PR open.
 
-## 7. Update, when a PR is open
+## 7. Confirm
 
-Read [references/update.md](references/update.md) under "In step 7" and
-follow it. It shows the user what changes, asks before sending unless their
-latest message asked for the update, and sends it.
+Read back `gh pr view --json state,title,url` and print the URL. Name the
+post-PR review, `/code-review high <from>..HEAD`, where `<from>` is the plan's
+`Reviewed:` commit, else `git merge-base <base remote>/<base> HEAD`.
 
-**Done when:** the user declined and nothing was sent, or `gh pr edit` or the REST fallback exited zero, or both
-failed and their output is printed.
-
-## 8. Confirm
-
-Print the PR URL. Then name the next step from the workflow's step 6, a
-review of the whole PR: `/code-review high <merge-base>..HEAD`, where
-`<merge-base>` is `git merge-base $BASE_REMOTE/$BASE HEAD` written out.
-
-**Done when:** `gh pr view --json state,title,url` returns the PR open, and
-its title is the one step 5 drafted, or the one it already carried when the
-user declined the update in step 7, and the review is named. A URL printed from memory proves nothing
-about what landed.
+**Done when:** the read-back title is the drafted one.

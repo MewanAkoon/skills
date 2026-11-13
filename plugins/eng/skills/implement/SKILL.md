@@ -1,108 +1,93 @@
 ---
 name: implement
-description: Use when the user approves a plan or names the exact change to make. Carries the change through in the repo's own patterns, tests the behaviour that changed, splits work across subagents only where parts are independent, and corrects docs the change makes false.
+description: Use when the user approves a plan or names the exact change to make.
 ---
 
 # Implement
 
-## What this does
+Carry an agreed change into the code, test what changed, correct what it made
+false, review it, and deliver what an approved plan lists. A request to
+investigate or plan goes to `eng:investigate`, and one to review a PR or diff
+goes to `/code-review`.
 
-It carries an agreed change into the code, tests what changed, corrects what
-the change made false, and reviews the result through `/code-review`.
-
-## When it runs
-
-When the user approves a plan ("proceed", "go ahead", "do items 2 and 4") or
-names the exact change. A request to investigate or plan is not approval and
-goes to `eng:investigate`. One to review a PR, a branch, or a diff goes to
-`/code-review`. Committing waits for its own request, or for an approved
-plan's Delivery section.
-
-## How to use it
-
-Approve the plan or name the change. You get the change, its tests, and a
-review report.
-
----
+**The fast path.** A change the user names exactly, of a few lines with no
+behaviour to design, skips the test-first loop and the intent check: make it,
+run the repo's checks, correct what it made false, and review it as step 5
+says. Everything else runs every step.
 
 ## Step 1: Name what is being done, and where
 
 Before the first edit, state in one line: the plan or request, the items
 approved, the directory, the branch, the commit work starts from
-(`git rev-parse --short HEAD`), and any files already changed
-(`git status --short`). Do only the items approved.
+(`git rev-parse --short HEAD`), and the files already changed
+(`git status --short`). Do only the items approved. Under a plan whose
+Delivery names a branch, switch to it first, as
+[references/deliver.md](references/deliver.md) says.
 
-**Done when:** that line is written and every edit after it lands in the
-named directory.
+**Done when:** that line is written.
 
 ## Step 2: Make the change
 
-Take one change at a time. Where it alters behaviour, work test-first as
-[references/tdd.md](references/tdd.md) sets out, before any code. Match the
-nearest example of the same kind in this repo, and prefer the clean solution
-the codebase would want over the smallest diff. A change the plan does not cover
-becomes a ruling, logged as [references/deliver.md](references/deliver.md)
-says, when it serves the plan's goal, and a stop when it would change it. When the plan sketched an interface, fill one body at a time against
-the sketch and run the typecheck after each.
+One change at a time. Where it alters behaviour, work test-first as
+[references/tdd.md](references/tdd.md) says. Match the nearest example of the
+same kind in the repo, and prefer the clean solution the codebase would want
+over the smallest diff. Keep agreed signatures.
 
-Before a rename, retype, or move that breaks callers, or removing a guard, a
-retry, or a special case, even one the request named, read
-[references/risky.md](references/risky.md).
+A decision the plan did not settle is a ruling, logged as `deliver.md` says,
+when it serves the plan's goal. A change that would alter the goal stops the
+run. So does friction that repeats: the same workaround in unrelated places, a
+cast or `any` needed to compile, callers needing internals. Say what the plan
+got wrong.
 
-Keep agreed signatures. Stop when friction repeats, as
-[references/friction.md](references/friction.md) lists.
+A rename, retype, or move that breaks callers goes expand, migrate, contract,
+and one touching stored or serialized data calls `eng:blast-radius` first.
+Before removing a guard, retry, or special case the user did not name, call
+`eng:why`, and keep the code when it finds a reason that still holds.
 
 Parts that touch disjoint files can run in parallel subagents, as
-[references/parallel.md](references/parallel.md) describes.
+[references/parallel.md](references/parallel.md) says.
 
-**Done when:** every approved item is in the code, or the run has stopped
-with its reason named, which is the plan's flaw, a reason `eng:why` found to
-keep code, a change that would alter the plan's goal, a failed parallel part, or a
-`tdd.md` stop: a seam to agree, a suite that will not run, or a test that
-never reaches the code.
+**Done when:** every approved item is in the code, or the run has stopped with
+its reason named.
 
 ## Step 3: Test the behaviour that changed
 
-Test at the level a caller sees. Run targeted tests as you go, and the repo's
-full check (lint, typecheck, tests) at the end.
+Test at the level a caller sees. Run targeted tests as you go and the repo's
+full check (lint, typecheck, tests) at the end. A bug fix's test comes from
+the reproduction, named after what broke.
 
-A bug fix's test comes from the reproduction, at the seam the call site hit,
-named after what broke. Say in one sentence why the fix makes it pass. When no
-seam reproduces the bug honestly, say so in the report.
-
-**Done when:** the full check passes and each change in behaviour has a test
-seen failing then passing, a test that passed on the old code reported with
-what that means, or a bug's missing seam on the record. Or a failure is
-reported with its output, or the report says the repo has no tests.
+**Done when:** the full check passes, and each change in behaviour has a test
+seen failing on its assertion, then passing, or the report says why not.
 
 ## Step 4: Correct what the change made false
 
-Find every place that describes the changed behaviour: docs, READMEs,
+Search for every place that describes the changed behaviour: docs, READMEs,
 comments, help text, the strings a script prints, `AGENTS.md`. Re-derive each
-from the new behaviour.
-Code comments follow `eng:plain-writing`'s code comments reference.
+from the new behaviour. Code comments follow `eng:plain-writing`.
 
-**Done when:** the terms searched and the files corrected are listed, or the
-search found nothing that described the change.
+**Done when:** the terms searched and the files corrected are listed.
 
 ## Step 5: Review
 
-Read [references/review.md](references/review.md) first and follow it.
+Follow [references/review.md](references/review.md). On the fast path, run
+`code-review` at `medium` in place of `high`, with no intent check.
 
 **Done when:** its report says ready, or not ready with each blocker named, or
 the review still runs in the background and the reply says so.
 
 ## Step 6: Deliver
 
-When the user approved a plan whose Delivery section lists writes, read
-[references/deliver.md](references/deliver.md) and follow it.
+When an approved plan's Delivery lists writes, follow
+[references/deliver.md](references/deliver.md).
 
-**Done when:** its hand-back is written, or the run stopped with a report
-naming the stop it hit.
+**Done when:** its hand-back is written.
 
 ## Report
 
-What changed, by file. Every check run, with its result. Anything done outside
-the plan. The review report. What was not checked, and any risk.
+What changed, by file; every check run, with its result; anything done
+outside the plan; the review report; what was not checked; any risk.
 
-**Done when:** each of those is in the report, or marked none.
+---
+
+The friction tells are adapted from the `architect` skill in cursor/plugins
+pstack, by Lauren Tan (MIT).

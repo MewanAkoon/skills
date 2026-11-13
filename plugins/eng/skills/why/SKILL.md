@@ -1,162 +1,79 @@
 ---
 name: why
-description: Use before removing or rewriting a guard, retry, timeout, early return, special case, odd constant, or code that looks redundant, and when asked why code is shaped the way it is. Traces the rationale through git history, keeping what a source says apart from inference.
+description: Use before removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code that the user's request did not name, and when asked why code is shaped the way it is. Traces the reason through git history and PRs.
 ---
 
 # Why
 
-## What this does
+Code the user named for removal needs none of this, because their request is
+the reason. For anything else, the answer comes from the record, and the report
+keeps what a source says apart from what you infer.
 
-It works out why a piece of code has the shape it has, from the record:
-commits, pull requests, the issues they close, the tests that shipped with
-them, and whatever else this repo can reach.
-
-It keeps two things apart in the answer: what a source says, and what you are
-inferring from a pattern. That separation is the product.
-
-## When to use it
-
-Before deleting a guard, a retry, a timeout, an early return, a special case,
-or a constant with an oddly specific value. Before rewriting something that
-looks wrong or redundant. When a reviewer asks why the code is like this and
-nobody left a comment.
-
-It runs on its own for that first case, because deleting a guard is something
-an agent reaches on its own with nobody watching to ask for it.
-`eng:api-boundaries` tells the agent to delete guards; this is the check that
-runs first.
-
-Skip it for code written this week that you already understand, and for code
-you are adding rather than removing. Skip it when the question is what the
-code does, which is `eng:investigate`.
-
-## How to use it
-
-Nothing to invoke when it fires on its own. To ask directly, type `/eng:why`
-with a file, a line range, or a symbol name. Either way you get a short report
-with a citation on every claim, and a list of everywhere that was searched and
-came back empty. When the commit that added the code, or its PR, already says
-why, you get that reason with its citation instead.
-
----
-
-## Step 1: Anchor on the code
-
-Pin down what is being investigated: the file paths, the line ranges, the
-symbols. Then get the commits.
+## Step 1: Find the commits
 
 ```bash
-git log -20 --follow --date=short --pretty='%h %ad %an %s' -- <file>
-git log -L <start>,<end>:<file>                  # every commit that touched these lines
-git blame -w -C -C -L <start>,<end> -- <file>    # ignore reformatting and moved code
-git log --follow -p -20 -- <file>
+git log -L <start>,<end>:<file>
+git blame -w -C -C -L <start>,<end> -- <file>
 ```
 
-`-w -C -C` on the blame matters. Without it, one formatter run or one file
-split makes every line blame to whoever moved it.
+Without `-w -C -C`, one formatter run or one file split blames every line on
+whoever moved it. Trace past the newest commit. The current shape is often
+several decisions stacked, and the last one only moved the code.
 
-For the PR behind a commit: a merge commit carries `Merge pull request
-#1234`, a squashed commit ends its subject with `(#1234)`, and a repo that
-rebases has neither. When the subject has no number, find it with
+For each commit, find its PR: a squashed subject ends in `(#1234)`, a merge
+commit says `Merge pull request #1234`, and otherwise
 `gh pr list --search <sha> --state merged`.
 
-**Done when:** there is a list of commits touching the target, with dates and
-authors, and a PR number or a recorded "no PR found" for each one.
+**Done when:** each commit touching the lines has a PR number or "no PR
+found".
 
 ## Step 2: Read the record
 
 ```bash
-gh pr view <n> --json title,body,createdAt,mergedAt,closingIssuesReferences,comments,reviews
+gh pr view <n> --json title,body,closingIssuesReferences,comments,reviews
 gh api --paginate repos/{owner}/{repo}/pulls/<n>/comments
-gh issue view <n> --comments
 ```
 
-Read the PR body, the review threads, and the linked issue. `gh pr view`
-returns the conversation and each review's summary but not the comments left
-on lines of the diff, which is often where a guard was argued over. The
-`gh api` call returns those.
+`gh pr view` leaves out comments on lines of the diff, which is where a guard
+usually got argued over. The `gh api` call returns them. Read the linked
+issue, and the tests that landed in the same commit. A test name is often the
+only record of the case that forced the code.
 
-Read the tests that landed in the same commit: a test name is often the only
-written record of the case that forced the code. Read the comments the commit
-added, and check whether a comment nearby was written at the same time or
-years later.
+When the commit that added the code, or its PR, states the reason, report it
+with its citation and stop.
 
-When the commit that added the target, or its PR, states the reason, that is
-the answer. Report the reason with its citation and stop, because steps 3 to
-5 are for a record that does not say.
-
-**Done when:** every commit from step 1 has either a source read or a note
-saying its message is the whole record, or the commit that added the target,
-or its PR, states the reason and the run has stopped with that reason cited.
+**Done when:** every commit has its PR, issue and tests read, or its message
+is the whole record, or the run has stopped on a stated reason.
 
 ## Step 3: Search outside git
 
-List the sources this repo can reach before searching any of them: an issue
-tracker, ADRs and specs under `docs/` or `.claude/plans/`, a Notion or Slack
-workspace where a connector is available.
+List what this repo can reach, such as the tracker, ADRs, `docs/`, and
+connectors for Slack, Notion, error tracking or metrics. Search each for the
+symbol, the constant's value, and the week the change shipped. A monitor
+threshold equal to the constant, or an error first seen the week before the
+commit, is often the whole answer. Record empty searches too.
 
-When the target is one of the shapes named in "When to use it", add two more:
-error tracking and metrics, where a connector reaches them.
+**Done when:** every reachable source has a query and a result, "nothing"
+included.
 
-Search each one on the symbol name, the constant's value, the ticket key, and
-the week the change shipped. In error tracking, look for issues first seen in
-the weeks before the commit whose stack passes through the target. In metrics,
-look for a monitor threshold matching the constant. A monitor created the same
-day as the change is usually the whole answer.
+## Step 4: Report
 
-An empty search carries information. "Searched the tracker for the retry
-threshold, nothing" says the number was chosen in a PR rather than in a plan.
+- **The code.** Paths, line ranges, symbols.
+- **What the record says.** One bullet per claim, each citing a sha, a PR, an
+  issue, or a `file:line`. A claim with no citation moves to the next list.
+- **What this suggests.** Inference, hedged with "appears to", each bullet
+  naming the evidence it rests on. When the evidence fits two stories, give
+  both. A guess the user offered is one of these until the record backs it.
+- **What is missing.** Questions the record did not answer.
+- **Where I looked.** One line per source and what came back.
 
-**Done when:** the reachable sources are listed, and every source on that
-list has a named query and a recorded result, including "nothing".
+Before a change, end with three lines: **preserve** (what the record shows
+was deliberate), **safe to change** (what nobody decided), **risk** (what
+breaks if the original reason still holds).
 
-## Step 4: Sort evidence from inference
-
-- Cite every claim about intent with a commit sha, a PR number, an issue id,
-  or a `file:line` for a comment. A claim with no citation belongs under
-  inference.
-- Hedge indirect evidence. Say "appears to" and "suggests" when the source
-  does not say it outright.
-- When the evidence fits more than one story, give both, with the evidence
-  for each, and let the reader pick.
-- Treat a guess the user offers as one hypothesis among the others, and check
-  it against the record the same way.
-- Trace back past the newest commit. The current shape is usually several
-  decisions stacked up, and the last one often only moved the code.
-- Take intent from an external source. The code tells you what it does. A
-  null check tells you a null arrives, not why.
-
-**Done when:** every claim sits under either the evidence heading with a
-citation, or the inference heading with the chain that led to it.
-
-## Step 5: Report
-
-**The question.** One line.
-
-**The code.** Paths, line ranges, symbols.
-
-**What the record says.** One bullet per claim, each with its citation.
-
-**What this suggests.** Inference, hedged, each bullet naming the evidence it
-rests on.
-
-**Competing readings.** Only when the evidence fits several stories.
-
-**What is missing.** The questions the record did not answer.
-
-**Where I looked.** One line per source: what was searched, what came back or
-"nothing found".
-
-When the investigation came before a change, close with three lines:
-**preserve** (behaviour the record shows was deliberate), **safe to change**
-(what the record shows nobody decided), **risk** (what breaks if the original
-reason still holds).
-
-**Done when:** every bullet under "what the record says" has a citation, and
-"where I looked" lists every source from step 3, empty ones included.
+**Done when:** every claim under "what the record says" has a citation, and
+"where I looked" lists every source from step 3.
 
 ---
 
 Adapted from the `why` skill in cursor/plugins pstack, by Lauren Tan (MIT).
-The seven-category investigator fan-out is narrowed to git history plus
-whatever else the repo can reach.

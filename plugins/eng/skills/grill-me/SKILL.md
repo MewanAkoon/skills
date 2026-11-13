@@ -8,96 +8,48 @@ disable-model-invocation: true
 
 ## What this does
 
-It reverses the usual direction. Instead of the agent building what it thinks
-you meant, it interviews you until the design has no unresolved branches
-left, and its only output is a written summary of the decisions.
-
-Most bad output comes from a gap between what you pictured and what the agent
-understood. This closes that gap before any code exists, which is the
-cheapest point to close it.
+It interviews you until the design has no open decisions, and writes down
+what you decided. Nothing gets built.
 
 ## When to use it
 
-Before starting any feature or refactor big enough that you would be annoyed
-to throw it away. Before writing a spec. When you have a rough idea and you
-know there are decisions inside it you have not made yet.
-
-Skip it for a task you could describe completely in one sentence.
+Before a feature or refactor you would hate to throw away, or on a plan the
+agent has just presented with questions still open. Skip it for a task one
+sentence describes.
 
 ## How to use it
 
-Type `/eng:grill-me` and describe the thing, roughly. Answer the questions.
-Say "enough" when you want it to stop early, or "I don't know, decide" for a
-question you have no opinion on.
-
-At the end you get a short written summary of every decision. Keep that. It
-is the input to whatever you build next.
+Type `/eng:grill-me` with the idea, roughly, or after a plan. Answer the
+questions. Say "enough" to stop, or "decide" for one you have no view on. You
+get a short summary of the decisions.
 
 ---
 
-## Rules for the interview
+## The interview
 
-**One question at a time.** A numbered list of eight questions gets three
-lazy answers. One question gets a real one.
-
-**Go depth-first.** Follow an answer into its consequences before moving to a
-new topic. An answer that opens two new questions means those two come next,
-not later.
-
-**Ask about the thing that would be expensive to get wrong.** Data shape,
-failure behaviour, ownership, and what happens on the second run. Not
-variable names.
-
-**When an answer is vague, ask again.** "It should handle errors gracefully"
-is not an answer. Ask what the caller sees, what gets logged, and what
-happens to the half-finished work.
-
-**Find the facts yourself.** Read the repo, open the manifest, run the tool.
-The user's time is for the decisions only they can make.
-
-**Propose when asked.** If the user says they do not know, give two concrete
-options with the trade-off, and let them pick. Do not stall on a question
-they cannot answer.
-
-**Say when an answer contradicts an earlier one.** Quote both and ask which
-one holds.
-
-## Question areas worth reaching
-
-Work through these, skipping the ones that do not apply:
-
-- **The actual goal.** What does the user of this see that they do not see
-  now? If nothing, why build it.
-- **Data shape.** What is stored, in what form, and what is derived at read
-  time. Get this before anything else, because everything downstream follows
-  from it.
-- **Boundaries.** What comes in from outside, what goes out, and what is
-  internal.
-- **Failure.** Every external call can fail. What happens for each one, and
-  what does the caller see.
-- **Second run.** What happens if this runs twice on the same input.
-  Retries, duplicate webhooks, a double-clicked button.
-- **Existing data.** What happens to the records that already exist and do
-  not match the new shape.
-- **Scope edges.** Name three things adjacent to this that you are choosing
-  not to build. Getting the "not this" list explicit prevents half of the
-  scope creep.
-- **Done.** What has to be true before you would call this finished.
+- One question at a time, depth-first. Follow an answer into its
+  consequences before the next topic.
+- Ask what is expensive to get wrong: data shape first, then boundaries,
+  failure of each external call, a second run on the same input, existing
+  data that does not fit, what is out of scope, and what done means.
+- A vague answer gets asked again, as what the caller sees, what is logged,
+  and what happens to half-finished work.
+- Find facts yourself from the repo and its tools. Ask the user only what
+  they alone can decide.
+- On "decide" or "I don't know", give two concrete options with the
+  trade-off, and take a pick.
+- When an answer contradicts an earlier one, quote both and ask which holds.
 
 ## Ending
 
-Stop when the remaining questions are ones whose answers would not change the
-build, or when the user says "enough".
+Stop when no remaining answer would change the build, or on "enough". Write
+the decisions, the options rejected and why, and what is still open. Run on a
+presented plan, the answers go into that plan's Open questions, each marked
+settled with the user's answer, and the plan file is updated when it has one.
 
-Then write the summary: the decisions made, the options rejected and why, and
-anything still open. Short. It is a record, not a document.
-
-**Done when:** the summary is written and the user has confirmed it, or has
-named a correction that is now in it, or the summary is in front of the user
-and the turn has ended, or the run has stopped because the user said "enough"
-and the summary went out unconfirmed. The confirmation settles the decisions.
-Building starts only when the user approves a plan that uses them or names the
-exact change.
+**Done when:** the summary, or the updated plan, is in front of the user and
+the turn has ended. Building starts only when the user approves a plan or
+names the exact change.
 
 ---
 

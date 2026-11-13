@@ -239,7 +239,7 @@ make for Cursor.
 ### Keeping working repos clean
 
 The plugin itself installs under `~/.claude/plugins`, outside every project.
-Some skills write working files: `investigate` and `wayfinder` under
+Some skills write working files: `investigate` under
 `.claude/plans/`, and `handoff` under `.claude/handoffs/`. `eng:commit` leaves
 them out unless you name them. As an optional safety net you can ignore them
 globally. Check what you already have first, because setting `core.excludesfile`
@@ -297,8 +297,8 @@ the `gh stack` rules under `permissions` if you no longer want them.
 [plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md) is eight
 standing steps: understand first, plan and stop, implement on approval, review
 until clean, commit and open PRs only when asked or when a plan you approved
-lists them, handle PR feedback on evidence and review the whole PR after each
-push, post nothing but a Linear issue comment you ask for, and report briefly.
+lists them, handle PR feedback on evidence and review the unreviewed commits
+after each push, post nothing, and report briefly.
 The plugin's SessionStart hook sends it at the start of every session and after
 each compaction. It names the skill for each step that has a procedure, so a
 change of phase is the cue to load it:
@@ -309,7 +309,7 @@ change of phase is the cue to load it:
 | 3, implement, and the delivery an approved plan lists | `eng:implement`, and its `references/deliver.md` |
 | 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
 | 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
-| 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the whole PR |
+| 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the commits no review has read |
 
 The other skills hold knowledge a phase reaches for, or are modes you start
 yourself.
@@ -462,16 +462,16 @@ above leaves out the ones you do not want.
 | Skill | Fires on | What it does |
 |---|---|---|
 | [investigate](plugins/eng/skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
-| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change test-first in the repo's patterns, corrects docs it makes false, reviews it through `/code-review` |
+| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, test-first unless it is a small named change, corrects docs it makes false, reviews it through `/code-review` |
 | [pr-feedback](plugins/eng/skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
 | [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
 | [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
 | [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes title and body from the diff in the repo's own PR format, creates or updates |
-| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and comments on a Linear issue only when asked |
-| [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Any `.ts` or `.tsx` file, a type error, or a diff adding `any` or a cast | Discriminated unions, brands, narrowing, exhaustiveness |
+| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker, drafts from its template and labels to files, files only when asked or when an approved plan's Delivery names the write, and drafts every comment to a file |
+| [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
 | [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
 | [merge-conflicts](plugins/eng/skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation | Traces both sides, resolves hunk by hunk, finishes the operation |
-| [why](plugins/eng/skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
+| [why](plugins/eng/skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code that the request did not name, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
 | [blast-radius](plugins/eng/skills/blast-radius/SKILL.md) | Planning a change to something shared, or a question about what a change breaks | What a change breaks elsewhere, with evidence levels |
 
 ### User-invoked
@@ -482,7 +482,6 @@ Only fire when typed. Zero context cost.
 |---|---|---|
 | [grill-me](plugins/eng/skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
 | [handoff](plugins/eng/skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
-| [wayfinder](plugins/eng/skills/wayfinder/SKILL.md) | `/eng:wayfinder` | Charts a big effort as decision tickets under `.claude/plans/` |
 
 To see a change working in the running app, Claude Code's built-in `/run`
 launches and drives it, and `eng:implement`'s review names it when a change

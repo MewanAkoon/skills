@@ -100,7 +100,9 @@ Print `git log --oneline -<n>` for this run's commits.
 On a request to push, or a push Delivery lists. `git rev-parse --abbrev-ref
 HEAD` printing `HEAD` means detached: stop. The remote is the upstream's,
 else `origin`, else the only one; with several and no `origin`, ask; with
-none, stop. Confirm before pushing the default branch. Read the upstream:
+none, stop. Confirm before pushing the default branch, which
+`git symbolic-ref --short refs/remotes/<remote>/HEAD` names after
+`git remote set-head <remote> -a`. Read the upstream:
 
 ```bash
 git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"

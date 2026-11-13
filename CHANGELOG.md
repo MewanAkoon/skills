@@ -6,6 +6,46 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.17.0 - unreleased
+
+### Changed
+
+- Every skill is cut to what a current model gets wrong without it. The
+  skills come to about 77 KB, down from 194 KB, and 16 reference files are
+  gone, mostly tutorials and rare-case procedures. Each shared rule now lives
+  in one place: the AI-credit ban and the repo-guidance probe in
+  `eng:commit`'s `repo-guidance.md`, the mid-operation probe in
+  `eng:merge-conflicts`, the approval rule in `eng:implement`'s `deliver.md`.
+- An approved plan runs to its draft PR without a question. Any plain yes,
+  such as "lgtm" or "go ahead", covers Delivery, and a message that says not
+  to commit, push or open a PR narrows it. `eng:pr` takes its base from
+  Delivery's `Base:`, `eng:commit` its grouping, and the test seam defaults to
+  the nearest existing test of the same kind, each logged as a ruling. When
+  `Base:` is not on origin yet, the run branches from the default branch and
+  names the restack as a follow-up, rather than stopping.
+- `eng:implement` has a fast path: a small change you name exactly runs the
+  repo's checks and a review loop at `/code-review medium`. The intent check
+  runs in round 1 and on the final tree only. The review after a push covers
+  only the commits since the last reviewed one, and the CI wait has a
+  10-minute limit.
+- A push rejected after a rebase the run made proposes
+  `git push --force-with-lease`, which asks. Nothing proposes
+  `git pull --rebase`.
+- `eng:investigate` sends subagents only into areas that span several
+  files, runs one merged check only on a plan that spans more than one area,
+  and writes the plan file whenever Delivery lists writes. The plan template
+  drops `Plan name:` and `Status:` and gains `Branch:` and `Base:`.
+- `eng:why` no longer fires on a change the request names, and `eng:ts-types`
+  no longer fires on reading a `.ts` file.
+- No skill describes the hook's plan grants, comment gate, or whole-PR
+  reminder any more.
+- Workflow step 5 takes any plain approval, and step 6 reviews only the
+  commits no review has read.
+
+### Removed
+
+- `eng:wayfinder`.
+
 ## 0.14.0 - unreleased
 
 ### Changed

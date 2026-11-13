@@ -44,7 +44,7 @@ AGENTS.md lists, including a first character YAML reserves.
 Fires:
 
 ```yaml
-description: Use when reading or editing any .ts or .tsx file, designing a type, or reviewing a function signature.
+description: Use when designing or editing a TypeScript type, interface or signature, modelling state, or fixing a type error, and when a diff adds any, an as cast, or a non-null assertion.
 ```
 
 Does not fire:
@@ -186,14 +186,18 @@ for is not one the body can leave unsaid.
 
 ## Structure
 
-Every skill opens with three short headings, in this order:
+A user-invoked skill opens with three short headings, in this order:
 
 - **What this does.** Two or three sentences.
-- **When it runs** or **When to use it.** Including when to skip it.
+- **When to use it.** Including when to skip it.
 - **How to use it.** What the human types and what comes back.
 
 Then the body. Someone reading the file cold should not have to infer
 anything.
+
+A model-invoked skill opens straight into its body. Its description already
+says when it runs, and loads on every turn, so the headings would repeat it.
+A case that should skip the skill goes in the body, at the step it changes.
 
 Name another skill by its full name inside the plugin, `eng:<name>`, and a
 command to type as `/eng:<name>`. Claude Code does not resolve every bare name
@@ -220,19 +224,12 @@ call at the top" is verifiable. "Validation is handled properly" is an
 invitation to stop early. Vague completion criteria are the main reason
 agents quit halfway.
 
-**An end condition admits every ending its step has.** A step that can stop
-early has more than one ending, and the condition has to name them all. "The
-probe printed nothing and there is at least one changed path" locks out the
-step's own "nothing to commit" exit, so an agent that hits it either loops
-looking for a state that will not arrive or drops the condition and moves on.
-Both are worse than having no condition, because the line looks like a check
-and is not one.
-
-Write the stops in: "..., or the run has stopped with its reason named, which
-is X or Y." Before writing the condition, list the step's endings, then read
-the condition back against that list. A condition that names one ending for a
-step that has three is the most common way this rule gets broken, and it
-survives review because the sentence reads fine on its own.
+**An end condition names the state that means the step worked.** A step
+that can stop early says so in its body, at the line where the stop happens:
+"With nothing staged, report that and end the run." The condition stays one
+checkable state, and does not list the stops. A condition that tries to name
+every ending grows into a paragraph no one checks, and one that names a state
+the step's own early exit never reaches makes an agent loop or ignore it.
 
 **Say what to do, not what to avoid.** A prohibition pulls the banned
 behaviour into context and makes it more available, not less. Write "return
@@ -242,7 +239,8 @@ you cannot phrase it positively, and pair it with the positive target.
 **Delete any line the model would follow anyway.** Read each sentence and ask
 whether it changes behaviour compared to the default. "Be thorough" does not.
 "Every modified collection accounted for" does. Delete the whole sentence
-when it fails, do not trim words from it.
+when it fails, do not trim words from it. The same holds for a reference
+file: one the model would get right without it is deleted, not trimmed.
 
 **Say each thing once.** One fact, one place. A duplicated fact costs tokens
 and one copy is already stale.
@@ -274,8 +272,8 @@ Run `./scripts/check.sh`. It covers the mechanical half, listed in
 Then read the skill back and check the half no script can:
 
 1. The description would fire on a real prompt you would actually type.
-2. Every step has a checkable end condition that admits every ending the step
-   has, stops included, or the skill is pure reference and has no steps.
+2. Every step has a checkable end condition, and every early stop is named in
+   the step's body, or the skill is pure reference and has no steps.
 3. No sentence states a default the model already follows.
 4. Reference material that only some runs need is in `references/`.
 5. No filler, no banned words.

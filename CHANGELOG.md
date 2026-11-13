@@ -6,6 +6,23 @@ while `main` carried it. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
 follow semantic versioning.
 
+## 0.18.0 - unreleased
+
+### Fixed
+
+- A subagent's issue write through MCP is denied on any tracker, as the
+  README says. GitHub's always were, Linear's had been until 0.16.0, and
+  other trackers' never were. A tool whose name writes, links, locks, pins
+  or transfers an issue, ticket or work item maps to the issue gate,
+  whatever its server is called, so Linear's `save_issue`, Jira's issue
+  writes, Sentry's `update_issue` and `link_issue`, Zendesk's ticket writes
+  and Azure DevOps's work item writes are denied in a subagent. A draft
+  issue, and a verb on none of the hook's lists, such as `clone_issue`,
+  still pass. The main session's decisions do not change: these writes stay
+  with Claude Code's own permissions, and a delete still asks.
+- `mcp.cases` takes a leading `subagent` field, so its cases can run as a
+  subagent, and a line the runner cannot read fails the count.
+
 ## 0.17.0 - unreleased
 
 ### Changed

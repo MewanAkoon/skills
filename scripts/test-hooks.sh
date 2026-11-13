@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs plugins/eng/hooks/eng-hook against the inputs in tests/hooks and checks what comes
-# out: the session block, then the gates, which read the cases in
-# tests/hooks/pre-tool and a scratch repo for the review gate. The checks read
+# out: the session block, then the guards, which read the cases in
+# tests/hooks/pre-tool and a scratch repo for the review reminder. The checks read
 # the block's shape rather than a stored copy of it, so editing the contract
 # or the writing rules does not mean editing a fixture.
 # Needs bash, jq, git, and the usual POSIX tools. CI runs it.
@@ -136,20 +136,9 @@ run "$inputs/startup.json" PATH="$nojq" CLAUDE_PLUGIN_DATA="$scratch/data-nojq"
 check_block "no jq" "$(cat "$scratch/out")"
 grep -q "jq not found" "$scratch/data-nojq/eng-hook.log" 2>/dev/null || bad "no jq: nothing in the log"
 
-# The gates. Each session below has its own state under $data, which the hook
-# reads from ${CLAUDE_PLUGIN_DATA}/sessions/<session>/.
+# The guards. Each session below has its own state under $data, which the
+# hook reads from ${CLAUDE_PLUGIN_DATA}/sessions/<session>/.
 data="$scratch/data-gates"
-
-# Sets session $1's latest message to $2 and its loaded skills to the rest.
-set_state() {
-  local dir="$data/sessions/$1"
-  mkdir -p "$dir"
-  printf '%s\n' "$2" > "$dir/turn"
-  shift 2
-  : > "$dir/skills"
-  local skill
-  for skill in "$@"; do printf '%s\n' "$skill" >> "$dir/skills"; done
-}
 
 # Runs mode $1 with the JSON $2 on stdin. The output goes to $scratch/out.
 hook_run() {
@@ -190,9 +179,9 @@ expect_bash() {
   fi
 }
 
-# Every skill loaded and every write asked for, so the command cases read what
-# the post guard and the confirmation prompt decide.
-set_state all "commit, push, open the PR and file the issue" commit pr issue
+# The main session leaves a commit, push, pull request or issue write to
+# Claude Code's own permissions, so the command cases, all run in session
+# "all", read what the post guard and the confirmation prompt decide.
 
 # commands.cases: "== <expect> <note>" starts a case, and the lines after it
 # up to the next one are the command.
@@ -238,9 +227,6 @@ while IFS=' ' read -r expect tool tool_input; do
 done < tests/hooks/pre-tool/mcp.cases
 want="$(grep -Ec '^(deny|ask|allow) ' tests/hooks/pre-tool/mcp.cases)"
 [ "$count" -eq "$want" ] || bad "mcp.cases: ran $count of $want cases"
-if [ -s "$data/eng-hook.log" ] && grep -q 'MCP input check' "$data/eng-hook.log"; then
-  bad "mcp.cases: the MCP input check failed and logged an error"
-fi
 
 # The terminal tool that runs a command is read as a shell command.
 terminal() {
@@ -283,24 +269,16 @@ reason="$(jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>
 case "$reason" in *"a deploy"*"parser failed"*) ;; *) bad "parser failure: the reason does not name both the deploy and the parser: $reason" ;; esac
 parser_fails '' 'ls' mcp__terminal__run_in_terminal
 [ "$(verdict)" = ask ] || bad "parser failure: a command through the terminal tool got $(verdict), want ask"
-# A write the gate refuses is still denied: a subagent's, and one in a session
-# whose latest message loaded no skill. One the gate allows, here because the
-# session has no state, still asks, and says why.
+# A subagent's write found before the failure is still denied. One in the main
+# session still asks, and says why.
 parser_fails 'print "gate push";' 'git push origin x' Bash '{"agent_id": "a1"}'
 [ "$(verdict)" = deny ] || bad "parser failure: a subagent's push found before the failure got $(verdict), want deny"
-jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'A subagent never' \
-  || bad "parser failure: the deny for a subagent's push does not come from the write gate"
-mkdir -p "$scratch/data-broken/sessions/noskill"
-printf 'push it\n' > "$scratch/data-broken/sessions/noskill/turn"
-: > "$scratch/data-broken/sessions/noskill/skills"
-parser_fails 'print "gate push";' 'git push origin x' Bash '{"session_id": "noskill"}'
-[ "$(verdict)" = deny ] || bad "parser failure: a push with no skill loaded got $(verdict), want deny"
-jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'Load the eng:commit skill' \
-  || bad "parser failure: the deny for a push with no skill loaded does not come from the write gate"
+jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'A subagent does not' \
+  || bad "parser failure: the deny for a subagent's push does not come from the subagent rule"
 parser_fails 'print "gate push";' 'git push origin x'
-[ "$(verdict)" = ask ] || bad "parser failure: a push the gate allows got $(verdict), want ask"
+[ "$(verdict)" = ask ] || bad "parser failure: a push in the main session got $(verdict), want ask"
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'parser failed' \
-  || bad "parser failure: the reason for a push the gate allows does not name the parser"
+  || bad "parser failure: the reason for a push in the main session does not name the parser"
 
 # A parser still running at its time limit is stopped, and the hook asks
 # rather than letting Claude Code stop the hook and run the command unread.
@@ -344,296 +322,53 @@ long_post "a long heredoc"
 awk 'BEGIN { printf "printf \""; for (i = 0; i < 200000; i++) printf "ab\\\"c"; printf "\" > f; gh pr comment 1 -b x" }' > "$long"
 long_post "a quoted string cut up by escapes"
 
-# The write gate. A subagent is denied whatever the state.
-bash_call all 'git commit -m x' '{"agent_id": "a1", "agent_type": "general-purpose"}'
-[ "$(verdict)" = deny ] || bad "write gate: a subagent's commit was not denied"
-bash_call all 'gh pr comment 5 -b x' '{"agent_id": "a1"}'
-jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'draft' \
-  || bad "write gate: a subagent's post was not denied as a post"
-# Skill not loaded since the latest message: deny, naming the skill.
-set_state none "commit this"
-expect_bash none deny 'git commit -m x' 'eng:commit'
-expect_bash none deny 'git push origin feature/x' 'eng:pr'
-expect_bash none deny 'git subtree push --prefix dist origin gh-pages' 'eng:commit'
-expect_bash none deny 'gh pr create --title x --body-file b.md' 'eng:pr'
-expect_bash none deny 'gh issue create --title x --body-file b.md' 'eng:issue'
-expect_bash none deny 'gh pr create --web' 'eng:pr'
-expect_bash none allow 'git commit -e --dry-run'
-expect_bash none deny 'git commit -am -h' 'eng:commit'
-expect_bash none deny 'git commit -am --help' 'eng:commit'
-expect_bash none deny 'git push -onotify origin x' 'eng:'
-expect_bash none deny 'gh stack submit' 'eng:'
-expect_bash none deny 'gh stack push' 'eng:'
-expect_bash none deny 'gh stack sync' 'eng:'
-expect_bash none deny 'uv run git commit -m x -- a.txt' 'eng:commit'
-expect_bash none deny 'dotenv -e a -e b -e c -e d -- git push' 'eng:'
-expect_bash none deny 'gt --no-interactive submit' 'eng:'
-expect_bash none deny 'gt stack submit' 'eng:'
-expect_bash none deny 'gt --cwd /tmp/x submit' 'eng:'
-expect_bash none deny 'gt s' 'eng:'
-expect_bash none deny 'devbox run "git push origin x"' 'eng:'
-expect_bash none deny 'bun exec "git push"' 'eng:'
-expect_bash none deny 'hatch env run -- git push' 'eng:'
-expect_bash none deny 'parallel "git push" ::: a' 'eng:'
-expect_bash none deny 'script -q out.log -c "git push"' 'eng:'
-expect_bash none deny "find . -name x -exec sh -c 'git push' \\;" 'eng:'
-expect_bash none deny 'script -q /dev/null git -c user.name=x push origin main' 'eng:'
-expect_bash none deny 'gh pr lock 5' 'eng:pr'
-expect_bash none allow 'gh issue create --web=true'
-bash_call all 'gh stack submit' '{"agent_id": "a1"}'
-[ "$(verdict)" = deny ] || bad "write gate: a subagent's gh stack submit was not denied"
-bash_call all "$(awk 'BEGIN { for (i = 0; i < 520; i++) printf "true; "; print "git push origin x" }')" '{"agent_id": "a1"}'
-[ "$(verdict)" = deny ] || bad "write gate: a subagent's push past the segment cap was not denied"
-hook_run pre-tool '{"session_id": "all", "cwd": "/tmp", "agent_id": "a1", "tool_name": "mcp__github__update_pull_request_branch", "tool_input": {"pullNumber": 5}}'
-[ "$(verdict)" = deny ] || bad "write gate: a subagent's PR branch update through MCP was not denied"
-# Your latest message. A write runs unless that message says not to, so these
-# all pass, including messages from real sessions that once asked.
-said_allows() { # message, skills, then command pairs: verdict command
-  local msg="$1" skills="$2"; shift 2
-  # shellcheck disable=SC2086
-  set_state said "$msg" $skills
-  while [ "$#" -gt 1 ]; do
-    expect_bash said "$1" "$2"
-    case "$1" in deny) jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'says not to' \
-      || bad "write gate: the deny for '$2' after '$msg' does not say the message said not to" ;; esac
-    shift 2
-  done
+# Every remote write the hook finds from a subagent is denied, with the one
+# reason: a shell command's, a post through any MCP tool, an MCP write whose
+# name asks, and the GitHub and git MCP writes it maps. Its reads still pass.
+subagent='{"agent_id": "a1", "agent_type": "general-purpose"}'
+for command in 'gh stack push' 'gh stack sync' 'gh stack submit --auto' 'gh stack merge 42 --yes' \
+  'gh stack unstack' 'gh stack link 41 42' 'git commit -m x' 'git push origin x' 'gh pr create --fill' \
+  'gh issue create -t x' 'gh release create v1' 'git push --force origin x' 'gh pr comment 5 -b x'; do
+  bash_call all "$command" "$subagent"
+  [ "$(verdict)" = deny ] || { bad "subagent: '$command' got $(verdict), want deny"; continue; }
+  jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'A subagent does not' \
+    || bad "subagent: the deny for '$command' does not give the subagent reason"
+done
+bash_call all "$(awk 'BEGIN { for (i = 0; i < 520; i++) printf "true; "; print "git push origin x" }')" "$subagent"
+[ "$(verdict)" = deny ] || bad "subagent: a push past the segment cap got $(verdict), want deny"
+for command in 'gh stack view --json' 'git status' 'gh pr view 5' 'git log --oneline'; do
+  bash_call all "$command" "$subagent"
+  [ "$(verdict)" = allow ] || bad "subagent: the read '$command' got $(verdict), want allow"
+done
+
+# Checks that session $1's MCP tool $3 with input $4 gets decision $2, with
+# the JSON object $6, when given, merged into the call, and when $5 is given,
+# that the reason holds it.
+expect_mcp() {
+  local extra="${6:-}"
+  [ -n "$extra" ] || extra='{}'
+  hook_run pre-tool "$(jq -cn --arg s "$1" --arg t "$3" --argjson i "$4" --argjson x "$extra" \
+    '{session_id: $s, cwd: "/tmp", tool_name: $t, tool_input: $i} + $x')"
+  local got
+  got="$(verdict)"
+  [ "$got" = "$2" ] || { bad "pre-tool: got $got, want $2, for $3 $4 in session $1"; return; }
+  if [ -n "${5:-}" ]; then
+    jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$5" \
+      || bad "pre-tool: the reason for $3 $4 in session $1 does not say '$5'"
+  fi
 }
-said_allows "commit this" commit allow 'git commit -m x'
-said_allows "tidy up the parser" "commit pr issue" allow 'git commit -m x' allow 'gh pr edit 5 --body-file b.md' allow 'gh label create bug'
-said_allows "Let's review this PR. If anything needs fixing, we'll keep reviewing and fixing until everything is resolved. Then you have my permission to commit, push, and update the PR. After the update, run another code review." "commit pr" \
-  allow 'git commit -m x' allow 'git push origin x' allow 'gh pr edit 5 --body-file b.md'
-said_allows "This PR has conflicts; please resolve them." commit allow 'git commit --no-edit'
-said_allows "Create a dummy env file and retry." commit allow 'git commit -m x'
-said_allows "If everything looks good, commit, open a PR, and run a review on the new PR." "commit pr" allow 'git commit -m x' allow 'gh pr create -t x'
-said_allows "rename the branch and open a PR" pr allow 'git push -u origin feature/x' allow 'gh pr create -t x'
-said_allows "Can you commit this?" commit allow 'git commit -m x'
-said_allows "commit and push when you're done" "commit pr" allow 'git commit -m x' allow 'git push origin x'
-said_allows "Don't forget to push" commit allow 'git push origin x'
-said_allows "commit this, but don't commit the .env file" commit allow 'git commit -m x'
-said_allows "push it, but don't push to main" commit allow 'git push origin x'
-said_allows "the PR is not merged, push the fix" commit allow 'git push origin x'
-said_allows "commit, and don't touch the tests" commit allow 'git commit -m x'
-said_allows "commit. Don't touch the tests" commit allow 'git commit -m x'
-said_allows "Don't stage the lockfile, commit the rest" commit allow 'git commit -m x'
-said_allows "Don't commit yet. Actually, go ahead and commit" commit allow 'git commit -m x'
-said_allows "don't push. Actually, push it" commit allow 'git push origin x'
-said_allows "skip the flaky test, then push" commit allow 'git push origin x'
-said_allows "drop the debug log and push" commit allow 'git push origin x'
-said_allows "commit and push. No rush" commit allow 'git push origin x'
-said_allows "no issues found, commit it" "commit issue" allow 'git commit -m x' allow 'gh issue close 3'
-said_allows "don't merge the PR, just update its description" pr allow 'gh pr edit 5 --body-file b.md'
-said_allows "I'll review it, then push" commit allow 'git push origin x'
-# Said not to: deny, naming that the message said so.
-said_allows "don't commit" commit deny 'git commit -m x'
-said_allows "Don't commit yet" commit deny 'git commit -m x'
-said_allows "please do not commit or push" commit deny 'git commit -m x' deny 'git push origin x'
-said_allows "Don't stage, commit, or push anything" commit deny 'git commit -m x' deny 'git push origin x'
-said_allows "commit, but don't push" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "Don't push yet, just commit" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "commit and push. Actually, don't push" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "commit it, push it later" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "commit it, I'll push it myself" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "commit, and leave the push to me" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "just commit, hold off on pushing" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "commit, but stop pushing" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "keep going, don't stop pushing until CI is green" commit allow 'git push origin x'
-said_allows "fix it, and never stop the push" commit allow 'git push origin x'
-said_allows "commit without pushing" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "No need to commit, just push" commit deny 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push, no PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
-said_allows "don't open a PR yet" pr deny 'gh pr create -t x'
-said_allows "commit and push. Never mind the push" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "commit, push, and open a PR. Scratch the PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
-said_allows "don't close the issue" issue deny 'gh issue close 3'
-said_allows "open the MR, don't push" pr allow 'glab mr create -tfix' deny 'glab mr create --fill' deny 'glab mr create -fy'
-said_allows "open a PR, but don't push" pr deny 'git push origin x' deny 'gh pr create --web'
-# A refusal earlier in the message stands when a later sentence does not name
-# the write again.
-said_allows "Don't push. Actually the CI is green, so commit." commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "Commit but don't push. Actually, also update the README first." commit allow 'git commit -m x' deny 'git push origin x'
-# More ways to refuse, and ways that are not refusals.
-said_allows "Don't ever push" commit deny 'git push origin x'
-said_allows "Do not push under any circumstances" commit deny 'git push origin x'
-said_allows "I don't want you to push" commit deny 'git push origin x'
-said_allows "don't run git push" commit deny 'git push origin x'
-said_allows "Don't push your changes" commit deny 'git push origin x'
-said_allows "don't push before I review" commit deny 'git push origin x'
-said_allows "Hold the push" commit deny 'git push origin x'
-said_allows "Leave that, commit and push." commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "Leave it and push" commit allow 'git push origin x'
-said_allows "Why is it not pushing? Push again." commit allow 'git push origin x'
-said_allows "Can't push? Try again." commit allow 'git push origin x'
-said_allows "no, go ahead and push" commit allow 'git push origin x'
-said_allows "I didn't push it, can you push" commit allow 'git push origin x'
-said_allows "I haven't committed; commit it" commit allow 'git commit -m x'
-said_allows "Don't push. Actually, commit it." commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "Don't commit or push. The bug is actually in the parser, fix it" commit deny 'git commit -m x' deny 'git push origin x'
-said_allows "don't push, I actually want to review it first" commit deny 'git push origin x'
-said_allows "I'm not ready to push yet" commit deny 'git push origin x'
-said_allows "push once I approve" commit deny 'git push origin x'
-said_allows "wait before pushing" commit deny 'git push origin x'
-said_allows "open a PR, but don't you dare push" pr deny 'git push origin x'
-said_allows "I'll open the PR myself, just push" "commit pr" deny 'gh pr create -t x' allow 'git push origin x'
-said_allows "no PR needed" pr deny 'gh pr create -t x'
-said_allows "Don't commit your changes" commit deny 'git commit -m x'
-said_allows "wait for CI, then push" commit allow 'git push origin x'
-said_allows "don't push. Wait for CI, then commit" commit deny 'git push origin x' allow 'git commit -m x'
-said_allows "commit, push and wait." commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "I want you to push" commit allow 'git push origin x'
-said_allows "I want to commit and push" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "I meant push" commit allow 'git push origin x'
-said_allows "commit and push; wait" commit allow 'git push origin x'
-said_allows "no you need to push" commit allow 'git push origin x'
-said_allows "no, I want you to commit" commit allow 'git commit -m x'
-said_allows "push, then let me know what failed first" commit allow 'git push origin x'
-said_allows "don't push the commit" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "Don't push yet, okay?" commit deny 'git push origin x'
-said_allows "Don't push - CI is broken" commit deny 'git push origin x'
-said_allows "Don't push, why did CI fail?" commit deny 'git push origin x'
-said_allows "Don't push yet. I'll tell you when to push." commit deny 'git push origin x'
-said_allows "No need for an issue" issue deny 'gh issue create -t x -F b.md'
-said_allows "refrain from pushing" commit deny 'git push origin x'
-said_allows "I'll handle the push" commit deny 'git push origin x'
-# Asks with a negation or a question in them, and more plain refusals.
-said_allows "Why don't you commit and push, then?" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "Why not push it, then?" commit allow 'git push origin x'
-said_allows "Commit this, but don't push --force" commit allow 'git push origin x'
-said_allows "Don't ask, push" commit allow 'git push origin x'
-said_allows "don't do anything else, push" commit allow 'git push origin x'
-said_allows "There's no PR yet, open one" pr allow 'gh pr create -t x'
-said_allows "Push it and wait, just in case CI is slow" commit allow 'git push origin x'
-said_allows "Don't create or update the PR" pr deny 'gh pr create -t x'
-said_allows "commit and push, then let me see the first CI run" commit allow 'git push origin x'
-said_allows "We shouldnt push yet" commit deny 'git push origin x'
-said_allows "I wont push it" commit deny 'git push origin x'
-said_allows "Do not touch the PR" pr deny 'gh pr edit 5 --body-file b.md'
-said_allows "Can you push this?" commit allow 'git push origin x'
-said_allows "commit and push, no rush" commit allow 'git push origin x'
-# Round 4 of the review: asks that once read as refusals, and plain no's.
-said_allows "don't change anything and push" commit allow 'git push origin x'
-said_allows "don't touch it and commit it" commit allow 'git commit -m x'
-said_allows "don't ask and push" commit allow 'git push origin x'
-said_allows "it didn't push, push again" commit allow 'git push origin x'
-said_allows "You didn't push - push now" commit allow 'git push origin x'
-said_allows "Not committed yet - commit it" commit allow 'git commit -m x'
-said_allows "$(printf 'It is not pushed \342\200\224 push it')" commit allow 'git push origin x'
-said_allows "the hook won't let me push, you push" commit allow 'git push origin x'
-said_allows "there's no need to push" commit deny 'git push origin x'
-said_allows "commit with no push" commit allow 'git commit -m x' deny 'git push origin x'
-said_allows "don't push till CI passes" commit deny 'git push origin x'
-said_allows "don't update the PR description" pr allow 'gh pr edit 5 --body-file b.md'
-said_allows "skip the PR and push" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
-said_allows "drop the commit and push" commit allow 'git push origin x'
-said_allows "no PR, push it" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
-said_allows "don't update the pr, push" "commit pr" allow 'git push origin x'
-said_allows "without committing, push" commit allow 'git push origin x' deny 'git commit -m x'
-said_allows "don't push. push it later" commit deny 'git push origin x'
-said_allows "Don't push, push later" commit deny 'git push origin x'
-said_allows "I don't want a PR" pr deny 'gh pr create -t x'
-said_allows "Make sure not to push" commit deny 'git push origin x'
-said_allows "do not create a PR for this" pr deny 'gh pr create -t x'
-said_allows "don't push for now" commit deny 'git push origin x'
-said_allows "commit it. staging is down, so don't use staging" commit allow 'git commit -m x'
-said_allows "don't push these changes" commit deny 'git push origin x'
-# A fact about a write is not a no, and an ask after one counts.
-said_allows "The branch wasn't pushed, I need you to push it" commit allow 'git push origin x'
-said_allows "It's not pushed. I want you to push it." commit allow 'git push origin x'
-said_allows "it didn't push, retry the push" commit allow 'git push origin x'
-said_allows "We never pushed this, please go ahead" commit allow 'git push origin x'
-said_allows "I can't push, you push it" commit allow 'git push origin x'
-said_allows "I didn't push it, can you push?" commit allow 'git push origin x'
-said_allows "Push it if it's not pushed" commit allow 'git push origin x'
-said_allows "commit whatever isn't committed yet" commit allow 'git commit -m x'
-said_allows "We have no PR yet, open one" pr allow 'gh pr create -t x'
-said_allows "Don't edit the PR title, update the PR description" pr allow 'gh pr edit 5 --body-file b.md'
-said_allows "Scrap this PR and open a new PR" pr allow 'gh pr create -t x'
-said_allows "Commit this; I don't need a PR yet" "commit pr" allow 'git commit -m x' deny 'gh pr create -t x'
-said_allows "Push it, but I'll do the PR" "commit pr" allow 'git push origin x' deny 'gh pr create -t x'
-said_allows "Don't file an issue for this" issue deny 'gh issue create -t x -F b.md'
-said_allows "We won't push today" commit deny 'git push origin x'
-said_allows "Don't open a PR; Sam will open the PR" pr deny 'gh pr create -t x'
-said_allows "Don't push; CI will retry the push" commit deny 'git push origin x'
-said_allows "don't push - every time you push CI breaks" commit deny 'git push origin x'
-said_allows "don't commit and push" commit deny 'git commit -m x' deny 'git push origin x'
-said_allows "you can't push this" commit deny 'git push origin x'
-said_allows "still no push, please" commit deny 'git push origin x'
-said_allows "it won't commit. fix the hook and commit" commit allow 'git commit -m x'
-said_allows "it did not push" commit allow 'git push origin x'
-said_allows "why don't you push it then" commit allow 'git push origin x'
-said_allows "I'll leave it to you to push" commit allow 'git push origin x'
-said_allows "whether or not you push it today, commit first. Actually push it too" commit allow 'git push origin x'
-said_allows "I'll need you to push this" commit allow 'git push origin x'
-said_allows "I'll want you to push it after the commit" commit allow 'git push origin x'
-said_allows "it won't push, can you retry" commit allow 'git push origin x'
-said_allows "it's not pushing, try again" commit allow 'git push origin x'
-said_allows "Don't push yet. OK, now try to push" commit allow 'git push origin x'
-said_allows "don't forget the PR" pr allow 'gh pr create -t x'
-said_allows "you can't push this yet" commit deny 'git push origin x'
-said_allows "this is not ready to commit" commit deny 'git commit -m x'
-said_allows "this won't need a PR" pr deny 'gh pr create -t x'
-said_allows "Commit the parser fix, don't stage anything else" commit allow 'git commit -m x'
-said_allows "no PR and push it" "commit pr" allow 'git push origin x'
-said_allows "commit without staging and push" commit allow 'git push origin x'
-said_allows "Push it, and if you can't push, tell me why" commit allow 'git push origin x'
-said_allows "Don't open a PR. Later open the PR" pr allow 'gh pr create -t x'
-said_allows "ok, why not push it" commit allow 'git push origin x'
-said_allows "Still no PR, open it" pr allow 'gh pr create -t x'
-said_allows "Don't push yet. OK, go push" commit allow 'git push origin x'
-said_allows "Don't push. Actually let's push" commit allow 'git push origin x'
-said_allows "don't push until CI passes. It passed, you should push now" commit allow 'git push origin x'
-said_allows "No PR yet - open one" pr allow 'gh pr create -t x'
-said_allows "no issue yet; file it" issue allow 'gh issue create -t x -F b.md'
-said_allows "Don't open a new PR, update the existing PR" pr allow 'gh pr edit 5 --body-file b.md'
-said_allows "leave the PR alone" pr deny 'gh pr edit 5 --body-file b.md'
-said_allows "it did not even push, try again" commit allow 'git push origin x'
-said_allows "Don't open a PR. The PR template is broken." pr deny 'gh pr create -t x'
-said_allows "Don't file an issue. I already filed the issue." issue deny 'gh issue create -t x -F b.md'
-said_allows "Don't push yet. The branch protection blocks pushes." commit deny 'git push origin x'
-said_allows "Thanks. Don't open the PR, the PR title is wrong" pr deny 'gh pr create -t x'
-said_allows "Don't open a PR. I'll tell you when to open the PR" pr deny 'gh pr create -t x'
-said_allows "you can't commit and push yet" commit deny 'git push origin x'
-said_allows "don't push until I say you should push" commit deny 'git push origin x'
-said_allows "No PR, never open one" pr deny 'gh pr create -t x'
-said_allows "Don't push now; later pushes will handle it" commit deny 'git push origin x'
-said_allows "No PR yet. Let's open one" pr allow 'gh pr create -t x'
-said_allows "no issue yet for this, file one" issue allow 'gh issue create -t x -F b.md'
-said_allows "Don't open the PR. I want to review the PR first." pr deny 'gh pr create -t x'
-said_allows "Don't push. We push on Fridays." commit deny 'git push origin x'
-said_allows "don't push. I push after review." commit deny 'git push origin x'
-said_allows "Don't push. The push hook is broken." commit deny 'git push origin x'
-said_allows "don't push yet. ok we can push now" commit allow 'git push origin x'
-said_allows "don't push yet! jk push it" commit allow 'git push origin x'
-said_allows "Don't push. Wait, actually push" commit allow 'git push origin x'
-said_allows "don't push. on second thought push it" commit allow 'git push origin x'
-said_allows "don't commit. Ok actually commit" commit allow 'git commit -m x'
-said_allows "don't push. I want to push it myself" commit deny 'git push origin x'
-# A takeback, a wait or a condition is left to the skills, which read meaning:
-# the hook lets these run, and eng:commit and eng:pr hold back what was taken
-# back.
-said_allows "commit and push. Scratch that" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push. Actually, just commit" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push. Never mind, just commit" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push, no wait, just commit" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push. Wait, only commit" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push. Actually, don't" commit allow 'git commit -m x' allow 'git push origin x'
-said_allows "commit and push, but let me review first" commit allow 'git push origin x'
-said_allows "commit and push. Not yet" commit allow 'git push origin x'
-said_allows "push it, but not until CI passes" commit allow 'git push origin x'
-said_allows "commit and push. Wait, don't" commit allow 'git push origin x' allow 'git commit -m x'
-said_allows "Commit and push. Actually, hold off." commit allow 'git push origin x'
-said_allows "Commit and push. Never mind, I'll do it myself." commit allow 'git push origin x'
-said_allows "Commit and push. Hold on." commit allow 'git push origin x'
-said_allows "Commit and push, but let me take a look first" commit allow 'git push origin x'
-said_allows "commit and push, but let me look at the diff, first" commit allow 'git push origin x'
-said_allows "Commit and push. Wait." commit allow 'git push origin x'
-said_allows "Push it. Hmm, wait." commit allow 'git push origin x'
-said_allows "Wait for CI before you push" commit allow 'git push origin x'
-said_allows "Wait until I review before pushing" commit allow 'git push origin x'
-said_allows "Push? No, just commit." commit allow 'git push origin x' allow 'git commit -m x'
-said_allows "Could you not push yet?" commit allow 'git push origin x'
-said_allows "Can you hold off on the push?" commit allow 'git push origin x'
-set_state all "commit, push, open the PR and file the issue" commit pr issue
+linear_comment='mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment'
+for tool in mcp__github__push_files mcp__github__create_or_update_file mcp__github__reopen_issue \
+  mcp__3f1c-id__push_files mcp__github__issue_write mcp__github__create_branch mcp__github__create_pull_request \
+  mcp__github__merge_pull_request mcp__github__close_pull_request mcp__git__git_commit mcp__git__git_push "$linear_comment" \
+  mcp__github__add_issue_comment mcp__github__update_pull_request_branch; do
+  expect_mcp all deny "$tool" '{}' 'A subagent does not' "$subagent"
+done
+expect_mcp all allow mcp__github__get_issue '{}' '' "$subagent"
+expect_mcp all allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__list_comments '{}' '' "$subagent"
+# Linear's issue writes have no mapping, so a subagent's passes.
+expect_mcp all allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue '{"team":"SKI","title":"x"}' '' "$subagent"
+# A push option is not a tag or a force, and a force among short options is.
 bash_call all 'git push -o tag origin main'
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'push options' \
   || bad "push options: -o tag did not ask about push options"
@@ -645,84 +380,16 @@ jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'f
 bash_call all 'git push -fo ci.skip origin main'
 jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -q 'forces' \
   || bad "push options: -fo was not read as a forced push"
-expect_bash none allow 'git commit -h'
-expect_bash none deny 'gh pr new --title x' 'eng:pr'
-expect_bash none deny 'gh issue new --title x' 'eng:issue'
-expect_bash none deny 'gt submit' 'eng:'
-hook_run pre-tool '{"session_id": "none", "tool_name": "mcp__github__create_issue", "tool_input": {}}'
-[ "$(verdict)" = deny ] || bad "write gate: a GitHub MCP issue write without eng:issue was not denied"
-expect_bash none deny 'glab mr create --fill --push' 'eng:'
-expect_bash none deny 'glab label create bug' 'eng:issue'
-expect_bash none deny 'glab -R a/b mr create --fill' 'eng:pr'
-expect_bash none deny 'glab -Ra/b mr create' 'eng:pr'
-expect_bash none deny 'glab mr -R a/b create --fill' 'eng:pr'
-expect_bash none deny 'glab --repo=a/b mr create' 'eng:pr'
-expect_bash none deny 'glab mr create --fill' 'eng:pr'
-set_state pushed "open a PR for this" pr
-expect_bash pushed allow 'git push -u origin feature/x'
-expect_bash pushed allow 'gh pr create --title x --body-file b.md'
-# A push the gate allows still asks when it forces.
-expect_bash pushed ask 'git push --force-with-lease origin feature/x' 'forces'
-# A typed /eng:commit is both the skill and the request.
-set_state typed "/eng:commit" commit
-expect_bash typed allow 'git commit -m x'
-# No state to read: the gate fails open, as every check does but the command
-# parser and the gate on a Linear comment.
+# A comment on a Linear issue is a post like any other, whoever asked for it.
+expect_mcp all deny "$linear_comment" '{"issueId":"SKI-1","body":"Done in the PR."}' 'Posting a comment'
+# With no state to read, a commit, a push or a Linear issue still gets no
+# decision, as the main session's writes never do.
 jq -cn '{session_id: "missing", tool_name: "Bash", tool_input: {command: "git commit -m x"}}' |
   "$hook" pre-tool > "$scratch/out" 2>/dev/null
-[ "$(verdict)" = allow ] || bad "write gate: a commit with no state was not allowed"
-bash_call nosuchsession 'git commit -m x'
-[ "$(verdict)" = allow ] || bad "write gate: a commit in a session with no message was not allowed"
+[ "$(verdict)" = allow ] || bad "pre-tool: a commit with no state got $(verdict), want allow"
+expect_bash nosuchsession allow 'git push -u origin feature/x'
+expect_mcp nosuchsession allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue '{"team":"SKI","title":"x"}'
 
-# A comment on a Linear issue, and a Linear issue write, through the gate.
-linear_comment='mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_comment'
-linear_issue='mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__save_issue'
-# Checks that session $1's MCP tool $3 with input $4 gets decision $2, with
-# the JSON object $6, when given, merged into the call, and when $5 is given,
-# that the reason holds it.
-expect_mcp() {
-  local extra="${6:-}"
-  [ -n "$extra" ] || extra='{}'
-  hook_run pre-tool "$(jq -cn --arg s "$1" --arg t "$3" --argjson i "$4" --argjson x "$extra" \
-    '{session_id: $s, cwd: "/tmp", tool_name: $t, tool_input: $i} + $x')"
-  local got
-  got="$(verdict)"
-  [ "$got" = "$2" ] || { bad "write gate: got $got, want $2, for $3 $4 in session $1"; return; }
-  if [ -n "${5:-}" ]; then
-    jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$5" \
-      || bad "write gate: the reason for $3 $4 in session $1 does not say '$5'"
-  fi
-}
-comment_in='{"issueId":"SKI-1","body":"Done in the PR."}'
-expect_mcp all deny "$linear_comment" "$comment_in" 'A subagent never' '{"agent_id": "a1"}'
-expect_mcp all deny "$linear_issue" '{"team":"SKI","title":"x"}' 'A subagent never' '{"agent_id": "a1"}'
-expect_mcp none deny "$linear_comment" "$comment_in" 'eng:issue'
-expect_mcp none deny "$linear_issue" '{"team":"SKI","title":"x"}' 'eng:issue'
-expect_mcp none deny mcp__linear__update_issue '{"id":"SKI-1","title":"x"}' 'eng:issue'
-expect_mcp none deny mcp__LinearServer__save_issue '{"team":"SKI","title":"x"}' 'eng:issue'
-expect_mcp none allow mcp__linearb__save_issue '{"team":"SKI","title":"x"}'
-# Unlike the other gates, a comment with no state to read is denied.
-jq -cn --arg t "$linear_comment" --argjson i "$comment_in" '{session_id: "missing", tool_name: $t, tool_input: $i}' |
-  "$hook" pre-tool > "$scratch/out" 2>/dev/null
-[ "$(verdict)" = deny ] || bad "write gate: a Linear comment with no state was not denied"
-expect_mcp nocommentstate deny "$linear_comment" "$comment_in" 'cannot read this session'
-# A plain no to the comment refuses it. A no to something else, or one that
-# narrows the comment, leaves it to the skill.
-comment_said() { # message, verdict
-  set_state said "$1" issue
-  expect_mcp said "$2" "$linear_comment" "$comment_in" "$([ "$2" = deny ] && printf 'says not to')"
-}
-comment_said "don't comment" deny
-comment_said "No comment." deny
-comment_said "don't comment yet" deny
-comment_said "please don't post a comment" deny
-comment_said "Don't add a comment yet" deny
-comment_said "comment on SKI-1 that the PR is up" allow
-comment_said "don't file a new issue, just comment on SKI-1" allow
-comment_said "don't comment on SKI-9" allow
-set_state said "Don't file an issue for this" issue
-expect_mcp said deny "$linear_issue" '{"team":"SKI","title":"x"}' 'says not to'
-said_allows "don't comment or push" commit deny 'git push origin x'
 # Input that is not JSON passes in every mode: exit 0, no output.
 for m in prompt expansion pre-tool post-tool stop; do
   printf 'not json' | env CLAUDE_PLUGIN_DATA="$data" "$hook" "$m" > "$scratch/out" 2>/dev/null \
@@ -763,100 +430,17 @@ expansion review '--post'
 [ "$(jq -r '.decision // empty' "$scratch/out" 2>/dev/null)" = block ] || bad "expansion: /review --post was not blocked"
 expansion code-review 'ultra'
 [ ! -s "$scratch/out" ] || bad "expansion: a typed ultra was blocked"
-# A typed skill is recorded.
-set_state typed-skill "do it"
-hook_run expansion '{"session_id": "typed-skill", "command_name": "eng:pr", "command_args": ""}'
-grep -qx pr "$data/sessions/typed-skill/skills" || bad "expansion: a typed eng:pr was not recorded"
 
-# A skill that loads is recorded, under its name without eng:.
-set_state loads "commit it"
-hook_run post-tool '{"session_id": "loads", "tool_name": "Skill", "tool_input": {"skill": "eng:commit"}}'
-grep -qx commit "$data/sessions/loads/skills" || bad "post-tool: a loaded eng:commit was not recorded"
-expect_bash loads allow 'git commit -m x'
-
-# A skill a subagent loads does not open the main session's gate.
-set_state subskill "commit it"
-hook_run post-tool '{"session_id": "subskill", "agent_id": "a1", "tool_name": "Skill", "tool_input": {"skill": "eng:commit"}}'
-expect_bash subskill deny 'git commit -m x' 'eng:commit'
-for tool in mcp__github__push_files mcp__github__create_or_update_file mcp__github__reopen_issue mcp__3f1c-id__push_files mcp__github__issue_write mcp__github__create_branch mcp__git__git_commit mcp__git__git_push; do
-  hook_run pre-tool "$(jq -cn --arg t "$tool" '{session_id: "none", tool_name: $t, tool_input: {}}')"
-  [ "$(verdict)" = deny ] || bad "write gate: $tool without its skill loaded was not denied"
-done
-
-# The conflict hint.
+# The hints are gone: a conflict in a command's output, and a message that is
+# only a pull request link, add nothing.
 hook_run post-tool '{"session_id": "s", "tool_name": "Bash", "tool_input": {"command": "git merge x"}, "tool_response": {"stdout": "Auto-merging a.ts\nCONFLICT (content): Merge conflict in a.ts\nAutomatic merge failed; fix conflicts and then commit the result.", "stderr": ""}}'
-jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null | grep -q 'eng:merge-conflicts' \
-  || bad "post-tool: a conflict got no hint"
-hook_run post-tool '{"session_id": "s", "hook_event_name": "PostToolUseFailure", "tool_name": "Bash", "tool_input": {"command": "git merge x"}, "error": "Exit code 1\nAuto-merging a.ts\nCONFLICT (content): Merge conflict in a.ts"}'
-[ "$(jq -r '.hookSpecificOutput.hookEventName' "$scratch/out" 2>/dev/null)" = PostToolUseFailure ] \
-  || bad "post-tool: a merge that failed on a conflict got no hint"
-hook_run post-tool '{"session_id": "s", "tool_name": "Bash", "tool_input": {"command": "ls"}, "tool_response": {"stdout": "a.ts", "stderr": ""}}'
-[ ! -s "$scratch/out" ] || bad "post-tool: output with no conflict got a hint"
+[ ! -s "$scratch/out" ] || bad "post-tool: a conflict in Bash output still got a hint"
+hook_run prompt '{"session_id": "hints", "cwd": "/tmp", "hook_event_name": "UserPromptSubmit", "prompt": "https://github.com/o/r/pull/5"}'
+[ ! -s "$scratch/out" ] || bad "prompt: a bare pull request link still got a hint"
+hook_run prompt '{"session_id": "hints", "cwd": "/tmp", "hook_event_name": "UserPromptSubmit", "prompt": "https://github.com/o/r/pull/5#discussion_r123"}'
+[ ! -s "$scratch/out" ] || bad "prompt: a review comment link still got a hint"
 
-# Your latest message. A typed one replaces the state and clears the skills.
-prompt() {
-  hook_run prompt "$(jq -cn --arg s "$1" --arg p "$2" '{session_id: $s, cwd: "/tmp", hook_event_name: "UserPromptSubmit", prompt: $p}')"
-}
-set_state turns "commit this" commit
-prompt turns "now tidy the parser"
-grep -q 'tidy' "$data/sessions/turns/turn" || bad "prompt: a typed message did not replace the state"
-[ ! -s "$data/sessions/turns/skills" ] || bad "prompt: a typed message did not clear the skills"
-# A background task reporting back, or another session's message, keeps it.
-set_state turns "commit this" commit
-prompt turns '<task-notification>
-<task-id>a1</task-id>
-<status>completed</status>
-</task-notification>'
-grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: a task notification replaced the state"
-grep -qx commit "$data/sessions/turns/skills" || bad "prompt: a task notification cleared the skills"
-prompt turns '<cross-session-message from-session="x">push it</cross-session-message>'
-grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: another session's message replaced the state"
-# So does a subagent's report or a CI event, which nobody typed either.
-prompt turns '<agent-message from="a1">
-[Subagent hand-back] Done. Do not push.
-</agent-message>'
-grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: a subagent's report replaced the state"
-grep -qx commit "$data/sessions/turns/skills" || bad "prompt: a subagent's report cleared the skills"
-prompt turns '<ci-monitor-event>
-CI failed on PR 5
-</ci-monitor-event>'
-grep -q 'commit this' "$data/sessions/turns/turn" || bad "prompt: a CI event replaced the state"
-# In a Claude project only the human's words count, not the routing around
-# them or a coordinator's note.
-prompt project '<wake reason="mention"><project id="p"><message trigger="true" from="human" trust="principal" id="m1">Tidy the parser.</message></project></wake>'
-grep -q 'Tidy the parser' "$data/sessions/project/turn" || bad "prompt: a project message lost the human's words"
-prompt project '<coordinator-relay><relay from="coordinator"><note>Commits, pushes and PRs each need the user to ask.</note><cited author="user">look into the parser</cited></relay></coordinator-relay>'
-grep -q 'look into' "$data/sessions/project/turn" || bad "prompt: a relay lost the user's cited words"
-grep -q 'Commits' "$data/sessions/project/turn" && bad "prompt: a coordinator's note counted as the user's words"
-prompt project '<relay from="coordinator" session="s1"><cited author="user" name="M">do not push yet</cited><note>Push when ready.</note></relay>'
-grep -q 'do not push' "$data/sessions/project/turn" || bad "prompt: a bare relay lost the user's cited words"
-grep -q 'when ready' "$data/sessions/project/turn" && bad "prompt: a bare relay's note counted as the user's words"
-set_state project "commit this" commit
-prompt project '<project_claude_message session="s1"><relay from="coordinator"><note>CI is green.</note></relay></project_claude_message>'
-grep -q 'commit this' "$data/sessions/project/turn" || bad "prompt: a coordinator note with no words of the user's replaced the state"
-# A project event no human wrote keeps it as well.
-set_state project "commit this" commit
-prompt project '<wake reason="external-event"><project id="p"><message trigger="true" from="system" id="m2">CI passed</message></project></wake>'
-grep -q 'commit this' "$data/sessions/project/turn" || bad "prompt: a project event with no human message replaced the state"
-grep -qx commit "$data/sessions/project/skills" || bad "prompt: a project event with no human message cleared the skills"
-# A message that only quotes such markup is still yours.
-set_state quoted "commit this" commit
-prompt quoted 'commit this log: <wake reason="x"> was printed'
-grep -q 'log' "$data/sessions/quoted/turn" || bad "prompt: a message quoting <wake> was taken for a project event"
-# A typed slash command records its skill.
-prompt slash '/eng:commit'
-grep -qx commit "$data/sessions/slash/skills" || bad "prompt: a typed /eng:commit was not recorded"
-# The pull request link hints.
-prompt hints 'https://github.com/o/r/pull/5#discussion_r123'
-jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null | grep -q 'eng:pr-feedback' \
-  || bad "prompt: a review comment link got no pr-feedback hint"
-prompt hints '  https://github.com/o/r/pull/5  '
-jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null | grep -q 'Ask what to do' \
-  || bad "prompt: a bare pull request link got no hint"
-prompt hints 'Review https://github.com/o/r/pull/5 for bugs'
-[ ! -s "$scratch/out" ] || bad "prompt: a pull request link with a request got a hint"
-
-# The review gate, in a scratch repo.
+# The review reminder, in a scratch repo.
 repo="$scratch/repo"
 mkdir -p "$repo"
 git -C "$repo" init -q
@@ -866,9 +450,9 @@ git -C "$repo" -c user.name=t -c user.email=t@t commit -qm init
 # Session start leaves the hash to the first prompt, before any edit.
 start() {
   hook_run session-start "$(jq -cn --arg s "$1" --arg d "${2:-$repo}" '{session_id: $s, cwd: $d, source: "startup"}')"
-  [ ! -f "$data/sessions/$1/start-hash" ] || bad "session start: hashed the tree before the first prompt"
+  [ ! -f "$data/sessions/$1/review-hash" ] || bad "session start: hashed the tree before the first prompt"
   hook_run prompt "$(jq -cn --arg s "$1" --arg d "${2:-$repo}" '{session_id: $s, cwd: $d, prompt: "go"}')"
-  [ -f "$data/sessions/$1/start-hash" ] || bad "session start: the first prompt left no start-hash for $1"
+  [ -f "$data/sessions/$1/review-hash" ] || bad "session start: the first prompt left no review-hash for $1"
 }
 stop() {
   local extra="${2:-}"
@@ -877,76 +461,65 @@ stop() {
     '{session_id: $s, cwd: $d, hook_event_name: "Stop", stop_hook_active: false, background_tasks: []} + $x')"
 }
 reminded() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null | grep -q 'not been reviewed'; }
+# Each edit writes a new line, so every one is a tree the reminder has not
+# seen.
+edits=0
+edit() { edits=$((edits + 1)); printf 'edit %s\n' "$edits" > "$repo/a.txt"; }
+review_post() {
+  local extra="${2:-}"
+  [ -n "$extra" ] || extra='{}'
+  hook_run post-tool "$(jq -cn --arg d "$repo" --arg a "$1" --argjson x "$extra" \
+    '{session_id: "gate", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: $a}} + $x')"
+}
 start gate
 stop gate
 [ ! -s "$scratch/out" ] || bad "review gate: a clean tree got a reminder"
-printf 'two\n' > "$repo/a.txt"
+edit
 stop gate
 reminded || bad "review gate: an unreviewed change got no reminder"
 [ "$(jq -r '.hookSpecificOutput.hookEventName' "$scratch/out")" = Stop ] || bad "review gate: the reminder is not Stop context"
+stop gate
+[ ! -s "$scratch/out" ] || bad "review gate: the same tree got a second reminder"
+edit
 stop gate '{"stop_hook_active": true}'
 [ ! -s "$scratch/out" ] || bad "review gate: acted twice in one turn"
 stop gate '{"background_tasks": [{"id": "t1", "type": "subagent", "status": "running", "description": "code-review medium a..b"}]}'
 [ ! -s "$scratch/out" ] || bad "review gate: acted while a code-review ran"
 stop gate '{"background_tasks": [{"id": "t1", "type": "subagent", "status": "completed", "description": "/code-review medium a..b"}]}'
 reminded || bad "review gate: a finished code-review task silenced it"
+edit
 stop gate '{"background_tasks": [{"id": "t1", "type": "shell", "status": "running", "description": "npm test"}]}'
 reminded || bad "review gate: an unrelated background task silenced it"
+edit
 hook_run pre-tool "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: "medium a..b"}}')"
 stop gate
 reminded || bad "review gate: a review that was only asked for silenced it"
-review_post() {
-  hook_run post-tool "$(jq -cn --arg d "$repo" --arg a "$1" '{session_id: "gate", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: $a}}')"
-}
-review_post "medium 123"
+# A review a subagent runs is not the main session's.
+edit
+review_post "medium" '{"agent_id": "a1"}'
 stop gate
-reminded || bad "review gate: a review of a pull request silenced it"
-review_post "medium HEAD~0..HEAD"
-stop gate
-reminded || bad "review gate: a review of another range silenced it"
-for open_range in "medium HEAD.." "medium main..." "medium HEAD~0.."; do
-  review_post "$open_range"
+reminded || bad "review gate: a subagent's review silenced it"
+# Any review that runs counts, whatever it was pointed at.
+for args in "medium" "medium 123" "medium HEAD~0..HEAD" "medium HEAD.." "medium main..." \
+  "high https://github.com/o/r/pull/12" "medium feature/x" "medium #12" "m*m" "medium --max-findings 5" ""; do
+  edit
+  review_post "$args"
   stop gate
-  reminded || bad "review gate: a review of '$open_range', which stops at HEAD, silenced it"
+  [ ! -s "$scratch/out" ] || bad "review gate: a review of '$args' did not silence it"
 done
-for target in "high https://github.com/o/r/pull/12" "medium feature/x" "medium #12"; do
-  review_post "$target"
-  stop gate
-  reminded || bad "review gate: a review of '$target' silenced it"
-done
-GIT_INDEX_FILE="$scratch/snap-index" git -C "$repo" read-tree HEAD
-GIT_INDEX_FILE="$scratch/snap-index" git -C "$repo" add -A
-snap="$(git -C "$repo" -c user.name=t -c user.email=t@t commit-tree "$(GIT_INDEX_FILE="$scratch/snap-index" git -C "$repo" write-tree)" -p HEAD -m review)"
-review_post "medium HEAD..$snap"
-stop gate
-[ ! -s "$scratch/out" ] || bad "review gate: a review of a snapshot of this tree got a reminder"
-printf 'three\n' > "$repo/a.txt"
+edit
 stop gate
 reminded || bad "review gate: a change after the review got no reminder"
-# A file the snapshot cannot read fails it, so no review of any range counts.
-if [ "$(id -u)" != 0 ]; then
-  printf 'u\n' > "$repo/unreadable.txt"
-  chmod 000 "$repo/unreadable.txt"
-  review_post "medium HEAD~0..HEAD"
-  stop gate
-  reminded || bad "review gate: a snapshot that could not read a file silenced it"
-  chmod 644 "$repo/unreadable.txt"
-  rm -f "$repo/unreadable.txt"
-fi
-# A glob among the arguments is a path, not files to expand into, even where
-# a file's name would turn it into a review level.
-mkdir -p "$scratch/globdir"
-: > "$scratch/globdir/medium"
-here="$PWD"
-( cd "$scratch/globdir" &&
-  jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: "m*m"}}' |
-  env CLAUDE_PLUGIN_DATA="$data" "$here/$hook" post-tool > /dev/null 2>&1 )
+# A typed review counts too, unless it was blocked.
+edit
+hook_run expansion "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, command_name: "code-review", command_args: "medium --comment"}')"
 stop gate
-reminded || bad "review gate: a review of a path glob silenced it"
-review_post "medium --max-findings 5"
+reminded || bad "review gate: a blocked typed review silenced it"
+edit
+hook_run expansion "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, command_name: "code-review", command_args: "medium"}')"
 stop gate
-[ ! -s "$scratch/out" ] || bad "review gate: a reviewed tree got a reminder"
-# Handoffs, like plans, are not changes to review, and an accented name hashes.
+[ ! -s "$scratch/out" ] || bad "review gate: a typed review was not recorded"
+# Handoffs, like plans, are not changes to review, and unusual names hash.
 mkdir -p "$repo/.claude/handoffs"
 printf 'h\n' > "$repo/.claude/handoffs/h.md"
 stop gate
@@ -961,7 +534,6 @@ stop gate
 reminded || bad "review gate: a new file with a quote in its name got no reminder"
 rm "$repo/a\"b.txt"
 # A link to a directory cannot be hashed, and must not hide the files after it.
-review_post "medium"
 mkdir -p "$repo/sub"
 ln -s sub "$repo/alink"
 printf 'z\n' > "$repo/zfile"
@@ -970,20 +542,12 @@ printf 'z2\n' > "$repo/zfile"
 stop gate
 reminded || bad "review gate: an edit after an unhashable untracked link got no reminder"
 rm -r "$repo/sub" "$repo/alink" "$repo/zfile"
-review_post "medium"
-printf 'new\n' > "$repo/b.txt"
-stop gate
-reminded || bad "review gate: a new untracked file after the review got no reminder"
-hook_run expansion "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, command_name: "code-review", command_args: "medium"}')"
-stop gate
-[ ! -s "$scratch/out" ] || bad "review gate: a typed review was not recorded"
 # Changes the session started with are not its own.
 start inherited
 stop inherited
 [ ! -s "$scratch/out" ] || bad "review gate: changes from before the session got a reminder"
 # Only plans changed, or not a repo at all.
 git -C "$repo" checkout -q -- a.txt
-rm "$repo/b.txt"
 mkdir -p "$repo/.claude/plans"
 printf 'plan\n' > "$repo/.claude/plans/p.md"
 start plans
@@ -995,768 +559,32 @@ stop plain '' "$scratch/plain"
 [ ! -s "$scratch/out" ] || bad "review gate: a directory outside git got a reminder"
 [ "$status" -eq 0 ] || bad "review gate: exited $status outside git"
 
-# The reminder to review the whole pull request after a push, in a repo with
-# a remote whose branches the pushes move. The remote names main as its
-# default, as a clone does.
-pr="$scratch/pr"
-git init -q --bare "$scratch/pr-remote.git"
-git clone -q "$scratch/pr-remote.git" "$pr" 2>/dev/null
-git -C "$pr" symbolic-ref HEAD refs/heads/main
-printf 'one\n' > "$pr/a.txt"
-git -C "$pr" add a.txt
-git -C "$pr" -c user.name=t -c user.email=t@t commit -qm init
-git -C "$pr" push -q -u origin main 2>/dev/null
-git -C "$pr" remote set-head origin main
-git -C "$pr" checkout -q -b feature
-git -C "$pr" push -q -u origin feature 2>/dev/null
-pr_commit() {
-  printf '%s\n' "$1" > "$pr/a.txt"
-  git -C "$pr" -c user.name=t -c user.email=t@t commit -qam "$1"
-}
-# Stubs stand in for gh, glab and gt, so no test reaches a real service. Each
-# exits with the status in $scratch/stub-status.
-mkdir -p "$scratch/stub"
-# The stub reads its status when it runs, so the expansion stays quoted.
-# shellcheck disable=SC2016
-for tool in gh glab gt; do
-  printf '#!/bin/sh\nexit "$(cat %s/stub-status 2>/dev/null || echo 0)"\n' "$scratch" > "$scratch/stub/$tool"
-  chmod +x "$scratch/stub/$tool"
-done
-# Runs a command through the hook as Claude Code would: pre-tool, the command
-# itself, then post-tool, or PostToolUseFailure when the command fails. $2
-# names a subagent.
-pr_bash() {
-  local agent="${2:-}" event=PostToolUse
-  hook_run pre-tool "$(jq -cn --arg d "$pr" --arg c "$1" --arg a "$agent" \
-    '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}
-      + (if $a == "" then {} else {agent_id: $a} end)')"
-  # The stub PATH is meant to stay inside this subshell.
-  # shellcheck disable=SC2030
-  (cd "$pr" && PATH="$scratch/stub:$PATH" && eval "$1") > /dev/null 2>&1 || event=PostToolUseFailure
-  hook_run post-tool "$(jq -cn --arg d "$pr" --arg c "$1" --arg e "$event" --arg a "$agent" \
-    '{session_id: "pr", cwd: $d, hook_event_name: $e, tool_name: "Bash", tool_input: {command: $c}}
-      + (if $a == "" then {} else {agent_id: $a} end)')"
-}
-pr_review() {
-  hook_run post-tool "$(jq -cn --arg d "$pr" --arg a "$1" '{session_id: "pr", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: $a}}')"
-}
-pr_stop() { stop pr "${1:-}" "$pr"; }
-pr_reminded() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null | grep -q 'review the whole PR'; }
-# True when a review was recorded for the pushed commit at HEAD.
-pr_counted() { [ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ]; }
-start pr "$pr"
-# A denied push never runs, so it gets no post-tool hook and keeps no state.
-hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "t0", tool_input: {command: "git push -q"}}')"
-[ "$(verdict)" = deny ] || bad "pr reminder: a push the user did not ask for was not denied"
-ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 && bad "pr reminder: a push the gate denied kept its state"
-# From here the user asked for the commits, pushes and pull requests.
-set_state pr "commit, push and open the PR" commit pr
-pr_stop
-[ ! -s "$scratch/out" ] || bad "pr reminder: a branch nobody pushed this session got a reminder"
-pr_commit two
-pr_bash 'git push -q'
-pr_stop
-pr_reminded || bad "pr reminder: a push got no reminder"
-[ "$(jq -r '.hookSpecificOutput.hookEventName' "$scratch/out")" = Stop ] || bad "pr reminder: the reminder is not Stop context"
-pr_stop
-[ ! -s "$scratch/out" ] || bad "pr reminder: reminded twice for the same push"
-pr_commit three
-pr_bash 'git push -q origin HEAD'
-pr_stop '{"background_tasks": [{"id": "t1", "type": "subagent", "status": "running", "description": "code-review high a..b"}]}'
-[ ! -s "$scratch/out" ] || bad "pr reminder: acted while a code-review ran"
-pr_review "high $(git -C "$pr" rev-parse HEAD~2)..$(git -C "$pr" rev-parse HEAD~1)"
-pr_stop
-pr_reminded || bad "pr reminder: a review ending at another commit cleared it"
-pr_commit four
-pr_bash 'git push -q'
-pr_review "high $(git -C "$pr" rev-parse HEAD~1)..HEAD"
-pr_stop
-pr_reminded || bad "pr reminder: a review of the last commit alone cleared it"
-pr_review "high --max-findings 5 $(git -C "$pr" merge-base origin/main HEAD)..HEAD"
-pr_counted || bad "pr reminder: a review of the whole range did not count"
-pr_stop
-[ ! -s "$scratch/out" ] || bad "pr reminder: a review of the whole range did not clear it"
-# A review that ran before the push counts once the push lands on its end.
-pr_commit five
-pr_review "high $(git -C "$pr" merge-base origin/main HEAD)..HEAD"
-pr_bash 'git push -q'
-pr_stop
-[ ! -s "$scratch/out" ] || bad "pr reminder: a review run before the push did not count"
-# A pull request opened on a commit whose push was already reminded about
-# gets its own reminder.
-pr_commit five-open
-pr_bash 'git push -q'
-pr_stop
-pr_reminded || bad "pr reminder: a push got no reminder before its pull request opened"
-pr_bash 'gh pr create --title x --body-file body.md'
-pr_stop
-pr_reminded || bad "pr reminder: a pull request opened on a commit already reminded about got no reminder"
-# A pull request opened on the pushed branch asks for the same review, and a
-# review of the pull request by number clears it.
-pr_commit six
-git -C "$pr" push -q 2>/dev/null
-for web in 'gh pr create --web' 'gh pr create -w' 'gh pr create --web=true' 'gh pr create -dw' \
-  'gh pr create --title x --body-file b.md --dry-run' 'glab mr create -w' 'glab mr create -yw' 'gt submit --dry-run'; do
-  pr_bash "$web"
-  pr_stop
-  pr_reminded && bad "pr reminder: '$web', which opens no pull request, got a reminder"
-done
-printf '1\n' > "$scratch/stub-status"
-pr_bash 'gh pr create --title x --body-file body.md'
-pr_stop
-pr_reminded && bad "pr reminder: a pull request that failed to open got a reminder"
-rm -f "$scratch/stub-status"
-pr_bash 'gh pr create --title x --body-file body.md'
-pr_stop
-pr_reminded || bad "pr reminder: a new pull request got no reminder"
-pr_commit six-mr
-git -C "$pr" push -q 2>/dev/null
-pr_bash 'glab mr create --title x'
-pr_stop
-pr_reminded || bad "pr reminder: a new merge request got no reminder"
-# The reminder went out above, so the state file shows what the review did.
-pr_review "high https://gitlab.com/o/r/-/merge_requests/5"
-[ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
-  || bad "pr reminder: a review of the merge request did not count"
-# What the classifier says about a pull request command decides its gate and
-# whether it counts as opening one.
-for case in 'gh pr create -twip -b x|gate pr open pr' 'gh pr create --web=false -t x|gate pr open pr' \
-  'gh pr create -dw|gate push' 'gh pr create --dry-run=true|gate push' 'glab mr create --web=false -t x|gate pr open pr' \
-  'glab mr create -yw|gate pr' 'gt submit|gate push gate pr open pr' 'gt submit --dry-run|gate push gate pr' \
-  'gh pr create -t x -F b --assignee @me|gate pr open pr'; do
-  said="$(printf '%s' "${case%%|*}" | awk -f "$plugin/hooks/classify-command.awk" | tr '\n' ' ')"
-  [ "$said" = "${case#*|} " ] || bad "classifier: '${case%%|*}' gave '$said', not '${case#*|}'"
-done
-# A pull request opened through the API counts too, by REST or GraphQL.
-for api in 'gh api repos/o/r/pulls -f title=x -f head=feature -f base=main' \
-  "gh api graphql -f query='mutation { createPullRequest(input: {}) { pullRequest { url } } }'"; do
-  pr_commit "api-$(printf '%s' "$api" | cksum | cut -d' ' -f1)"
-  git -C "$pr" push -q 2>/dev/null
-  pr_bash "$api"
-  pr_stop
-  pr_reminded || bad "pr reminder: a pull request opened by '$api' got no reminder"
-done
-# A push that landed counts though the pull request after it failed to open.
-pr_commit six-fail
-printf '1\n' > "$scratch/stub-status"
-pr_bash 'git push -q && gh pr create --title x --body-file b.md'
-rm -f "$scratch/stub-status"
-pr_stop
-pr_reminded || bad "pr reminder: a push followed by a pull request that failed to open got no reminder"
-# A commit and its push in one command count, though the branch's name was
-# already among the remote branches.
-pr_bash 'printf six2 > a.txt && git -c user.name=t -c user.email=t@t commit -qam six2 && git push -q'
-pr_stop
-pr_reminded || bad "pr reminder: a commit and push in one command got no reminder"
-pr_commit seven
-pr_bash 'git push -q'
-pr_review "high 5abc"
-pr_stop
-pr_reminded || bad "pr reminder: a review of a commit read as a pull request cleared it"
-pr_review "high https://github.com/o/r/pull/12/files/$(git -C "$pr" merge-base origin/main HEAD)..$(git -C "$pr" rev-parse HEAD)"
-pr_counted && bad "pr reminder: a link to a range inside the pull request counted as the whole of it"
-pr_review "HIGH 12"
-pr_counted || bad "pr reminder: a review of the pull request, its level in capitals, did not count"
-pr_stop
-[ ! -s "$scratch/out" ] || bad "pr reminder: a review of the pull request did not clear it"
-# A push to a remote branch the branch does not track, as to a fork, counts.
-git init -q --bare "$scratch/pr-fork.git"
-git -C "$pr" remote add fork "$scratch/pr-fork.git"
-pr_commit eight
-pr_bash 'git push -q fork HEAD:feature'
-pr_stop
-pr_reminded || bad "pr reminder: a push to a fork's branch got no reminder"
-# What a push did not move records nothing.
-pr_commit nine
-pr_bash 'git push -q nowhere HEAD'
-pr_stop
-pr_reminded && bad "pr reminder: a failed push got a reminder"
-pr_bash 'git push -q && false'
-pr_stop
-pr_reminded || bad "pr reminder: a push in a command that then failed got no reminder"
-git -C "$pr" push -q 2>/dev/null
-git -C "$pr" push -q fork HEAD:feature 2>/dev/null
-# The branch is already at HEAD on the remote here, pushed outside the hook,
-# so only a push that moves it again would count.
-pr_commit ten
-git -C "$pr" push -q 2>/dev/null
-git -C "$pr" tag v1
-pr_bash 'git push -q origin v1'
-pr_stop
-pr_reminded && bad "pr reminder: a tag push got a reminder"
-# A push that starts outside the repo and changes into it has nothing to
-# compare against, so this one, which moves nothing, records nothing.
-cmd="cd $pr && git push -q"
-hook_run pre-tool "$(jq -cn --arg d "$scratch/plain" --arg c "$cmd" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}')"
-(eval "$cmd") > /dev/null 2>&1
-hook_run post-tool "$(jq -cn --arg d "$pr" --arg c "$cmd" '{session_id: "pr", cwd: $d, hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: {command: $c}}')"
-pr_stop
-pr_reminded && bad "pr reminder: a push that moved nothing, run from outside the repo, got a reminder"
-pr_bash 'git push -q origin HEAD:main'
-pr_stop
-pr_reminded && bad "pr reminder: a push to the default branch got a reminder"
-pr_commit ten-agent
-pr_bash 'git push -q' agent-1
-pr_stop
-pr_reminded && bad "pr reminder: a subagent's push got a reminder"
-pr_bash 'git status --short'
-pr_stop
-pr_reminded && bad "pr reminder: a command that is not a push got a reminder"
-# A commit on top of the pushed one leaves the reminder for the next push,
-# and uncommitted changes get their own reminder first.
-pr_commit eleven
-pr_bash 'git push -q'
-pr_commit twelve
-pr_stop
-pr_reminded && bad "pr reminder: reminded about a push HEAD has moved past"
-pr_bash 'git push -q'
-printf 'dirty\n' > "$pr/a.txt"
-pr_stop
-reminded || bad "pr reminder: uncommitted changes lost their reminder to the push"
-git -C "$pr" checkout -q -- a.txt
-pr_stop
-pr_reminded || bad "pr reminder: the push got no reminder once the tree was clean"
-# A three-dot range reads from the merge base, so it counts once the default
-# branch has moved past where the branch left it.
-side="$(git -C "$pr" -c user.name=t -c user.email=t@t commit-tree -p origin/main -m side "origin/main^{tree}")"
-git -C "$pr" push -q origin "$side:refs/heads/main" 2>/dev/null
-git -C "$pr" fetch -q origin
-pr_commit thirteen
-pr_bash 'git push -q'
-pr_review "high origin/main...HEAD"
-[ "$(cat "$data/sessions/pr/pr-review" 2>/dev/null)" = "$(git -C "$pr" rev-parse HEAD)" ] \
-  || bad "pr reminder: a three-dot range from the default branch did not count as the whole PR"
-pr_commit fourteen
-pr_bash 'git push -q'
-pr_review "high origin/main..HEAD"
-pr_counted || bad "pr reminder: a two-dot range from the default branch did not count as the whole PR"
-pr_commit fifteen
-pr_bash 'git push -q'
-pr_review "high origin/main..."
-pr_counted || bad "pr reminder: a three-dot range with no end did not count as the whole PR"
-# A link to one commit of the pull request reads part of it; its files page
-# reads all of it.
-pr_commit sixteen
-pr_bash 'git push -q'
-pr_review "high https://github.com/o/r/pull/12/commits/abc1234"
-pr_counted && bad "pr reminder: a link to one commit of the pull request counted as the whole of it"
-pr_review "medium https://github.com/o/r/pull/12"
-pr_counted && bad "pr reminder: a review of the pull request below high counted"
-pr_review "high #12abc"
-pr_counted && bad "pr reminder: a word that only starts like a pull request number counted"
-pr_commit sixteen-b
-pr_bash 'git push -q'
-pr_review "high https://github.com/o/r/pull/12#discussion_r987"
-pr_counted && bad "pr reminder: a link to one thread of the pull request counted as the whole of it"
-pr_review "https://github.com/o/r/pull/12/changes high"
-pr_counted || bad "pr reminder: a link to the pull request's changes, with the level after it, did not count"
-pr_commit sixteen-c
-pr_bash 'git push -q'
-pr_review "12 xhigh"
-pr_counted || bad "pr reminder: a pull request number with the level after it did not count"
-pr_commit sixteen-d
-pr_bash 'git push -q'
-pr_review "high #12"
-pr_counted || bad "pr reminder: a pull request number written with # did not count"
-# A push command keeps its state while a message arrives mid-run, and one the
-# user declined at a prompt keeps it only until the turn ends.
-hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_use_id: "t9", tool_input: {command: "git push -q --force"}}')"
-ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 || bad "pr reminder: a push the gate asked about kept no state"
-hook_run prompt "$(jq -cn --arg d "$pr" '{session_id: "pr", cwd: $d, prompt: "<task-notification>done</task-notification>"}')"
-ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 || bad "pr reminder: a message arriving mid-push dropped the push's state"
-pr_stop
-ls "$data/sessions/pr"/push-pending.* > /dev/null 2>&1 && bad "pr reminder: a declined push kept its state past the end of the turn"
-# Two commands running at once each keep their own state, by tool call.
-pr_commit seventeen
-pr_hook() {
-  hook_run "$1" "$(jq -cn --arg d "$pr" --arg c "$2" --arg e "$3" --arg i "$4" \
-    '{session_id: "pr", cwd: $d, hook_event_name: $e, tool_name: "Bash", tool_use_id: $i, tool_input: {command: $c}}')"
-}
-pr_hook pre-tool 'git push -q' PreToolUse t1
-pr_hook pre-tool 'gh pr edit 12 --title x' PreToolUse t2
-pr_hook post-tool 'gh pr edit 12 --title x' PostToolUse t2
-git -C "$pr" push -q 2>/dev/null
-pr_hook post-tool 'git push -q' PostToolUse t1
-pr_stop
-pr_reminded || bad "pr reminder: a push run beside another push command got no reminder"
-# Outside a plan's grant the reminder stays context, so Claude may still stop.
-pr_commit seventeen-b
-pr_bash 'git push -q'
-pr_stop
-[ -z "$(jq -r '.decision // empty' "$scratch/out" 2>/dev/null)" ] || bad "pr reminder: a push outside a grant blocked the stop"
-
-# Plan grants. A plan file waiting for approval, approved in the user's own
-# message, lets a push through only on its branch, as a plain push of a tree a
-# review read, six times; and the stop after it blocks rather than reminds.
-gr="$scratch/gr"
-git init -q --bare "$scratch/gr-remote.git"
-git clone -q "$scratch/gr-remote.git" "$gr" 2>/dev/null
-git -C "$gr" symbolic-ref HEAD refs/heads/main
-printf '.claude/\n' >> "$gr/.git/info/exclude"
-printf 'one\n' > "$gr/a.txt"
-git -C "$gr" add a.txt
-git -C "$gr" -c user.name=t -c user.email=t@t commit -qm init
-git -C "$gr" push -q -u origin main 2>/dev/null
-git -C "$gr" remote set-head origin main
-# Writes plan $1 for branch $2, none when empty, with status $3.
-gr_plan() {
-  mkdir -p "$gr/.claude/plans"
-  {
-    printf 'Plan name: %s\nStatus: %s\n\n# %s\n\n## Delivery\n\n' "$1" "${3:-awaiting approval}" "$1"
-    # The branch in backticks, as a plan writes it.
-    [ -z "$2" ] || printf 'Branch: %s%s%s\n' '`' "$2" '`'
-  } > "$gr/.claude/plans/$1.md"
-}
-# Starts session $1, dated well before any plan written after it.
-gr_start() {
-  hook_run session-start "$(jq -cn --arg s "$1" --arg d "$gr" '{session_id: $s, cwd: $d, source: "startup"}')"
-  touch -t 202501010000 "$data/sessions/$1/started"
-  # A real start is a new session; a test reuses the name, so clear its grant.
-  rm -f "$data/sessions/$1/grant" "$data/sessions/$1/grant-pushes"
-}
-gr_say() { hook_run prompt "$(jq -cn --arg s "$1" --arg d "$gr" --arg p "$2" '{session_id: $s, cwd: $d, prompt: $p}')"; }
-gr_note() { jq -r '.hookSpecificOutput.additionalContext // empty' "$scratch/out" 2>/dev/null; }
-# True when session $1 holds a grant for plan $2.
-granted() { [ "$(sed -n 2p "$data/sessions/$1/grant" 2>/dev/null)" = "$2" ]; }
-gr_plan alpha feature/a
-gr_start g1
-gr_say g1 "approve"
-granted g1 alpha || bad "grant: a bare approve with one plan waiting granted nothing"
-gr_note | grep -q 'approves plan alpha' || bad "grant: a grant recorded no context saying so"
-# A granted plan stops waiting, so a later approve cannot grant it again.
-head -n 2 "$gr/.claude/plans/alpha.md" | grep -qx 'Status: approved' || bad "grant: the granted plan was not marked approved"
-grep -qx 'Status: awaiting approval' "$gr/.claude/plans/alpha.md" && bad "grant: the granted plan still says it is waiting"
-printf '3\n' > "$data/sessions/g1/grant-pushes"
-gr_say g1 "approve"
-[ "$(cat "$data/sessions/g1/grant-pushes" 2>/dev/null)" = 3 ] || bad "grant: a second approve reset the count of pushes"
-gr_plan alpha feature/a
-gr_start g1b
-gr_say g1b "I approve this plan. Let$(printf '\342\200\231')s ensure we implement it correctly, follow the engineering workflow, and finalize the changes and the PR."
-granted g1b alpha || bad "grant: an approval in a sentence with no condition granted nothing"
-for words in "Yes, I approve this. Before we start, let's review the plan" "approved?" \
-  "I don't approve" "approve, but wait" "approve once CI passes" "approve it after lunch" \
-  "I can't approve this yet" "approve it when CI is green" "looks good, go ahead" \
-  "I haven$(printf '\342\200\231')t approved this" "I don$(printf '\342\200\231')t approve" \
-  "I won$(printf '\342\200\230')t approve" "I don\`t approve" "I'd approve this with one change" \
-  "approve this. Skip the push, just commit" "approve this, leave the PR to me" \
-  "I like it, but it needs changes before I approve" "I approve with a few changes" \
-  "approve, with two tweaks to step 3" "I approve, rename the branch first" \
-  "Approved, make these changes: rename the branch" "approve, a couple of changes below" \
-  "I approve with the following changes: rename step 2" "approve with 4 changes" "approve, a few more edits" \
-  "I wouldnt approve this" "you have my approval" "approve. review the changes I made to step 2" \
-  "Approved, two changes are good to add: rename the branch" "I approve. Accept the changes you suggested and go" \
-  "Approve, these edits please: rename step 2" "Approved, two changes look good to add: rename the branch" \
-  "The changes look good, approved" "Approve, land this change behind a feature flag" \
-  "Approve, land this change and put it behind a feature flag" "approve and finalize all the changes we agreed" \
-  "Approve, land this change and push it behind a feature flag" \
-  "approve, finalize the changes and the PR with a different title" \
-  "I approve with one edit to step 2" "Approve, commit the changes and push" "Approve the dependabot PR." \
-  "Approve the dependabot PR. Sam approved it." "Approve the dependabot PR, then I approve this plan" \
-  "I would approve it" "Should I approve it" "I'd approve it" "I'll approve it" "I might approve this" \
-  "I would definitely approve it" "I would've approved it" "That would be approved" \
-  "Should I, as the reviewer, approve it" "Thanks. Sam approved it." "The team needs to approve it" \
-  "Sam, the lead, approved it" "Sam, approve it" "Sam: approved" "Dependabot PR: approved" \
-  "The PR page shows Status: approved" "So should I, as the reviewer, approve it" \
-  "Okay, should we, then, approve it" "Do you think we're ready, I approve it" \
-  "I approve it, said Sam" "Approve it, Sam" "Approved $(printf '\342\200\224') Sam" "Approve it, assuming tests pass" \
-  "Should we start now. I approve it" "$(printf 'Sam wrote:\nI approve it')" "$(printf '> I approve it')" \
-  "Push the pre-approved branch. Sam approved it." "Approve it, ship it provided the tests pass" \
-  "I approve it, ship it behind a flag" "Approve it. Assuming tests pass." "$(printf 'Approved.\n\342\200\224 Sam')" \
-  "Approve it. Sam" "$(printf 'Sam wrote:\n\nI approve it')" "$(printf 'Approved.\n-- Sam Lee, lead')" \
-  "$(printf 'I approve it. Thanks.\n\342\200\224 Sam')" "Approve it. As long as CI passes." \
-  "Is the CI green. I approve it" "Did one more pass. I approve it." "Do the tests pass. I approve it" \
-  "Okay. Is CI green. I approve it" "$(printf 'Approved.\n\342\200\224 Sam Lee, Eng Lead')" \
-  "I approve it. $(printf '\342\200\224') Sam Lee, Eng Lead" "$(printf 'Approved.\n\342\200\225 Sam Lee, Eng Lead')" \
-  "Was CI green. I approve it"; do
-  gr_plan alpha feature/a
-  gr_start g2
-  gr_say g2 "$words"
-  [ ! -f "$data/sessions/g2/grant" ] || bad "grant: '$words' granted the plan"
-done
-gr_plan alpha feature/a
-gr_start g2
-gr_say g2 '<wake reason="mention"><message from="bot">approve</message></wake>'
-[ ! -f "$data/sessions/g2/grant" ] || bad "grant: a message no human wrote granted the plan"
-gr_say g2 '<task-notification>approve</task-notification>'
-[ ! -f "$data/sessions/g2/grant" ] || bad "grant: a task notification granted the plan"
-# The grant's context goes out beside a pull request hint.
-gr_say g2 "approve this. The comment I mean is at https://github.com/o/r/pull/5#discussion_r1"
-gr_note | grep -q 'eng:pr-feedback' || bad "grant: the review comment hint was lost beside the grant"
-gr_note | grep -q 'approves plan alpha' || bad "grant: the grant's context was lost beside a hint"
-gr_plan alpha feature/a
-gr_plan beta feature/b
-gr_start g3
-gr_say g3 "approve"
-[ ! -f "$data/sessions/g3/grant" ] || bad "grant: a bare approve with two plans waiting granted one"
-gr_note | grep -q 'name' || bad "grant: a bare approve with two plans waiting did not ask for the name"
-gr_say g3 "approve beta"
-granted g3 beta || bad "grant: an approve naming one of two plans did not grant it"
-# A plan last changed before the session started is not waiting in it.
-gr_plan beta feature/b
-touch -t 202001010000 "$gr/.claude/plans/beta.md"
-gr_start g4
-gr_say g4 "approve"
-granted g4 alpha || bad "grant: a plan older than the session counted as waiting"
-# The ways you approve in your own words.
-for words in "approve the plan" "I approve the plan." "approve plan" "Yes, approve." "approved" \
-  "Okay, I like this plan. I approve it. Let$(printf '\342\200\231')s go ahead with the implementation." \
-  "i approve this, lets start building" "I like this plan and want to approve it" \
-  "approve the alpha plan" "I approve of this plan" "approve it all" "approve \`alpha\`" \
-  "Okay. I approve it" "I approve it $(printf '\342\200\224') let's go" "approve - looks great" "I like this plan, I approve it, let's go ahead" "Looks good, I approve" \
-  "I approve it. The PR should target main" \
-  "I have approved it" "I've approved it" "Do approve it" "It is approved" "I hereby approve the plan" \
-  "I want to approve it" "Great, approved" "Plan approved, go ahead" "Yes: approved" \
-  "Approved, go ahead and commit" "Approved, commit and push" \
-  "I approve, let's get started" "Great plan, I approve" "I approve it. Thanks"; do
-  gr_plan alpha feature/a
-  gr_start g4d
-  gr_say g4d "$words"
-  granted g4d alpha || bad "grant: '$words' did not grant the one plan waiting"
-done
-# An approval of something other than the plan says so.
-gr_plan alpha feature/a
-gr_start g4k
-gr_say g4k "Approve the dependabot PR."
-gr_note | grep -q 'something other than the plan' || bad "grant: an approval of something else did not say so"
-# A condition in the same clause gets the condition's note.
-gr_say g4k "I approve this plan but change step 2"
-gr_note | grep -q 'condition' || bad "grant: a condition beside the approval did not get the condition note"
-gr_plan alpha feature/a approved
-# A message that grants nothing new says an earlier grant still holds, unless
-# it sets a condition.
-gr_say g4d "approve"
-gr_note | grep -q 'still holds' || bad "grant: a later approve with no plan waiting did not say the grant still holds"
-gr_say g4d "Hold on, I need to approve the new version first"
-gr_note | grep -q 'still holds' && bad "grant: a message asking to hold said the grant still holds"
-[ ! -f "$data/sessions/g4d/grant" ] || bad "grant: doubt about the approval left the grant"
-# A passing mention of approval with a condition word keeps the grant.
-gr_plan alpha feature/a
-gr_start g4f
-gr_say g4f "approve"
-gr_say g4f "The client approved the copy, carry on"
-granted g4f alpha || bad "grant: a passing mention of approval ended the grant"
-gr_say g4f "I don't approve this anymore"
-[ ! -f "$data/sessions/g4f/grant" ] || bad "grant: 'I don't approve this anymore' left the grant"
-for words in "I didn't mean to approve that" "I withdraw my approval" "Hold on, I want to check something" "wait" \
-  "I revoke my approval" "I take back my approval" "I didnt mean to approve that" \
-  "I take my approval back" "I retract my approval" "I revoked my approval" "I have withdrawn my approval" \
-  "This isn't approved anymore" "I cannot approve this" "I disapprove of this plan entirely"; do
-  gr_plan alpha feature/a
-  gr_say g4f "approve"
-  granted g4f alpha || bad "grant: setup approval before '$words' failed"
-  gr_say g4f "$words"
-  [ ! -f "$data/sessions/g4f/grant" ] || bad "grant: '$words' left the grant"
-done
-# Only a first line that opens with "hold" or "wait" pauses.
-for words in "Stop asking me, just push it" "$(printf 'Carry on.\n  wait times are fine')" \
-  "The client approved the copy, carry on" "We still want approval from legal later, carry on"; do
-  gr_plan alpha feature/a
-  gr_say g4f "approve"
-  gr_say g4f "$words"
-  granted g4f alpha || bad "grant: '$words' ended the grant"
-done
-# Changes the run is to finish, in a phrase that ends its clause, do not block.
-for words in "I approve, then commit the edits, and finalize the changes" \
-  "Approve, commit the changes, push the changes" "Approved, ship the change" \
-  "approved, commit the tweak" "Approve, commit the edit"; do
-  gr_plan alpha feature/a
-  gr_start g4g
-  gr_say g4g "$words"
-  granted g4g alpha || bad "grant: '$words' did not grant"
-done
-# In a repo with plans and none waiting, an approval is told it grants nothing.
-gr_start g4i
-gr_say g4i "approve"
-gr_note | grep -q 'no plan file' || bad "grant: an approval with no plan waiting got no note"
-# Outside a repo with plans, an approval that speaks of a plan is told too.
-hook_run prompt "$(jq -cn --arg d "$scratch/plain" '{session_id: "g4j", cwd: $d, prompt: "approved, go ahead with the plan"}')"
-gr_note | grep -q 'no plan file' || bad "grant: an approval of a plan with no plan file got no note"
-# Outside a repo with plans, approving something else gets no note.
-hook_run prompt "$(jq -cn --arg d "$scratch/plain" '{session_id: "g4h", cwd: $d, prompt: "approve the dependabot PR"}')"
-[ -z "$(gr_note)" ] || bad "grant: an approval outside any plan got a note"
-# With no plan waiting, a message that only mentions approving gets no note.
-gr_start g4e
-gr_say g4e "don't approve PR 12 until CI passes"
-[ -z "$(gr_note)" ] || bad "grant: a condition with no plan waiting got a note"
-gr_plan beta feature/b approved
-gr_plan gamma ""
-gr_start g5
-gr_say g5 "approve"
-[ ! -f "$data/sessions/g5/grant" ] || bad "grant: a plan with no Branch line granted"
-gr_note | grep -q 'Branch' || bad "grant: a plan with no Branch line did not say why"
-gr_plan gamma main
-gr_start g6
-gr_say g6 "approve"
-[ ! -f "$data/sessions/g6/grant" ] || bad "grant: a plan naming the default branch granted"
-gr_note | grep -q 'default branch' || bad "grant: a plan naming the default branch did not say why"
-rm "$gr/.claude/plans/gamma.md"
-# Only the header's Status line changes, and a plan that cannot be marked
-# grants nothing.
-gr_plan alpha feature/a
-printf '\n\n\n\nStatus: awaiting approval\n' >> "$gr/.claude/plans/alpha.md"
-gr_start g8
-gr_say g8 "approve"
-granted g8 alpha || bad "grant: the plan with a quoted status line was not granted"
-[ "$(grep -c '^Status: awaiting approval$' "$gr/.claude/plans/alpha.md")" = 1 ] || bad "grant: a Status line past the header was changed"
-if [ "$(id -u)" != 0 ]; then
-  gr_plan alpha feature/a
-  chmod 555 "$gr/.claude/plans"
-  gr_start g9
-  gr_say g9 "approve"
-  chmod 755 "$gr/.claude/plans"
-  [ ! -f "$data/sessions/g9/grant" ] || bad "grant: a plan that could not be marked approved was granted"
-  gr_note | grep -q 'could not be marked' || bad "grant: a plan that could not be marked did not say why"
-fi
-# Another checkout's plans, such as the main clone's beside a worktree, are
-# not this session's.
-git -C "$gr" worktree add -q -b wt-branch "$scratch/gr-wt" 2>/dev/null || bad "grant: the worktree for the next case was not made"
-gr_plan alpha feature/a
-hook_run session-start "$(jq -cn --arg d "$scratch/gr-wt" '{session_id: "g7", cwd: $d, source: "startup"}')"
-touch -t 202501010000 "$data/sessions/g7/started"
-hook_run prompt "$(jq -cn --arg d "$scratch/gr-wt" '{session_id: "g7", cwd: $d, prompt: "approve"}')"
-[ ! -f "$data/sessions/g7/grant" ] || bad "grant: a worktree session granted the main clone's plan"
-git -C "$gr" worktree remove --force "$scratch/gr-wt"
-
-# Under a grant, at a push.
-gr_plan alpha feature/a
-git -C "$gr" checkout -q -b feature/a
-gr_start gp
-gr_say gp "approve alpha"
-granted gp alpha || bad "grant: setup approval failed"
-printf 'commit\npr\n' >> "$data/sessions/gp/skills"
-gr_pre() {
-  hook_run pre-tool "$(jq -cn --arg d "$gr" --arg c "$1" --arg i "${2:-}" \
-    '{session_id: "gp", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}
-      + (if $i == "" then {} else {tool_use_id: $i} end)')"
-}
-# Runs a command as Claude Code would: pre-tool, then, when allowed, the
-# command and post-tool. $gr_verdict holds what pre-tool decided.
-gr_run() {
-  local id="id$RANDOM$RANDOM" input
-  input="$(jq -cn --arg d "$gr" --arg c "$1" --arg i "$id" \
-    '{session_id: "gp", cwd: $d, tool_name: "Bash", tool_use_id: $i, tool_input: {command: $c}}')"
-  hook_run pre-tool "$(jq -c '. + {hook_event_name: "PreToolUse"}' <<< "$input")"
-  gr_verdict="$(verdict)"
-  [ "$gr_verdict" = allow ] || return 0
-  (cd "$gr" && eval "$1") > /dev/null 2>&1
-  hook_run post-tool "$(jq -c '. + {hook_event_name: "PostToolUse"}' <<< "$input")"
-}
-gr_commit() {
-  printf '%s\n' "$1" > "$gr/a.txt"
-  git -C "$gr" -c user.name=t -c user.email=t@t commit -qam "$1"
-}
-gr_review() {
-  hook_run post-tool "$(jq -cn --arg d "$gr" --arg a "$1" '{session_id: "gp", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: $a}}')"
-}
-gr_whole() { gr_review "high $(git -C "$gr" merge-base origin/main HEAD)..HEAD"; }
-# The review loop's kind of review, at high: the last commit taken back to
-# uncommitted changes, a snapshot of them on HEAD reviewed, and the commit
-# made again, so the review reads the local changes and not the whole PR.
-gr_snap() {
-  git -C "$gr" reset -q --soft HEAD~1
-  gr_review "high HEAD..$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree \
-    "$(git -C "$gr" write-tree)" -p HEAD -m review)"
-  git -C "$gr" -c user.name=t -c user.email=t@t commit -qm again
-}
-gr_expect() {
-  gr_pre "$2"
-  [ "$(verdict)" = "$1" ] || bad "grant: got $(verdict), want $1, for: $2 ($(jq -r .hookSpecificOutput.permissionDecisionReason "$scratch/out" 2>/dev/null))"
-  if [ -n "${3:-}" ]; then
-    jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" | grep -qF -- "$3" \
-      || bad "grant: the reason for '$2' does not say '$3'"
-  fi
-}
-gr_commit two
-gr_expect deny 'git push -u origin feature/a' 'review step'
-gr_expect deny 'gh pr create --title x --body-file b.md' 'review step'
-# A review of a range whose start does not resolve reads nothing, so it does
-# not count.
-gr_review "high nosuchref..$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree "HEAD^{tree}" -p HEAD -m review)"
-gr_expect deny 'git push -u origin feature/a' 'review step'
-# A review of an empty range reads nothing, so it does not count.
-gr_review "high HEAD..$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree "HEAD^{tree}" -p HEAD -m review)"
-gr_expect deny 'git push -u origin feature/a' 'review step'
-gr_snap
-gr_expect allow 'git push -u origin feature/a'
-gr_expect allow 'gh pr create --title x --body-file b.md'
-# The form eng:pr runs, its title read from a file. The command is data, so
-# its $( ) stays unexpanded.
-# shellcheck disable=SC2016
-gr_expect allow 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md" --base main --draft'
-# shellcheck disable=SC2016
-gr_expect allow 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md" --base main --assignee @me --draft'
-bs="\\"
-# A backslash that is itself escaped leaves the line break a separator.
-gr_expect ask "$(printf '%s%s%s\n%s' 'gh pr create --title x ' "$bs" "$bs" 'gh pr create --repo other/repo')"
-gr_expect ask "$(printf '%s%s\n%s' 'gh pr create --fill #' "$bs" 'gh pr create --fill')"
-gr_expect allow 'gh pr create --title "Fix #12" --body-file b.md'
-# The same over two lines, as eng:pr writes it, joined by a backslash.
-# shellcheck disable=SC2016
-gr_expect allow "$(printf '%s %s\n  %s' 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md"' "$bs" '--base $BASE')"
-# shellcheck disable=SC2016
-gr_expect allow "$(printf '%s %s\n  %s' 'gh pr create --title "$(cat "/tmp/x/pr-title.txt")" --body-file "/tmp/x/pr-body.md"' "$bs" '--base $BASE --assignee @me')"
-gr_expect ask 'git push origin HEAD:main'
-gr_expect ask 'git push fork feature/a'
-gr_expect ask 'git push -q origin feature/a && echo done'
-gr_expect ask 'git -c user.name=t -c user.email=t@t commit -qam x && git push'
-gr_expect ask 'git push --force'
-gr_expect ask 'gh pr create --head unrelated --base main --title x --body-file b.md'
-gr_expect ask 'gh pr create -R other/repo --title x --body-file b.md'
-gr_expect ask 'gh pr create -dR other/repo --title x --body-file b.md'
-gr_expect ask 'gh pr create --title x "--head" other --body-file b.md'
-gr_expect ask "gh pr create --title x '--repo=other/repo' --body-file b.md"
-gr_expect ask 'gh pr create --title x --body-file b.md && echo done'
-gr_expect ask 'GH_REPO=other/repo gh pr create --title x --body-file b.md'
-gr_expect ask 'gh api repos/o/r/pulls -X POST -f head=other -f base=main -f title=x'
-git -C "$gr" config remote.origin.push 'HEAD:refs/heads/main'
-gr_expect ask 'git push'
-gr_expect ask 'git push origin feature/a'
-git -C "$gr" config --unset remote.origin.push
-git -C "$gr" config remote.origin.mirror true
-gr_expect ask 'git push origin'
-git -C "$gr" config --unset remote.origin.mirror
-git -C "$gr" config branch.feature/a.pushRemote fork
-gr_expect ask 'git push'
-git -C "$gr" config --unset branch.feature/a.pushRemote
-git -C "$gr" config remote.origin.pushurl "$scratch/elsewhere.git"
-gr_expect ask 'git push -u origin feature/a'
-git -C "$gr" config --unset remote.origin.pushurl
-git -C "$gr" config url."$scratch/elsewhere.git".pushInsteadOf "$scratch/gr-remote.git"
-gr_expect ask 'git push'
-git -C "$gr" config --unset url."$scratch/elsewhere.git".pushInsteadOf
-git -C "$gr" config url."$scratch/elsewhere.git".insteadOf "$scratch/gr-remote.git"
-gr_expect ask 'git push'
-git -C "$gr" config --unset url."$scratch/elsewhere.git".insteadOf
-git -C "$gr" config push.followTags true
-gr_expect ask 'git push'
-git -C "$gr" config --unset push.followTags
-git -C "$gr" config push.recurseSubmodules on-demand
-gr_expect ask 'git push'
-# An explicit no wins over submodule.recurse.
-git -C "$gr" config push.recurseSubmodules no
-git -C "$gr" config submodule.recurse true
-gr_expect allow 'git push -u origin feature/a'
-git -C "$gr" config --unset push.recurseSubmodules
-gr_expect ask 'git push -u origin feature/a'
-git -C "$gr" config --unset submodule.recurse
-git -C "$gr" config push.default matching
-gr_expect ask 'git push'
-git -C "$gr" config --unset push.default
-# Through any tool but Bash, a push or a pull request write asks, even for a
-# plain push of a reviewed tree.
-for tool in mcp__terminal__run_in_terminal Monitor PowerShell; do
-  hook_run pre-tool "$(jq -cn --arg d "$gr" --arg t "$tool" '{session_id: "gp", cwd: $d, tool_name: $t, tool_input: {command: "git push -u origin feature/a"}}')"
-  [ "$(verdict)" = ask ] || bad "grant: a plain push of a reviewed tree through $tool got $(verdict), want ask"
-done
-for mcp in mcp__github__create_pull_request mcp__github__push_files; do
-  hook_run pre-tool "$(jq -cn --arg d "$gr" --arg t "$mcp" '{session_id: "gp", cwd: $d, tool_name: $t, tool_input: {}}')"
-  [ "$(verdict)" = ask ] || bad "grant: $mcp under a grant got $(verdict), want ask"
-done
-# An issue write the plan's Delivery names goes through the write gate alone:
-# with eng:issue loaded, the grant neither asks about it nor denies it, through
-# Bash or Linear's MCP tool.
-printf 'issue\n' >> "$data/sessions/gp/skills"
-gr_pre 'gh issue create --title x --body y'
-[ "$(verdict)" = allow ] || bad "grant: gh issue create under a grant got $(verdict), want allow"
-hook_run pre-tool "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, tool_name: "mcp__linear__save_issue", tool_input: {team: "SKI", title: "x"}}')"
-[ "$(verdict)" = allow ] || bad "grant: Linear save_issue under a grant got $(verdict), want allow"
-gr_run 'git push -q -u origin feature/a'
-[ "$gr_verdict" = allow ] || bad "grant: a plain push of a reviewed tree got $gr_verdict"
-[ "$(cat "$data/sessions/gp/grant-pushes" 2>/dev/null)" = 1 ] || bad "grant: a push under the grant was not counted"
-grep -q ' alpha feature/a push ' "$data/grant-writes.log" 2>/dev/null || bad "grant: a push under the grant was not logged"
-stop gp '{}' "$gr"
-[ "$(jq -r '.decision // empty' "$scratch/out")" = block ] || bad "grant: the stop after a push did not block"
-jq -r '.reason // empty' "$scratch/out" | grep -q 'review the whole PR' || bad "grant: the stop's block gave no reason"
-stop gp '{"stop_hook_active": true}' "$gr"
-[ ! -s "$scratch/out" ] || bad "grant: the stop blocked twice in one turn"
-# A tree that changed after the review is denied, and a snapshot of the tree
-# that is then committed counts.
-gr_commit three
-gr_expect deny 'git push' 'review step'
-# On the plan's branch, an unreviewed tree is denied whatever the push.
-gr_expect deny 'git push origin hotfix' 'review step'
-# A shell tool's push of a tree no review read is denied too.
-hook_run pre-tool "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, tool_name: "mcp__terminal__run_in_terminal", tool_input: {command: "git push"}}')"
-[ "$(verdict)" = deny ] || bad "grant: an unreviewed push through the terminal tool got $(verdict), want deny"
-printf 'four\n' > "$gr/a.txt"
-GIT_INDEX_FILE="$scratch/gr-index" git -C "$gr" read-tree HEAD
-GIT_INDEX_FILE="$scratch/gr-index" git -C "$gr" add -A
-snap="$(git -C "$gr" -c user.name=t -c user.email=t@t commit-tree "$(GIT_INDEX_FILE="$scratch/gr-index" git -C "$gr" write-tree)" -p HEAD -m review)"
-# A review below high reads the tree but does not clear it for a push.
-gr_review "medium HEAD..$snap"
-git -C "$gr" -c user.name=t -c user.email=t@t commit -qam four
-gr_expect deny 'git push' 'review step'
-git -C "$gr" reset -q --soft HEAD~1
-gr_review "high HEAD..$snap"
-git -C "$gr" -c user.name=t -c user.email=t@t commit -qam four
-gr_expect allow 'git push'
-# A review of a range ending in another tree leaves the last reviewed tree as
-# it was.
-gr_review "high HEAD~2..HEAD~1"
-gr_expect allow 'git push'
-# Off the plan's branch, a push asks.
-git -C "$gr" checkout -q -b other
-gr_expect ask 'git push -u origin other' 'branch'
-git -C "$gr" checkout -q feature/a
-# The seventh push under one grant asks.
-# A review of the whole pull request on a clean tree counts as well.
-for n in 2 3 4 5 6; do
-  gr_commit "push-$n"
-  gr_whole
-  gr_run 'git push -q'
-  [ "$gr_verdict" = allow ] || bad "grant: push $n got $gr_verdict"
-done
-gr_commit push-7
-gr_whole
-gr_expect ask 'git push -q' 'six'
-[ "$(grep -c ' alpha feature/a push ' "$data/grant-writes.log")" = 6 ] || bad "grant: the log does not hold one line per push"
-# A new grant starts the count again, a no ends it, and so does /clear.
-gr_plan alpha feature/a
-gr_say gp "approve alpha"
-[ ! -f "$data/sessions/gp/grant-pushes" ] || bad "grant: a new grant kept the old count"
-gr_say gp "Looks good, no issues. Carry on"
-[ -f "$data/sessions/gp/grant" ] || bad "grant: 'no issues' ended the grant"
-gr_say gp "don't push anything"
-[ ! -f "$data/sessions/gp/grant" ] || bad "grant: a no to pushing left the grant"
-gr_plan alpha feature/a
-gr_say gp "approve alpha"
-hook_run session-start "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, source: "clear"}')"
-[ ! -f "$data/sessions/gp/grant" ] || bad "grant: /clear left the grant"
-touch -t 202501010000 "$data/sessions/gp/started"
-# A compaction keeps it.
-gr_plan alpha feature/a
-gr_say gp "approve alpha"
-hook_run session-start "$(jq -cn --arg d "$gr" '{session_id: "gp", cwd: $d, source: "compact"}')"
-granted gp alpha || bad "grant: a compaction dropped the grant"
-
 # Monitor and PowerShell commands are read like Bash ones.
 for tool in Monitor PowerShell; do
   hook_run pre-tool "$(jq -cn --arg t "$tool" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {command: "gh pr comment 5 -b x"}}')"
   [ "$(verdict)" = deny ] || bad "pre-tool: a post through $tool got $(verdict), want deny"
 done
 
-# With no tool call id, a push keeps its state under the command's hash.
-hook_run pre-tool "$(jq -cn --arg d "$pr" '{session_id: "noid", cwd: $d, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "git push -q"}}')"
-want="push-pending.$(printf '%s' 'git push -q' | git hash-object --stdin)"
-[ -f "$data/sessions/noid/$want" ] || bad "pr reminder: a push with no tool call id kept no state under its hash"
-
-# A resume keeps the changes the session started with, and a session's state
+# A resume keeps the hash, a clear starts it again, and a session's state
 # goes once it is 30 days old.
 hook_run session-start "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, source: "resume"}')"
-[ -f "$data/sessions/gate/start-hash" ] || bad "session start: a resume dropped start-hash"
-[ ! -f "$data/sessions/gate/start-pending" ] || bad "session start: a resume asked for a new start-hash"
+[ -f "$data/sessions/gate/review-hash" ] || bad "session start: a resume dropped review-hash"
+[ ! -f "$data/sessions/gate/start-pending" ] || bad "session start: a resume asked for a new hash"
+hook_run session-start "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, source: "clear"}')"
+[ ! -f "$data/sessions/gate/review-hash" ] || bad "session start: a clear kept review-hash"
+[ -f "$data/sessions/gate/start-pending" ] || bad "session start: a clear did not ask for a new hash"
+# A session from before 0.16.0 keeps the hash it started with.
+mkdir -p "$data/sessions/upgraded"
+printf 'old\n' > "$data/sessions/upgraded/start-hash"
+hook_run session-start "$(jq -cn --arg d "$repo" '{session_id: "upgraded", cwd: $d, source: "resume"}')"
+[ "$(cat "$data/sessions/upgraded/review-hash" 2>/dev/null)" = old ] || bad "session start: a resume from before 0.16.0 dropped its start-hash"
+[ ! -f "$data/sessions/upgraded/start-pending" ] || bad "session start: a resume from before 0.16.0 asked for a new hash"
 mkdir -p "$data/sessions/stale"
 touch -t 202001010000 "$data/sessions/stale"
 hook_run session-start "$(jq -cn --arg d "$repo" '{session_id: "fresh", cwd: $d, source: "startup"}')"
 [ ! -d "$data/sessions/stale" ] || bad "session start: a session 30 days old was kept"
 [ -d "$data/sessions/gate" ] || bad "session start: a recent session was removed"
 
-# Each skill that loads is one line of its own.
-for name in eng:commit eng:pr; do
-  hook_run post-tool "$(jq -cn --arg n "$name" '{session_id: "lines", cwd: "/tmp", hook_event_name: "PostToolUse", tool_name: "Skill", tool_input: {skill: $n}}')"
-done
-[ "$(cat "$data/sessions/lines/skills" 2>/dev/null)" = "$(printf 'commit\npr')" ] \
-  || bad "post-tool: the skills file is not one name per line: $(cat "$data/sessions/lines/skills" 2>/dev/null)"
 
 # The error log keeps its last 1000 lines once it passes 2000.
 mkdir -p "$scratch/data-log"
@@ -1766,54 +594,15 @@ lines="$(wc -l < "$scratch/data-log/eng-hook.log" | tr -d ' ')"
 [ "$lines" -le 1001 ] || bad "log: the error log kept $lines lines past 2000"
 tail -1 "$scratch/data-log/eng-hook.log" | grep -q 'bogus' || bad "log: trimming dropped the newest line"
 
-# The first prompt saves your message before it hashes the tree, so a hash
-# slow enough to outlast the hook leaves the gate reading this message. A
-# stand-in git notes whether the message was there when the hash began.
-shims="$scratch/shims"
-mkdir -p "$shims"
-real_git="$(command -v git)"
-real_awk="$(command -v awk)"
-# The stand-ins' own $ expand when they run, not here.
-# shellcheck disable=SC2016
-printf '#!/bin/sh\ncase " $* " in *" ls-files "*) [ -f "$ORDER_TURN" ] && : > "$ORDER_SEEN" ;; esac\nexec "%s" "$@"\n' "$real_git" > "$shims/git"
-chmod +x "$shims/git"
-mkdir -p "$data/sessions/order"
-: > "$data/sessions/order/start-pending"
-rm -f "$scratch/order-seen"
-# The PATH set in the pr reminder's subshell above is not this one.
-# shellcheck disable=SC2031
-jq -cn --arg d "$repo" '{session_id: "order", cwd: $d, prompt: "commit it"}' |
-  env PATH="$shims:$PATH" ORDER_TURN="$data/sessions/order/turn" ORDER_SEEN="$scratch/order-seen" \
-    CLAUDE_PLUGIN_DATA="$data" "$hook" prompt > /dev/null 2>&1
-[ -f "$scratch/order-seen" ] || bad "prompt: the tree was hashed before the message was saved"
-rm -f "$shims/git"
-
-# A check of your message that fails lets the write run, a Linear comment
-# too, as the checks that fail open do, and logs it. A stand-in awk fails only
-# that check.
-# shellcheck disable=SC2016
-printf '#!/bin/sh\nfor a; do case "$a" in target=*) exit 2 ;; esac; done\nexec "%s" "$@"\n' "$real_awk" > "$shims/awk"
-chmod +x "$shims/awk"
-mkdir -p "$scratch/data-saidno/sessions/s"
-printf 'push it\n' > "$scratch/data-saidno/sessions/s/turn"
-printf 'commit\n' > "$scratch/data-saidno/sessions/s/skills"
-# shellcheck disable=SC2031
-jq -cn '{session_id: "s", cwd: "/tmp", tool_name: "Bash", tool_input: {command: "git push origin x"}}' |
-  env PATH="$shims:$PATH" CLAUDE_PLUGIN_DATA="$scratch/data-saidno" "$hook" pre-tool > "$scratch/out" 2> /dev/null
-[ "$(verdict)" = allow ] || bad "write gate: a failed check of the message got $(verdict), want allow"
-grep -q 'check of the latest message' "$scratch/data-saidno/eng-hook.log" 2>/dev/null \
-  || bad "write gate: a failed check of the message was not logged"
-rm -f "$shims/awk"
-
 # Session start sweeps up the tree hash's temp files once they are a day old.
 mkdir -p "$scratch/tmp"
 : > "$scratch/tmp/eng-hook-untracked.old"
 touch -t 202001010000 "$scratch/tmp/eng-hook-untracked.old"
-: > "$scratch/tmp/eng-hook-index.new"
+: > "$scratch/tmp/eng-hook-untracked.new"
 jq -cn --arg d "$repo" '{session_id: "sweep", cwd: $d, source: "startup"}' |
   env TMPDIR="$scratch/tmp" CLAUDE_PLUGIN_DATA="$data" "$hook" session-start > /dev/null 2>&1
 [ ! -f "$scratch/tmp/eng-hook-untracked.old" ] || bad "session start: a day-old temp file was kept"
-[ -f "$scratch/tmp/eng-hook-index.new" ] || bad "session start: a new temp file was removed"
+[ -f "$scratch/tmp/eng-hook-untracked.new" ] || bad "session start: a new temp file was removed"
 # The temp folder can be a link, as /tmp is on macOS.
 ln -s "$scratch/tmp" "$scratch/tmplink"
 : > "$scratch/tmp/eng-hook-untracked.old"
@@ -1835,7 +624,7 @@ grep -q "jq not found" "$scratch/data-nojq-gates/eng-hook.log" 2>/dev/null || ba
 # The root is matched as written, so it stays unexpanded.
 # shellcheck disable=SC2016
 quoted='"${CLAUDE_PLUGIN_ROOT}"/hooks/eng-hook '
-for event in UserPromptSubmit UserPromptExpansion PreToolUse PostToolUse PostToolUseFailure Stop; do
+for event in UserPromptSubmit UserPromptExpansion PreToolUse PostToolUse Stop; do
   command="$(jq -r --arg e "$event" '.hooks[$e][0].hooks[0].command // empty' "$plugin/hooks/hooks.json")"
   case "$command" in
     "$quoted"*) ;;
@@ -1844,6 +633,10 @@ for event in UserPromptSubmit UserPromptExpansion PreToolUse PostToolUse PostToo
 done
 [ "$(jq -r '.hooks.PreToolUse[0].matcher' "$plugin/hooks/hooks.json")" = 'Bash|Monitor|PowerShell|Skill|mcp__.*' ] \
   || bad "hooks.json: PreToolUse does not match Bash, Monitor, PowerShell, Skill and MCP tools"
+[ "$(jq -r '.hooks.PostToolUse[0].matcher' "$plugin/hooks/hooks.json")" = Skill ] \
+  || bad "hooks.json: PostToolUse does not match the Skill tool alone"
+jq -e '.hooks | has("PostToolUseFailure") | not' "$plugin/hooks/hooks.json" > /dev/null \
+  || bad "hooks.json: PostToolUseFailure still runs the hook"
 
 # A runner's later words are read only when they name a command in the
 # classifier's known list, so every command a rule or a runner pattern names

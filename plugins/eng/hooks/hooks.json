@@ -37,7 +37,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Monitor|PowerShell|Skill|mcp__.*",
+        "matcher": "Bash|Monitor|PowerShell|Skill|mcp__.*|MCP:.*",
         "hooks": [
           {
             "type": "command",

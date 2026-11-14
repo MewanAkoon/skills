@@ -1,0 +1,1 @@
+{"conversation_id":"cursor-import","generation_id":"g-4","model":"default","tool_name":"Shell","tool_input":{"command":"gh pr comment 1 --body x","cwd":"","timeout":30000},"tool_use_id":"t-4","cwd":"","session_id":"cursor-import","hook_event_name":"preToolUse","cursor_version":"2026.11.11-b912975","workspace_roots":["/tmp"],"user_email":"user@example.com","transcript_path":null}

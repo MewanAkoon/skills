@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "./hooks/eng-hook session-start cursor",
+        "timeout": 10
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "./hooks/eng-hook pre-tool cursor",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "./hooks/eng-hook pre-tool cursor",
+        "timeout": 10,
+        "failClosed": true
+      }
+    ]
+  }
+}

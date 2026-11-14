@@ -47,6 +47,8 @@ mentioning", "In order to" (use "to"), "Due to the fact that" (use
 Delete chatbot filler: "I hope this helps", "Let me know if", "Great
 question", "Good catch", "You're absolutely right", "Certainly".
 
+Spell out made-up abbreviations, such as cfg and impl.
+
 ## Sentences
 
 Write in active voice and name the actor. "The compiler validates the query",
@@ -70,6 +72,12 @@ If a sentence could appear unchanged in another project's docs, it says
 nothing about this project. Cut it.
 
 ## Structure
+
+Lead a doc, README or reply with what the reader must know or do. Detail
+follows.
+
+Number test plans, reproduction steps and setup instructions, one action per
+step.
 
 Group ideas by the natural number, not by three. The rule of three is a tell
 when the third item was invented to fill the pattern.
@@ -103,6 +111,12 @@ at resolves from a fresh clone.
 After writing, read it back and ask one question: what in here makes this
 obviously AI generated? Fix what that turns up before handing it over.
 
+Then check that every not, never, no, only and except survived the edits, and
+rewrite any sentence that reads two ways.
+
 ---
 
-Adapted from the `unslop` skill in cursor/plugins pstack, by Lauren Tan (MIT).
+Adapted from the `unslop` skill in cursor/plugins pstack, by Lauren Tan (MIT),
+with structure and self-audit rules from the `i-have-adhd` skill in
+ayghri/i-have-adhd (MIT) and the `caveman` skill in JuliusBrussee/caveman
+(Apache-2.0).

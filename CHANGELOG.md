@@ -56,6 +56,11 @@ and the numbers follow semantic versioning.
   Where a harness cannot set one, the subagent runs on the session's own.
   Where there is an advisor tool, the session consults it on the final plan
   and before the run's first `gh pr ready`.
+- `eng:plain-writing` spells out made-up abbreviations, numbers test plans,
+  reproduction steps and setup instructions one action per step, leads with
+  what the reader must know or do, and checks after writing that every
+  negation survived and that no sentence reads two ways. These rules draw on
+  the `i-have-adhd` and `caveman` skills, credited in its footer.
 
 ### Changed
 

@@ -28,6 +28,14 @@ without installing anything:
 claude --plugin-dir plugins/eng
 ```
 
+The Cursor CLI takes the same folder, and runs its Cursor hooks file:
+
+```bash
+agent --plugin-dir plugins/eng
+```
+
+[docs/cursor.md](docs/cursor.md) has what holds there, and a check to run.
+
 Every script you run while working here is also an `npm run` target, which
 is the only reason `package.json` exists. It declares no dependencies.
 
@@ -87,7 +95,8 @@ here follows. Every skill has a row in the README under the heading for its
 invocation mode, which `check.sh` checks.
 
 A pull request leaves the `version` in
-`plugins/eng/.claude-plugin/plugin.json` alone and adds its entry under
+`plugins/eng/.claude-plugin/plugin.json` and
+`plugins/eng/.cursor-plugin/plugin.json` alone and adds its entry under
 `## Unreleased` at the top of [CHANGELOG.md](CHANGELOG.md). Installs follow
 `stable`, so a change reaches them at the next release.
 
@@ -133,8 +142,10 @@ A plugin installs as a unit, and it loads every folder under
 `plugins/eng/skills/`. To take part of it, fork the repo, delete the skill
 folders you do not want along with their README rows, and install from your
 fork. `./scripts/check.sh` names anything left pointing at a skill you
-removed. Listing skills in `plugin.json` does not narrow the set, because
-that field adds to the `skills/` scan rather than replacing it.
+removed. Listing skills in `.claude-plugin/plugin.json` does not narrow the
+set, because that field adds to the `skills/` scan rather than replacing it.
+The Cursor manifest names the whole `./skills/` folder, so deleting a folder
+takes it out of both.
 
 ## Sharing one skill with a team
 

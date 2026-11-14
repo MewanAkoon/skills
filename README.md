@@ -1,10 +1,11 @@
 # eng
 
-Engineering skills for Claude Code, shipped as one plugin, `eng`: a standing
-workflow from ticket to pull request, and skills for commits, PRs, issues,
-review feedback, debugging, TypeScript, API boundaries and plain writing. It
-runs in Claude Code. Cursor is not supported yet, and eng's guards have not
-been shown to hold there.
+Engineering skills for Claude Code and Cursor, shipped as one plugin, `eng`:
+a standing workflow from ticket to pull request, and skills for commits, PRs,
+issues, review feedback, debugging, TypeScript, API boundaries and plain
+writing. It runs in Claude Code and in the Cursor CLI, where the guards that
+hold are in [docs/cursor.md](docs/cursor.md). The Cursor IDE is not tested
+yet, and nothing loads under Cursor's ACP.
 
 ## Setup
 
@@ -44,6 +45,26 @@ Installs follow the `stable` branch, so they change only at a release.
 To remove, run `claude plugin uninstall eng@mewanakoon`, then
 `claude plugin marketplace remove mewanakoon`. The uninstall deletes the
 plugin's data folder, `~/.claude/plugins/data/eng-mewanakoon/`.
+
+**In Cursor.** With eng installed in Claude Code, Cursor already loads it,
+and the update above updates it there too. Install nothing more, or every
+skill loads twice. On a machine with Cursor alone, in steps not yet run end
+to end:
+
+1. If `agent plugin marketplace list` shows `mewanakoon`, run
+   `agent plugin marketplace remove mewanakoon`.
+2. `agent plugin marketplace add https://github.com/MewanAkoon/skills --git-ref stable`
+3. Install `eng` from `mewanakoon` in Cursor's plugins view, `/plugin` in
+   the CLI.
+4. Start a new chat.
+
+To update in Cursor:
+
+1. Run `agent plugin marketplace update mewanakoon`, or Refresh in the IDE.
+2. Start a new chat.
+
+[docs/cursor.md](docs/cursor.md) says what each way in brings, what holds,
+the settings, and a check to run.
 
 ## Setup in detail
 
@@ -123,7 +144,8 @@ skill still runs the job, with its checks and its rules on writes.
 ## Skills
 
 Every skill loads as `eng:<name>`. Type the full name: a bare `commit` or `pr`
-is not sure to reach the plugin's skill.
+is not sure to reach the plugin's skill. In Cursor the names are bare, such as
+`/commit`, because a Cursor skill name allows no colon.
 
 ### Model-invoked
 
@@ -179,11 +201,13 @@ command or a tool's name:
 | A new session's start | Shows you a line for each missing setting or tool |
 | The first prompt outside plan mode | In default, accept-edits or don't-ask mode, shows you a line when your permission rules would stop eng's writes |
 
-The header of [eng-hook](plugins/eng/hooks/eng-hook) says what each hook
-decides, and the cases under [tests/hooks/](tests/hooks/) show the exact
-rules. The hook catches a slip, not a determined bypass: a git alias, a
-command built at run time, a script that runs one, or an MCP tool whose name
-hides what it does all get past it.
+In Cursor a few rows differ, as the table in
+[docs/cursor.md](docs/cursor.md) says. The header of
+[eng-hook](plugins/eng/hooks/eng-hook) says what each hook decides, and the
+cases under [tests/hooks/](tests/hooks/) show the exact rules. The hook
+catches a slip, not a determined bypass: a git alias, a command built at run
+time, a script that runs one, or an MCP tool whose name hides what it does
+all get past it.
 
 ## Cloud sessions
 

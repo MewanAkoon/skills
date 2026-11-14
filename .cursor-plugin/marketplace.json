@@ -1,0 +1,15 @@
+{
+  "name": "mewanakoon",
+  "owner": {
+    "name": "MewanAkoon",
+    "url": "https://github.com/MewanAkoon"
+  },
+  "description": "MewanAkoon's engineering skills for Claude Code and Cursor.",
+  "plugins": [
+    {
+      "name": "eng",
+      "source": "./plugins/eng",
+      "description": "Engineering skills for Claude Code and Cursor: investigate, plan, implement, review, commit and open PRs, with hooks that block posting and confirm writes that are hard to undo."
+    }
+  ]
+}

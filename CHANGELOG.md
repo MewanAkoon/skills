@@ -3,7 +3,8 @@
 Each release of the `eng` plugin, newest first. The version is the one in
 `plugins/eng/.claude-plugin/plugin.json`. A pull request adds its entry under
 `## Unreleased` and leaves the version alone. A release moves those entries
-under a heading for its version with its date, bumps `plugin.json`, tags the
+under a heading for its version with its date, bumps the version in both
+plugin manifests, Claude Code's and Cursor's, tags the
 commit `vX.Y.Z`, and fast-forwards the `stable` branch that installs follow.
 A version marked "not tagged" reached `main`, and every install that followed
 `main` then, but has no tag. The format follows
@@ -13,6 +14,26 @@ follow semantic versioning.
 ## Unreleased
 
 ### Added
+
+- eng as a Cursor plugin. `plugins/eng/.cursor-plugin/plugin.json` and a
+  root `.cursor-plugin/marketplace.json` let Cursor install the same folder,
+  and `hooks/hooks-cursor.json` runs the hook on Cursor's `sessionStart`,
+  `beforeShellExecution` and `beforeMCPExecution`, the last two failing
+  closed. There the workflow arrives at session start, a post through a
+  command or an MCP tool is denied, and a hard-to-undo write asks even when
+  Cursor's allowlist lets the command through. The hook answers in Cursor's
+  shape when that file runs it, and `{}` when it makes no decision, since a
+  hook that fails closed blocks a call it does not answer. Through Cursor's
+  import of an installed Claude Code plugin the hook now reads Cursor's
+  `Shell` tool as Bash, an `MCP:<tool>` name as an MCP tool, and an empty
+  `cwd` from the workspace, so a post is denied there too, and `hooks.json`
+  matches the `MCP:` form. Under Cursor, which gives a plugin no data folder,
+  state and the log live in `${XDG_STATE_HOME:-~/.local/state}/eng`, and the
+  review reminder and setup checks stay Claude Code only. `check.sh` holds
+  the two manifests and the two marketplaces to the same name, version,
+  description and source. `docs/cursor.md` says which way in to use, what
+  holds in Cursor and what does not, the settings, and a check to repeat in
+  the IDE. Under Cursor's ACP eng does not load at all.
 
 - A setup check that tells you what a machine is missing. On a new session the
   hook shows you, and not the model, one line for each setting the README's

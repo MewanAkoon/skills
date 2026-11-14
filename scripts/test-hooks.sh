@@ -18,8 +18,10 @@ fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 
 # Values left over from the calling shell would point the hook at another
-# copy's files, so each run below gets only the ones it sets.
-unset CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA
+# copy's files, so each run below gets only the ones it sets. A shell that
+# Cursor started would also make the hook read every case as Cursor's, and
+# keep its state under the real home.
+unset CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA CURSOR_VERSION CURSOR_PROJECT_DIR XDG_STATE_HOME
 
 plugin=plugins/eng
 hook="$plugin/hooks/eng-hook"
@@ -906,12 +908,144 @@ for event in UserPromptSubmit UserPromptExpansion PreToolUse PostToolUse Stop; d
     *) bad "hooks.json: $event does not run the quoted eng-hook: $command" ;;
   esac
 done
-[ "$(jq -r '.hooks.PreToolUse[0].matcher' "$plugin/hooks/hooks.json")" = 'Bash|Monitor|PowerShell|Skill|mcp__.*' ] \
-  || bad "hooks.json: PreToolUse does not match Bash, Monitor, PowerShell, Skill and MCP tools"
+[ "$(jq -r '.hooks.PreToolUse[0].matcher' "$plugin/hooks/hooks.json")" = 'Bash|Monitor|PowerShell|Skill|mcp__.*|MCP:.*' ] \
+  || bad "hooks.json: PreToolUse does not match Bash, Monitor, PowerShell, Skill, and MCP tools in Claude Code's mcp__ and Cursor's MCP: forms"
 [ "$(jq -r '.hooks.PostToolUse[0].matcher' "$plugin/hooks/hooks.json")" = Skill ] \
   || bad "hooks.json: PostToolUse does not match the Skill tool alone"
 jq -e '.hooks | has("PostToolUseFailure") | not' "$plugin/hooks/hooks.json" > /dev/null \
   || bad "hooks.json: PostToolUseFailure still runs the hook"
+
+# Cursor. Its own hooks file runs the hook with the cursor argument, and
+# expects Cursor's shape back: additional_context, or permission with its
+# messages, and {} for no decision, since failClosed blocks a call on no
+# answer. The inputs in tests/hooks/cursor are Cursor 2026.11.11's, redacted.
+# With no plugin data folder, state goes under XDG_STATE_HOME, which these
+# runs point at the scratch folder, and HOME too, so nothing reaches the real
+# home.
+cursor_in=tests/hooks/cursor
+cursor_hooks="$plugin/hooks/hooks-cursor.json"
+# Runs the hook with the input $1 and the arguments after it, where a
+# NAME=value argument goes to its environment instead.
+cursor_run() {
+  local input="$1" a
+  local -a vars=() args=()
+  shift
+  for a in "$@"; do
+    case "$a" in *=*) vars+=("$a") ;; *) args+=("$a") ;; esac
+  done
+  printf '%s' "$input" | env XDG_STATE_HOME="$scratch/xdg" HOME="$scratch/home" ${vars[@]+"${vars[@]}"} "$hook" "${args[@]}" > "$scratch/out" 2> "$scratch/err"
+  status=$?
+  ! grep -q 'the command parser failed' "$scratch/err" || bad "cursor: the command parser failed on: $input"
+}
+# Prints Cursor's permission in $scratch/out, none when the answer is {}, and
+# unreadable for anything that is not one JSON object.
+cursor_verdict() {
+  jq -er 'if type == "object" then (.permission // "none") else error end' "$scratch/out" 2>/dev/null || printf 'unreadable'
+}
+
+cursor_run "$(cat "$cursor_in/session-start.json")" session-start cursor
+[ "$status" -eq 0 ] || bad "cursor session start: exited $status"
+[ "$(jq -c 'keys' "$scratch/out" 2>/dev/null)" = '["additional_context"]' ] \
+  || bad "cursor session start: the answer is not {additional_context}: $(head -c 200 "$scratch/out")"
+check_block "cursor session start" "$(jq -r '.additional_context' "$scratch/out" 2>/dev/null)"
+[ -d "$scratch/xdg/eng/sessions/cursor-start" ] || bad "cursor session start: no state under XDG_STATE_HOME"
+[ ! -e "$scratch/home/.local" ] || bad "cursor session start: wrote under HOME with XDG_STATE_HOME set"
+
+# Before a shell command, with the command at the top of the input.
+expect_cursor_shell() {
+  cursor_run "$(jq -c --arg c "$2" '.command = $c' "$cursor_in/before-shell.json")" pre-tool cursor
+  [ "$status" -eq 0 ] || bad "cursor shell: exited $status on: $2"
+  [ "$(cursor_verdict)" = "$1" ] || { bad "cursor shell: got $(cursor_verdict), want $1, for: $2"; return; }
+  if [ "$1" != none ]; then
+    [ -n "$(jq -r '.user_message // empty' "$scratch/out")" ] &&
+      [ "$(jq -r '.user_message' "$scratch/out")" = "$(jq -r '.agent_message' "$scratch/out")" ] \
+      || bad "cursor shell: the messages for '$2' are empty or differ"
+  fi
+}
+expect_cursor_shell deny 'gh pr comment 1 --body x'
+expect_cursor_shell ask 'gh pr merge 1'
+expect_cursor_shell ask 'git push --force origin main'
+expect_cursor_shell none 'git status'
+expect_cursor_shell none 'git commit -m x'
+[ "$(cat "$scratch/out")" = '{}' ] || bad "cursor shell: no decision printed $(cat "$scratch/out"), want {}"
+# A parser that runs out of time asks, in Cursor's shape too.
+long="$scratch/cursor-long.txt"
+awk 'BEGIN { for (i = 0; i < 4000; i++) printf "echo %d && ", i; print "true" }' > "$long"
+cursor_run "$(jq -c --rawfile c "$long" '.command = $c' "$cursor_in/before-shell.json")" pre-tool cursor ENG_HOOK_PARSE_SECONDS=1
+[ "$(cursor_verdict)" = ask ] || bad "cursor shell: a parser out of time got $(cursor_verdict), want ask"
+# Input that is not JSON still gets an answer.
+cursor_run 'not json' pre-tool cursor
+[ "$(cursor_verdict)" = none ] || bad "cursor shell: input that is not JSON got $(cursor_verdict), want {}"
+# Without jq every mode still answers {}.
+for m in pre-tool session-start; do
+  env PATH="$nojq" XDG_STATE_HOME="$scratch/xdg-nojq" HOME="$scratch/home" "$hook" "$m" cursor < "$cursor_in/before-shell.json" > "$scratch/out" 2>/dev/null
+  [ "$(cat "$scratch/out")" = '{}' ] || bad "cursor without jq: $m printed $(head -c 100 "$scratch/out"), want {}"
+done
+
+# Before an MCP call, with a bare tool name beside its server.
+expect_cursor_mcp() {
+  cursor_run "$(jq -c --arg t "$2" --arg s "$3" '.tool_name = $t | .mcp_server_name = $s' "$cursor_in/before-mcp.json")" pre-tool cursor
+  [ "$(cursor_verdict)" = "$1" ] || bad "cursor MCP: got $(cursor_verdict), want $1, for $3 $2"
+}
+expect_cursor_mcp deny save_comment linear
+expect_cursor_mcp none get_issue linear
+expect_cursor_mcp ask merge_pull_request github
+expect_cursor_mcp none create_issue github
+# A terminal tool's command sits inside the string tool_input, and the
+# server's own launch command at the top is never read as the command.
+cursor_run "$(jq -c '.tool_name = "run_in_terminal" | .mcp_server_name = "terminal" | .tool_input = "{\"command\":\"gh pr comment 1 -b x\"}" | .command = "echo server"' "$cursor_in/before-mcp.json")" pre-tool cursor
+[ "$(cursor_verdict)" = deny ] || bad "cursor MCP: a post through a terminal tool got $(cursor_verdict), want deny"
+cursor_run "$(jq -c '.tool_name = "run_in_terminal" | .mcp_server_name = "terminal" | .tool_input = "{}" | .command = "gh pr comment 1 -b x"' "$cursor_in/before-mcp.json")" pre-tool cursor
+[ "$(cursor_verdict)" = none ] || bad "cursor MCP: a server launch command was read as the tool's, got $(cursor_verdict)"
+
+# Through an imported hooks.json, Cursor names the shell tool Shell, leaves
+# cwd empty, and names an MCP tool MCP:<tool>. The answer keeps Claude's
+# shape, which Cursor honours.
+import_call() {
+  cursor_run "$(jq -c "$1" "$cursor_in/pre-tool-import.json")" pre-tool
+}
+import_call '.'
+[ "$(verdict)" = deny ] || bad "cursor import: a post through Shell got $(verdict), want deny"
+import_call '.tool_input.command = "gh pr merge 1"'
+[ "$(verdict)" = ask ] || bad "cursor import: a merge through Shell got $(verdict), want ask"
+import_call '.tool_name = "MCP:save_comment" | .tool_input = {body: "x"}'
+[ "$(verdict)" = deny ] || bad "cursor import: MCP:save_comment got $(verdict), want deny"
+# CURSOR_VERSION alone is enough to read Shell as Bash.
+cursor_run "$(jq -c 'del(.cursor_version)' "$cursor_in/pre-tool-import.json")" pre-tool CURSOR_VERSION=2026.11.11
+[ "$(verdict)" = deny ] || bad "cursor import: Shell with only CURSOR_VERSION set got $(verdict), want deny"
+# An empty cwd is filled from CURSOR_PROJECT_DIR, which a push with a lease
+# reads for the default branch.
+cursor_repo="$scratch/cursor-repo"
+lease_repo "$cursor_repo" origin main
+cursor_lease='.tool_input.command = "git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x"'
+cursor_run "$(jq -c "$cursor_lease" "$cursor_in/pre-tool-import.json")" pre-tool CURSOR_PROJECT_DIR="$cursor_repo"
+[ "$(verdict)" = allow ] || bad "cursor import: a lease push with CURSOR_PROJECT_DIR got $(verdict), want allow"
+# Without it, the first workspace root, here a folder with no remote HEADs.
+cursor_run "$(jq -c "$cursor_lease" "$cursor_in/pre-tool-import.json")" pre-tool
+[ "$(verdict)" = ask ] || bad "cursor import: a lease push read from /tmp got $(verdict), want ask"
+cursor_run "$(jq -c --arg d "$cursor_repo" "$cursor_lease"' | .workspace_roots = [$d]' "$cursor_in/pre-tool-import.json")" pre-tool
+[ "$(verdict)" = allow ] || bad "cursor import: a lease push read from the workspace root got $(verdict), want allow"
+
+# The review reminder and the setup check stay Claude Code's: an imported
+# Stop or UserPromptSubmit from Cursor prints nothing, even in a dirty repo.
+: > "$cursor_repo/dirty.txt"
+for m in stop prompt; do
+  cursor_run "$(jq -c --arg d "$cursor_repo" '.hook_event_name = "x" | .cwd = $d | .session_id = "cursor-quiet"' "$cursor_in/pre-tool-import.json")" "$m"
+  [ ! -s "$scratch/out" ] || bad "cursor import: $m printed $(head -c 100 "$scratch/out")"
+done
+
+# Cursor's hooks file runs the hook from the plugin root, with the cursor
+# argument on the shell and MCP hooks.
+for event in sessionStart beforeShellExecution beforeMCPExecution; do
+  command="$(jq -r --arg e "$event" '.hooks[$e][0].command // empty' "$cursor_hooks")"
+  case "$event:$command" in
+    sessionStart:'./hooks/eng-hook session-start cursor') ;;
+    before*:'./hooks/eng-hook pre-tool cursor') ;;
+    *) bad "hooks-cursor.json: $event runs '$command'" ;;
+  esac
+done
+jq -e '.hooks.sessionStart[0].failClosed // false | not' "$cursor_hooks" > /dev/null \
+  || bad "hooks-cursor.json: sessionStart fails closed, so a broken hook would cost the session"
 
 # A runner's later words are read only when they name a command in the
 # classifier's known list, so every command a rule or a runner pattern names

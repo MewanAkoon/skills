@@ -3,7 +3,8 @@ type: llm
 focus: trace
 ---
 
-Judge the issue the agent drafted, in the files it wrote and its final reply.
+Judge the issue the agent drafted, in the files it wrote, with the Write
+tool or a shell command, and in its final reply.
 
 PASS only if all of these hold:
 

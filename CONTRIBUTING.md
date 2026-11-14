@@ -107,8 +107,8 @@ loads at its moment, a request to open a PR among them; `eng:issue` stays out
 of "look into issue 42"; an issue draft carries its assignee and estimate; an
 issue run with no tools for the repo's tracker asks you to connect its server;
 the workflow is in context at the start; looking into a repo commits nothing;
-a commit waits for `eng:commit`; and an unreviewed hand-back gets the hook's
-reminder. Every run is a model call on your account, so they stay out of CI.
+and an unreviewed hand-back gets the hook's reminder. Every run is a model
+call on your account, so they stay out of CI.
 Run them before a release:
 
 ```bash
@@ -116,9 +116,12 @@ claude plugin eval plugins/eng --ablation none --runs 1 --scaffold --allow-tools
   --no-publish --max-cost-usd 3
 ```
 
-`--scaffold` builds the scratch repo a case needs. Bash, Write and Edit are
-gated tools, so a case gets one only when it lists it in `allowed_tools` and
-the run passes it to `--allow-tools`.
+`--scaffold` builds the scratch repo a case needs. `--allow-tools` grants a
+gated tool to every case, whatever its `allowed_tools` lists: a run with
+`Bash Write` gave the issue cases Bash and Edit, which they do not list. So
+a grader that checks what the agent wrote reads a Bash heredoc as well as a
+Write call. To check a case's graders for free, run it with
+`--case <name> --max-cost-usd 0`, which loads that case and runs nothing.
 
 The eval sandbox blocks `git`, so the review loop is checked by hand. In an
 empty directory, run `tests/review-loop/setup.sh` from the clone, or
@@ -135,6 +138,10 @@ briefs the intent check beside it, and commits nothing. With `shell`, the
 report names a shell trust boundary, the intent check carries the security
 checklist, and after one local commit a subagent calls `security-review`
 once. With `docs`, the report says `Trust boundary: none`, and neither runs.
+
+A plan's check rounds are checked by hand too. One run needs subagents for
+each round and costs about $4, more than the whole suite, and a grader that
+reads only the reply would pass a plan that names rounds it never ran.
 
 ## Taking a subset
 

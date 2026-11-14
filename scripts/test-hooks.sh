@@ -26,7 +26,42 @@ hook="$plugin/hooks/eng-hook"
 inputs=tests/hooks/session-start
 contract="$plugin/standards/workflow.md"
 scratch="$(mktemp -d)"
-trap 'rm -rf "$scratch"' EXIT
+trap 'chmod -R u+rwx "$scratch" 2>/dev/null; rm -rf "$scratch"' EXIT
+
+# The setup check reads the user's settings and runs gh and claude, so every
+# run below gets a scratch config holding the README's settings and the
+# gh-stack skill, a Claude Code at the minimum the dependency list states, and
+# stand-ins for gh and claude, never this machine's own. The stand-ins are new
+# files in a directory of their own, so nothing is written through a link to
+# a real binary. STUB_* variables steer them per case.
+cc_min="$(sed -nE 's/^\| Claude Code ([0-9.]+) or later .*/\1/p' "$plugin/standards/dependencies.md")"
+[ -n "$cc_min" ] || bad "setup: no Claude Code minimum found in $plugin/standards/dependencies.md"
+stubs="$scratch/stubs"
+mkdir -p "$stubs"
+cat > "$stubs/gh" <<'EOF'
+#!/bin/sh
+[ -n "${STUB_GH_SLEEP:-}" ] && sleep "$STUB_GH_SLEEP"
+case "$1 ${2:-}" in
+  "auth token") [ "${STUB_GH_LOGIN:-yes}" = yes ] || exit 1; echo token ;;
+  "extension list") [ "${STUB_GH_EXTENSION:-yes}" = yes ] && printf 'gh stack\tgithub/gh-stack\tv0.3.0\n' ;;
+esac
+exit 0
+EOF
+cat > "$stubs/claude" <<'EOF'
+#!/bin/sh
+[ "${STUB_CLAUDE_VERSION:-}" = none ] && exit 1
+printf '%s (Claude Code)\n' "${STUB_CLAUDE_VERSION:-2.1.293}"
+EOF
+chmod +x "$stubs/gh" "$stubs/claude"
+config="$scratch/config"
+mkdir -p "$config/skills/gh-stack"
+: > "$config/skills/gh-stack/SKILL.md"
+cp "$inputs/settings-complete.json" "$config/settings.json"
+CLAUDE_CONFIG_DIR="$config"
+AI_AGENT="claude-code_$(printf '%s' "$cc_min" | tr . -)_harness"
+PATH="$stubs:$PATH"
+export CLAUDE_CONFIG_DIR AI_AGENT PATH
+unset ENG_HOOK_SETUP_SECONDS STUB_GH_SLEEP STUB_GH_LOGIN STUB_GH_EXTENSION STUB_CLAUDE_VERSION
 
 # Runs the hook with $1 on stdin and any extra environment after it. The
 # output goes to $scratch/out, the exit status to $status.
@@ -72,6 +107,9 @@ for source in startup resume clear compact; do
   fi
   check_block "$source" "$(jq -r '.hookSpecificOutput.additionalContext' "$scratch/out")"
   [ ! -s "$scratch/data-$source/eng-hook.log" ] || bad "$source: wrote to the error log"
+  # With every setting and tool in place, nothing is shown.
+  [ "$(jq -r 'has("systemMessage")' "$scratch/out")" = false ] \
+    || bad "$source: showed a setup message with everything in place: $(jq -r '.systemMessage' "$scratch/out")"
 done
 
 # Input that is not JSON still gets the block, without the reload.
@@ -137,6 +175,173 @@ run "$inputs/startup.json" PATH="$nojq" CLAUDE_PLUGIN_DATA="$scratch/data-nojq"
 [ "$status" -eq 0 ] || bad "no jq: exited $status"
 check_block "no jq" "$(cat "$scratch/out")"
 grep -q "jq not found" "$scratch/data-nojq/eng-hook.log" 2>/dev/null || bad "no jq: nothing in the log"
+
+# The setup check at session start. Each case runs a new session with the
+# environment it names after the input, and reads what the user is shown.
+setup_run() {
+  local name="$1" input="$2"; shift 2
+  run "$input" CLAUDE_PLUGIN_DATA="$scratch/data-setup" "$@"
+  [ "$status" -eq 0 ] || bad "setup, $name: exited $status"
+  check_block "setup, $name" "$(jq -r '.hookSpecificOutput.additionalContext' "$scratch/out" 2>/dev/null)"
+  shown="$(jq -r '.systemMessage // empty' "$scratch/out" 2>/dev/null)"
+}
+# Checks that the last run showed exactly $2 lines, and one holding $3.
+expect_shown() {
+  local name="$1" count="$2" text="${3:-}" got
+  got="$(printf '%s' "$shown" | grep -c .)"
+  [ "$got" -eq "$count" ] || { bad "setup, $name: showed $got lines, want $count: $shown"; return; }
+  [ -z "$text" ] || grep -qF -- "$text" <<< "$shown" || bad "setup, $name: no line says '$text': $shown"
+}
+# Makes a config directory named $1 whose settings are the complete ones put
+# through the jq filter $2, with the gh-stack skill in place.
+make_config() {
+  mkdir -p "$scratch/cfg-$1/skills/gh-stack"
+  : > "$scratch/cfg-$1/skills/gh-stack/SKILL.md"
+  jq "$2" "$inputs/settings-complete.json" > "$scratch/cfg-$1/settings.json"
+  printf '%s' "$scratch/cfg-$1"
+}
+
+# Each setting missing in turn gives one line naming it, and attribution
+# turned off by false counts as off.
+while IFS='|' read -r label filter text; do
+  setup_run "$label" "$inputs/startup.json" CLAUDE_CONFIG_DIR="$(make_config "$label" "$filter")"
+  expect_shown "$label" 1 "$text"
+done <<'EOF'
+no commit override|del(.skillOverrides.commit)|skillOverrides.commit to "off"
+pr not off|.skillOverrides.pr = "on"|skillOverrides.pr to "off"
+no attribution|del(.attribution)|does not turn attribution off
+attribution footer on|.attribution.pr = "Generated"|does not turn attribution off
+no gh stack allow|.permissions.allow = []|Bash(gh stack:*) under permissions.allow
+no merge ask|.permissions.ask -= ["Bash(gh stack merge:*)"]|Bash(gh stack merge:*) under permissions.ask
+no unstack ask|.permissions.ask -= ["Bash(gh stack unstack:*)"]|Bash(gh stack unstack:*) under permissions.ask
+EOF
+setup_run "attribution false" "$inputs/startup.json" CLAUDE_CONFIG_DIR="$(make_config falseattr '.attribution = false')"
+expect_shown "attribution false" 0
+# No settings file at all is every setting missing, and names the file.
+mkdir -p "$scratch/cfg-none/skills/gh-stack"
+: > "$scratch/cfg-none/skills/gh-stack/SKILL.md"
+setup_run "no settings file" "$inputs/startup.json" CLAUDE_CONFIG_DIR="$scratch/cfg-none"
+expect_shown "no settings file" 6 "$scratch/cfg-none/settings.json does not set"
+# A file Claude Code cannot read gets one line, and the session goes on.
+bad_cfg="$(make_config malformed .)"
+cp "$inputs/settings-malformed.json" "$bad_cfg/settings.json"
+setup_run "malformed settings" "$inputs/startup.json" CLAUDE_CONFIG_DIR="$bad_cfg"
+expect_shown "malformed settings" 1 "is not valid JSON"
+if [ "$(id -u)" -ne 0 ]; then
+  locked="$(make_config locked .)"
+  chmod 000 "$locked/settings.json"
+  setup_run "unreadable settings" "$inputs/startup.json" CLAUDE_CONFIG_DIR="$locked"
+  expect_shown "unreadable settings" 1 "cannot be read"
+fi
+# A resume, a clear or a compaction shows nothing, whatever is missing.
+for source in resume clear compact; do
+  setup_run "$source with no settings" "$inputs/$source.json" CLAUDE_CONFIG_DIR="$scratch/cfg-none"
+  expect_shown "$source with no settings" 0
+done
+
+# Each tool missing gives one line with its install command.
+setup_run "no gh login" "$inputs/startup.json" STUB_GH_LOGIN=no
+expect_shown "no gh login" 1 "Install: gh auth login"
+setup_run "no gh-stack extension" "$inputs/startup.json" STUB_GH_EXTENSION=no
+expect_shown "no gh-stack extension" 1 "Install: gh extension install github/gh-stack"
+mkdir -p "$scratch/cfg-noskill"
+cp "$inputs/settings-complete.json" "$scratch/cfg-noskill/settings.json"
+setup_run "no gh-stack skill" "$inputs/startup.json" CLAUDE_CONFIG_DIR="$scratch/cfg-noskill"
+expect_shown "no gh-stack skill" 1 "gh skill install github/gh-stack gh-stack --agent claude-code --scope user"
+# The project's own skills folder counts.
+mkdir -p "$scratch/project/.claude/skills/gh-stack"
+: > "$scratch/project/.claude/skills/gh-stack/SKILL.md"
+jq -c --arg d "$scratch/project" '.cwd = $d' "$inputs/startup.json" > "$scratch/start-project.json"
+setup_run "gh-stack skill in the project" "$scratch/start-project.json" CLAUDE_CONFIG_DIR="$scratch/cfg-noskill"
+expect_shown "gh-stack skill in the project" 0
+setup_run "old Claude Code" "$inputs/startup.json" AI_AGENT=claude-code_2-1-0_harness
+expect_shown "old Claude Code" 1 "this session runs Claude Code 2.1.0"
+setup_run "old claude on PATH" "$inputs/startup.json" AI_AGENT= STUB_CLAUDE_VERSION=2.1.0
+expect_shown "old claude on PATH" 1 "claude --version prints 2.1.0"
+setup_run "no version to read" "$inputs/startup.json" AI_AGENT= STUB_CLAUDE_VERSION=none
+expect_shown "no version to read" 0
+# Without gh, one line says so, and its login and extension are not checked.
+# The tools here are links to the real ones, written to by nothing.
+nogh="$scratch/nogh"
+mkdir -p "$nogh"
+for tool in sh env cat dirname awk sed grep tr date mkdir mktemp sleep rm find touch wc head tail mv jq git; do
+  p="$(command -v "$tool")" && ln -s "$p" "$nogh/$tool"
+done
+setup_run "no gh" "$inputs/startup.json" PATH="$nogh"
+expect_shown "no gh" 1 "gh is missing"
+# A gh that hangs is stopped at the limit, and the block still goes out.
+began="$SECONDS"
+setup_run "hanging gh" "$inputs/startup.json" STUB_GH_SLEEP=5 ENG_HOOK_SETUP_SECONDS=1
+expect_shown "hanging gh" 0
+[ $((SECONDS - began)) -lt 4 ] || bad "setup, hanging gh: took $((SECONDS - began)) s, past the limit"
+
+# The permission check, on the first prompt of a new session, which carries
+# the mode. Runs a new session $1 with config $3, then prompts in mode $2 from
+# the project $4, and reads what the user is shown.
+perm_run() {
+  local sid="perm-$1" mode="$2" cfg="$3" dir="${4:-/tmp}"
+  jq -cn --arg s "$sid" --arg d "$dir" '{session_id: $s, cwd: $d, source: "startup"}' |
+    env CLAUDE_PLUGIN_DATA="$scratch/data-perm" CLAUDE_CONFIG_DIR="$cfg" "$hook" session-start > /dev/null 2>&1
+  perm_prompt "$1" "$mode" "$cfg" "$dir"
+}
+# Prompts again in session $1, in mode $2 ("" for none) with config $3.
+perm_prompt() {
+  local sid="perm-$1" mode="$2" cfg="$3" dir="${4:-/tmp}"
+  jq -cn --arg s "$sid" --arg d "$dir" --arg m "$mode" \
+    '{session_id: $s, cwd: $d, hook_event_name: "UserPromptSubmit", prompt: "go"} + (if $m == "" then {} else {permission_mode: $m} end)' |
+    env CLAUDE_PLUGIN_DATA="$scratch/data-perm" CLAUDE_CONFIG_DIR="$cfg" "$hook" prompt > "$scratch/out" 2> "$scratch/err" ||
+    bad "permissions, $1: exited non-zero"
+  shown="$(jq -r '.systemMessage // empty' "$scratch/out" 2>/dev/null)"
+}
+writes='.permissions.allow += ["Bash(git commit:*)", "Bash(git push:*)", "Bash(gh pr create:*)", "Bash(gh pr edit:*)", "Bash(gh pr ready:*)", "mcp__linear"]'
+allowed="$(make_config allowed "$writes")"
+
+for mode in auto bypassPermissions; do
+  perm_run "$mode" "$mode" "$config"
+  expect_shown "permissions in $mode mode" 0
+done
+perm_run default default "$config"
+expect_shown "permissions with no write rules" 2 "git commit, git push, gh pr create, gh pr edit and gh pr ready ask each time"
+grep -qF "Bash(git commit:*), Bash(git push:*), Bash(gh pr create:*), Bash(gh pr edit:*) and Bash(gh pr ready:*) to permissions.allow" <<< "$shown" \
+  || bad "permissions with no write rules: the rules to add are not named: $shown"
+grep -qF "tracker's MCP server asks each time" <<< "$shown" || bad "permissions with no write rules: no MCP line: $shown"
+perm_run acceptedits acceptEdits "$allowed"
+expect_shown "permissions with every write allowed" 0
+perm_run broad default "$(make_config broad '.permissions.allow = ["Bash(git:*)", "Bash(gh *)", "mcp__claude_ai_Linear__*"]')"
+expect_shown "permissions with broad rules" 0
+perm_run bash default "$(make_config bash '.permissions.allow = ["Bash", "mcp__jira"]')"
+expect_shown "permissions with bare Bash" 0
+perm_run askpush default "$(make_config askpush "$writes | .permissions.ask += [\"Bash(git push:*)\"]")"
+expect_shown "permissions with an ask rule on push" 1 "An ask or deny rule names git push"
+grep -qF "Bash(git push:*) to permissions.allow" <<< "$shown" && bad "permissions with an ask rule on push: told to add an allow rule that is there"
+# A rule holding a newline is one rule to Claude Code, never a bare Bash.
+perm_run newline default "$(make_config newline '.permissions.allow += ["Bash(true)\nBash", "mcp__linear"]')"
+expect_shown "permissions with a newline in a rule" 1 "git commit, git push"
+perm_run unanchored default "$(make_config unanchored "$writes | .permissions.allow -= [\"mcp__linear\"] | .permissions.allow += [\"mcp__*\"]")"
+expect_shown "permissions with an unanchored MCP rule" 1 "tracker's MCP server asks each time"
+mkdir -p "$scratch/rules-project/.claude"
+jq "$writes" "$inputs/settings-complete.json" > "$scratch/rules-project/.claude/settings.local.json"
+perm_run project default "$config" "$scratch/rules-project"
+expect_shown "permissions allowed by the project" 0
+perm_run dontask dontAsk "$config"
+expect_shown "permissions in dontAsk mode" 2 "gh pr ready are refused"
+# Plan mode waits for the next prompt; the check then runs once.
+perm_run plan plan "$config"
+expect_shown "permissions in plan mode" 0
+perm_prompt plan default "$config"
+expect_shown "permissions after plan mode" 2
+perm_prompt plan default "$config"
+expect_shown "permissions on a later prompt" 0
+# No mode in the input shows nothing, and the check does not wait for one.
+perm_run nomode "" "$config"
+expect_shown "permissions with no mode" 0
+perm_prompt nomode default "$config"
+expect_shown "permissions after a prompt with no mode" 0
+# A resumed session is not checked again.
+jq -cn '{session_id: "perm-resumed", cwd: "/tmp", source: "resume"}' |
+  env CLAUDE_PLUGIN_DATA="$scratch/data-perm" "$hook" session-start > /dev/null 2>&1
+perm_prompt resumed default "$config"
+expect_shown "permissions after a resume" 0
 
 # The guards. Each session below has its own state under $data, which the
 # hook reads from ${CLAUDE_PLUGIN_DATA}/sessions/<session>/.

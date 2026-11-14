@@ -1,7 +1,7 @@
 # The intent check
 
-Brief a general-purpose subagent with this, on the model and effort in
-[models.md](../../investigate/references/models.md), writing out `R`, the
+Brief a general-purpose subagent with this, on Sonnet at medium effort, as
+[models.md](../../investigate/references/models.md) says, writing out `R`, the
 plan or request and the items approved, `<parent>`, the range, and the files
 already changed at the start, which are not extra.
 

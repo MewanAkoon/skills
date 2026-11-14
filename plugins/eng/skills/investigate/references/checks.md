@@ -9,21 +9,24 @@ it: the session's own and a checker's, round after round.
 A plan, a report, or an answer resting on more than one file gets one
 general-purpose subagent per round, briefed as below with a scratch directory
 made with `mktemp -d` in the scratchpad. A one-line answer gets a fresh read
-of the source it rests on in place of a subagent. Each subagent runs on the
-model and effort in [models.md](models.md).
+of the source it rests on in place of a subagent. Pass each subagent the
+model and effort below; [models.md](models.md) says what to do where a
+harness cannot set them.
 
 ## The rounds
 
 1. **Round 1 settles the facts:** what the code does, the root cause, what
-   breaks. On a task, launch it at the start of the investigation, beside
-   your own reading. For an answer or a report, launch it once the trace
-   shows the work rests on more than one file. Brief it with the request and
-   the sources, not with an answer, so a wrong premise is caught there. Save
-   the text of any source the subagent cannot reach, such as a ticket read
-   through a tracker's MCP server, to the scratchpad and pass its path.
+   breaks. Run it on Opus at high effort, in the background. On a task,
+   launch it at the start of the investigation, beside your own reading. For
+   an answer or a report, launch it once the trace shows the work rests on
+   more than one file. Brief it with the request and the sources, not with an
+   answer, so a wrong premise is caught there. Save the text of any source
+   the subagent cannot reach, such as a ticket read through a tracker's MCP
+   server, to the scratchpad and pass its path.
 2. **Round 2 reviews the plan,** or the answer or report, and improves it in
-   place, as code review does a diff. The reviewer gets the plan and checks
-   every claim it rests on against the code or the ticket.
+   place, as code review does a diff. It and every later round run on Sonnet
+   at medium effort. The reviewer gets the plan and checks every claim it
+   rests on against the code or the ticket.
 3. **Each later round reads only what changed** since the last one, and
    re-runs an experiment only when a changed claim rests on it.
 

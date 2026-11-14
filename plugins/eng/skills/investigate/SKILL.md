@@ -27,8 +27,9 @@ connect, and read nothing in its place: no guess at the ticket from its key,
 a branch name or a search.
 
 On a task, launch round 1 of the check in
-[references/checks.md](references/checks.md) as the reading starts, beside
-your own, briefed with the request and the sources, not an answer.
+[references/checks.md](references/checks.md) in the background as the reading
+starts, beside your own, briefed with the request and the sources, not an
+answer.
 
 **Done when:** every source the request names is read, or listed with the
 reason it could not be, and on a task round 1 is running.

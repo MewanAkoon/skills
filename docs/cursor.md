@@ -9,9 +9,12 @@ otherwise. The Cursor IDE was not tested.
 ## Which way in
 
 - **eng is installed in Claude Code on this machine.** Install nothing in
-  Cursor. Cursor imports installed Claude Code plugins by default, through
-  Cursor Settings, Agents, Third-Party Imports, "Include Third-Party Plugins,
-  Skills, and Other Configs"
+  Cursor. Until a release that carries this change is installed, which
+  0.22.0 does not, the import brings the skills and the workflow and guards
+  nothing, as "What the import brings" says. Cursor imports installed
+  Claude Code plugins by default, through Cursor Settings, Agents,
+  Third-Party Imports, "Include Third-Party Plugins, Skills, and Other
+  Configs"
   ([docs](https://cursor.com/docs/reference/third-party-hooks)). Updating
   the Claude Code install with `claude plugin update eng@mewanakoon` updates
   what Cursor loads, and that install follows `stable`, so it changes only
@@ -41,7 +44,9 @@ the IDE, then start a new chat. Cursor caches a plugin by commit, not by its
 `version`, so an install changes only at a release only if the marketplace
 keeps tracking `stable`. Cursor's docs say a Refresh pulls "from the
 repository", and say nothing on whether `--git-ref` holds across one
-([docs](https://cursor.com/docs/plugins)).
+([docs](https://cursor.com/docs/plugins)). The one fact tested here: an
+account's `mewanakoon` entry stayed at the commit it was indexed at, across
+two days of CLI runs, so the CLI does not refresh it on its own.
 
 To remove, uninstall `eng` in the plugins view, then run
 `agent plugin marketplace remove mewanakoon`.
@@ -57,7 +62,10 @@ To remove, uninstall `eng` in the plugins view, then run
 - **The hooks.** Which hooks file runs depends on the folder Cursor loads:
   - A folder with only `.claude-plugin/`, as every eng release up to 0.22.0
     is, runs `hooks/hooks.json`. Cursor names its shell tool `Shell` there
-    and leaves `cwd` empty, and the hook reads both, from this release on.
+    and leaves `cwd` empty. The hook in those releases does not read `Shell`,
+    so through their import nothing is denied and nothing asks: in an
+    earlier probe `gh pr comment` ran. Every release that carries this change
+    has both manifests.
   - A folder with both manifests, loaded with `--plugin-dir`, ran only
     `hooks/hooks-cursor.json`, the Cursor plugin's file. The import of a
     release that carries both is expected to do the same. That is checked
@@ -74,7 +82,7 @@ Claude Code plugin and skill from Cursor.
 
 ## What holds in Cursor
 
-| | Cursor plugin | Import running `hooks.json` | ACP |
+| | Cursor plugin | Import running this change's `hooks.json` | ACP |
 |---|---|---|---|
 | The workflow and core writing rules at session start | Yes | Yes | No |
 | A post through `gh`, an API call or a CLI denied | Yes | Yes | No |
@@ -83,7 +91,10 @@ Claude Code plugin and skill from Cursor.
 | A command the parser cannot read in time asks | Yes | As the row above | No |
 | A hook that crashes or times out blocks the call | Yes, through `failClosed` | No, the call runs | No |
 
-The Cursor plugin's column comes from `beforeShellExecution` and
+The middle column was measured on a copy of this tree without
+`.cursor-plugin/`. It holds only if a release's import runs `hooks.json`,
+and for 0.22.0 and earlier nothing in it holds. The Cursor plugin's column
+comes from `beforeShellExecution` and
 `beforeMCPExecution`, the two Cursor events whose ask stops a call. Through
 `hooks.json`, Cursor's `preToolUse` takes eng's deny, but its ask does not
 stop a command the allowlist lets through.
@@ -139,7 +150,9 @@ In a scratch git repo with no remote, start a new chat and ask for each:
    which starts "Post no comment, review, or reply".
 2. Run `gh pr comment 1 --body x`. A hook blocks it with "Posting a comment,
    review or reply is off limits".
-3. Run `gh pr merge 1`. Cursor asks you first. Decline.
+3. With `gh` allowlisted, run `gh pr merge 1`. Cursor asks you first.
+   Decline. Without the allowlist entry Cursor asks for any `gh` command,
+   so the step shows nothing about eng.
 4. Type `/commit`. It loads eng's commit skill, which reads its
    `references/repo-guidance.md`.
 

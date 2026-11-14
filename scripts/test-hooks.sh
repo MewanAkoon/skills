@@ -968,11 +968,13 @@ expect_cursor_shell ask 'git push --force origin main'
 expect_cursor_shell none 'git status'
 expect_cursor_shell none 'git commit -m x'
 [ "$(cat "$scratch/out")" = '{}' ] || bad "cursor shell: no decision printed $(cat "$scratch/out"), want {}"
-# A parser that runs out of time asks, in Cursor's shape too.
-long="$scratch/cursor-long.txt"
-awk 'BEGIN { for (i = 0; i < 4000; i++) printf "echo %d && ", i; print "true" }' > "$long"
-cursor_run "$(jq -c --rawfile c "$long" '.command = $c' "$cursor_in/before-shell.json")" pre-tool cursor ENG_HOOK_PARSE_SECONDS=1
+# A parser that runs out of time asks, in Cursor's shape too. The stand-in
+# parser never ends, under a one-second limit, as in parser_slow above.
+printf 'BEGIN { fflush(); while (1) n++ }\n' > "$broken/hooks/classify-command.awk"
+cursor_run "$(cat "$cursor_in/before-shell.json")" pre-tool cursor CLAUDE_PLUGIN_ROOT="$broken" ENG_HOOK_PARSE_SECONDS=1
 [ "$(cursor_verdict)" = ask ] || bad "cursor shell: a parser out of time got $(cursor_verdict), want ask"
+jq -r '.agent_message' "$scratch/out" 2>/dev/null | grep -q 'within its time limit' \
+  || bad "cursor shell: the ask for a parser out of time does not say so"
 # Input that is not JSON still gets an answer.
 cursor_run 'not json' pre-tool cursor
 [ "$(cursor_verdict)" = none ] || bad "cursor shell: input that is not JSON got $(cursor_verdict), want {}"

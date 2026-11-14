@@ -1134,6 +1134,10 @@ gh stack submit
 gh stack submit --auto --remote origin
 == allow gh stack rebase, which is local
 gh stack rebase --upstack
+== allow gh stack rebase --continue, after a conflict is resolved
+gh stack rebase --continue
+== allow gh stack rebase onto a retargeted base
+gh stack rebase --accept-base-change
 == allow gh stack add
 gh stack add feature/b
 == allow gh stack init
@@ -1166,5 +1170,7 @@ gh stack merge 42 --yes
 gh stack unstack
 == ask gh stack unstack, local only, still asks
 gh stack unstack --local
-== ask gh stack link
+== allow gh stack link, which pushes the branches it names like submit
 gh stack link 41 42
+== allow gh stack link with a base, marking its PRs ready
+gh stack link --base main --open 41 42

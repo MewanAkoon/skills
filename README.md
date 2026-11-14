@@ -358,9 +358,13 @@ subagent every push is denied.
   goes as a plain push.
 - Anything else that can force asks: `--force`, `-f`, a `+` refspec, a lease
   with no sha, a sha that is not hex, a lease on a bare name, which could
-  name a tag, a lease or a named branch that is the default or is built
-  from `$`, `~` or braces, and a lease push in a directory with no remote
-  HEAD, or not run as its own command.
+  name a tag, a lease that is the default, a named branch that is the
+  default on either side of a refspec, such as `main:feature/x`, a source
+  whose last path part is a default or `HEAD` after a slash, in any case,
+  such as `origin/main:`, `origin/HEAD:`, `feature/main:` or `Main:`, one
+  built from `$`, `~`
+  or braces, and a lease push in a directory with no remote HEAD, or not run
+  as its own command.
 - `--delete`, `-d`, a `:<branch>` refspec, `--mirror`, `--prune`, `--tags`,
   `--follow-tags`, a tag refspec, and push options through `-o` or
   `--push-option` ask too, with a lease or without one. git takes any
@@ -449,7 +453,8 @@ command is read by those same rules, so its own quoting and escapes, and a
 command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings outside a grant's plain-push check, a tag pushed
 by its bare name, a remote HEAD left stale after a repo's default branch was
 renamed, the default of a remote with no HEAD or of one reached by a path or
-`--repo=` rather than a remote name, a commit made by anything but `git commit`, such as
+`--repo=` rather than a remote name, a default branch's history pushed as a
+bare `HEAD`, a sha or another ref at its commit, such as `FETCH_HEAD`, a commit made by anything but `git commit`, such as
 `git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
 an MCP tool whose name and input both hide what it does, or a browser posting through a web
 page. The reminder to review the whole PR reads only the Bash tool. It misses

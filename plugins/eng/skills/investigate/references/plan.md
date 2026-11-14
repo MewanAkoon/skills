@@ -46,8 +46,8 @@ by `eng:implement`'s `references/deliver.md`; each issue write, named as
 values in `eng:issue`'s [estimate.md](../../issue/references/estimate.md) so
 the run asks nothing; the checks that must pass; and standing rules for what
 review may find. Delivery names no start condition that waits on work outside
-the session. Merges, releases, tags, deploys, force pushes and pushes to the
-default branch never go here.
+the session. Merges, releases, tags, deploys, pushes to the default branch,
+and force pushes outside `eng:commit`'s Push section never go here.
 
 **Progress.** Empty at first. The run adds each ruling, each pushed commit,
 and `Reviewed: <sha>` for the last pushed commit the review loop read.

@@ -190,6 +190,12 @@ git push --force-with-lease=refs/heads/feature/x:abc1 origin HEAD:refs/heads/fea
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 --force-if-includes origin feature/x
 == allow
 git push -u --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
+== allow the form eng:commit's Push section writes, local branch to its remote name
+git push -u --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x:feature/x
+== allow
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x:feature/x
+== allow eng:commit's lookup of the sha it last pushed
+git log -g -1 --grep-reflog='update by push' --format=%H refs/remotes/origin/feature/x
 == allow with no remote or refspec only the leased ref is forced
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567
 == allow
@@ -296,6 +302,32 @@ git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcde
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin HEAD:refs/heads/main
 == ask
 git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x main
+== ask a default branch as a refspec's source forces its history over the destination
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin main:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin refs/heads/main:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin heads/main:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin master:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin origin/main:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin refs/remotes/origin/main:feature/x
+== ask a remote's HEAD as the source is its default branch
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin origin/HEAD:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin refs/remotes/origin/HEAD:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin a/b/HEAD:feature/x
+== ask a source counts by its last path part
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/main:feature/x
+== ask git on a case-insensitive file system resolves another case to the default
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin Main:feature/x
+== ask
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin origin/head:feature/x
+== ask a default source in a later refspec
+git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x main:feature/y
 == ask a lease push that is not the whole command
 cd ../o && git push --force-with-lease=refs/heads/feature/x:0123456789abcdef0123456789abcdef01234567 origin feature/x
 == ask

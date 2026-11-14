@@ -109,13 +109,43 @@ none, stop. Confirm before pushing the default branch, which
 git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"
 ```
 
-`<remote>/<branch>`: `git push`. Empty: `git push -u <remote> <branch>`.
-Another branch, such as `origin/main`: under a Delivery, push with `-u` to
-its branch and log a ruling; otherwise ask first.
+On a branch that `gh stack view --json` lists under `branches`, a rebase is
+`gh stack rebase` and a push is `gh stack push`, each with `--remote <remote>`
+when there are several remotes. A rejected `gh stack push` is any other
+rejection.
 
-A push rejected after a rebase this run made proposes
-`git push --force-with-lease`, run only on the user's yes. Any other
-rejection: fetch, report what `git push` said and what the remote branch has
-that this one lacks, and stop.
+Otherwise, `<remote>/<branch>`: `git push`. Empty:
+`git push -u <remote> <branch>`. Another branch, such as `origin/main`: under
+a Delivery, push with `-u` to its branch and log a ruling; otherwise ask
+first.
 
-**Done when:** `git push` exited zero onto `<remote>/<branch>`.
+When a push is rejected as non-fast-forward after a rebase this run made,
+push again with an explicit lease. `<branch>` is the branch on `<remote>`
+that the rejected push named, after `->` in its output. `<local>` is the
+branch the `git rev-parse` at the top of this section printed, run in the
+checkout this run rebased. When `<local>` or `<branch>` is the default
+branch, ask first, even after the confirmation above, showing what the lease
+push replaces. Without that yes, stop. Otherwise run, as a command of its
+own, with nothing before `git` and no `-C`, `cd`, `;`, `&&`, pipe or `$( )`:
+
+```bash
+git push -u --force-with-lease=refs/heads/<branch>:<sha> <remote> <local>:<branch>
+```
+
+`<sha>` is the commit this run last pushed there, else what this prints,
+where no output or an error means no sha:
+
+```bash
+git log -g -1 --grep-reflog='update by push' --format=%H refs/remotes/<remote>/<branch>
+```
+
+With no sha, run
+`git fetch <remote> +refs/heads/<branch>:refs/remotes/<remote>/<branch>`,
+then ask first, showing `<remote>/<branch>`'s sha and what
+`git log --oneline --cherry-pick --right-only <local>...<remote>/<branch>`
+lists, and on a yes, lease on that sha. Without that yes, never take the sha
+from `<remote>/<branch>` or a fetch. Never `--force`. A rejected lease push
+is any other rejection. Any other rejection: fetch, report what `git push`
+said and what the remote branch has that this one lacks, and stop.
+
+**Done when:** the push exited zero onto `<remote>/<branch>`.

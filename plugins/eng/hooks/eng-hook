@@ -27,10 +27,10 @@
 # The hook decides deny or ask, and never allow. In the main session a post
 # is denied, a write that is hard to take back asks, and a commit, push, pull
 # request, issue or other MCP write gets no decision, so Claude Code's own
-# permission settings decide it. A push with an explicit lease that names no default
-# branch, as the lease, source or destination, counts as a plain push, with
-# a source read as classify-command.awk says. In a subagent every remote
-# write the hook finds is denied.
+# permission settings decide it. A push with an explicit lease that names no
+# default branch, as the lease, source or destination, counts as a plain
+# push, with a source read as classify-command.awk says. In a subagent every
+# remote write the hook finds is denied.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates. review-hash holds a hash of the uncommitted changes as they
@@ -459,29 +459,30 @@ mcp_tool() {
       done ;;
   esac
   # Any other MCP write leaves this machine, so a subagent's is denied,
-  # whatever the server is called and whatever it writes: a tracker's issue,
-  # task, item, card or entity, a doc, a page or a sheet. The verbs listed
-  # here are on none of the word lists: gh issue's lock, unlock, pin, unpin,
-  # transfer and develop, and the link, unlink, change and retire of other
-  # trackers' tools, such as Monday's change_item_column_values. Servers that
+  # whatever the server is called and whatever it writes: a tracker's task,
+  # item, card or entity, a doc, a page or a sheet. Change is on none of the
+  # word lists, and Monday's change_item_column_values writes. Servers that
   # run on this machine, a browser driver, a code editor, a memory store and
-  # the file system, are left out by their usual names. Both fall through, so
+  # the file system, are left out by their usual names. It falls through, so
   # a delete still asks in the main session.
   case "$first:$words" in
-    ?*:* | :*" link "* | :*" unlink "* | :*" change "* | :*" lock "* | :*" unlock "* | \
-      :*" pin "* | :*" unpin "* | :*" transfer "* | :*" develop "* | :*" retire "*)
+    ?*:* | :*" change "*)
       case "$server" in
         *[Pp]laywright* | *[Pp]uppeteer* | *[Ss]erena* | memory | *-memory | filesystem | \
           *-filesystem | sequential-thinking) ;;
         *) printf 'gate write\n' ;;
       esac ;;
   esac
-  # Resolving an issue, ticket or work item writes too. Elsewhere resolve
-  # reads, as resolve-library-id and resolve-shortlink do.
-  case "$first:$words" in
-    :*" resolve "*)
-      case "$words" in
-        *" issue "* | *" issues "* | *" ticket "* | *" tickets "* | *" work item "* | *" work items "*)
+  # An issue, ticket or work item write is one on any server, local names
+  # included. The verbs listed here are on none of the word lists: gh issue's
+  # lock, unlock, pin, unpin, transfer and develop, and the link, unlink,
+  # resolve and retire of other trackers' tools. Elsewhere they can read, as
+  # resolve-library-id does.
+  case "$words" in
+    *" issue "* | *" issues "* | *" ticket "* | *" tickets "* | *" work item "* | *" work items "*)
+      case "$first:$words" in
+        ?*:* | :*" link "* | :*" unlink "* | :*" resolve "* | :*" lock "* | :*" unlock "* | \
+          :*" pin "* | :*" unpin "* | :*" transfer "* | :*" develop "* | :*" retire "*)
           printf 'gate write\n' ;;
       esac ;;
   esac

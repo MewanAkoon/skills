@@ -32,11 +32,12 @@ tracker and its target.
   ToolSearch. Then read one thing the guidance names, such as the team, the
   project or a known key, to confirm the server is that tracker's, and
   follow [mcp.md](mcp.md).
-- No tools for it in the session, or the confirming read fails: stop before
-  step 2, call no tracker tools, and file nothing. Say which tracker's MCP
-  server to connect and ask again after, showing it through a tool that
-  suggests connectors where the session has one, and say a copy-paste draft
-  is there if it cannot be connected. A comment needs no tools and is
+- No tools for it in the session, or the confirming read fails, outside a
+  plan, whose case is the last paragraph: stop before step 2, call no
+  tracker tools, and file nothing. Say which tracker's MCP server to connect
+  and ask again after, showing it through a tool that suggests connectors
+  where the session has one, and say a copy-paste draft is there if it
+  cannot be connected. A comment needs no tools and is
   drafted as [mcp.md](mcp.md) says.
 
 Only when the user says the server cannot be connected: skip search, labels

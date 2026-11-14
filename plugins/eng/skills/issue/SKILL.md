@@ -17,8 +17,8 @@ whose `gh` commands below apply, in another tracker's MCP tools, for which
 [references/mcp.md](references/mcp.md) replaces them, or in a stop that asks
 you.
 
-**Done when:** the tracker, its target and its tools are named, or the run
-asked and stopped.
+**Done when:** the tracker, its target and its tools are named, the user
+chose the copy-paste draft, or the run asked and stopped.
 
 ## Step 2: Look for a duplicate
 

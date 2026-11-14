@@ -791,7 +791,7 @@ EOF
     printf 'doctor: %d to fix\n' "$problems"
     fail=1
   else
-    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it, the settings it needs, and no hook errors logged\n' "$id" "$version"
+    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it, the settings and tools it needs, and no hook errors logged\n' "$id" "$version"
   fi
 fi
 

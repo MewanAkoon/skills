@@ -138,7 +138,7 @@ To confirm it worked from a clone of this repo:
 A good run ends like this:
 
 ```
-doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it, the settings it needs, and no hook errors logged
+doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it, the settings and tools it needs, and no hook errors logged
 <n> skills, <m> model-invoked
 ok
 ```

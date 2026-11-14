@@ -12,6 +12,21 @@ and the numbers follow semantic versioning.
 
 ### Added
 
+- A setup check that tells you what a machine is missing. On a new session the
+  hook shows you, and not the model, one line for each setting the README's
+  Setup section asks for that is missing from your user settings, and for each
+  tool in the new `standards/dependencies.md` that is not installed, with its
+  install command: Claude Code 2.1.293 or later, git, jq, `gh` and its login,
+  and the gh-stack extension and skill. The first prompt outside plan mode
+  adds a line when the permission mode and rules would stop `git commit`,
+  `git push`, `gh pr create`, `gh pr edit`, `gh pr ready`, `gh stack` or an
+  MCP issue write for a prompt, since only a prompt carries the mode. Auto
+  mode shows nothing. A plugin cannot ship any of these settings itself, so
+  each is warned about. The checks live in `hooks/setup-check`, which
+  `check.sh --doctor` now runs too, so the two agree, and which runs under a
+  3-second limit so a hanging `gh` never costs the session its contract. It
+  installs nothing and writes no settings file.
+
 - Stacked pull requests through gh-stack, without being asked, in
   `implement/references/stack.md`. A plan whose Changes split into dependent
   layers, or a branch already in a stack, names one branch per layer under

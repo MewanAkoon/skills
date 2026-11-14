@@ -9,10 +9,15 @@
 #                  Punctuation and Word choice sections of plain-writing, read
 #                  from the plugin's own files at run time. On a compaction it
 #                  also asks Claude Code to load the skill listing again, which
-#                  compaction drops.
+#                  compaction drops. On a new session it also shows the user,
+#                  not the model, a line for each setting or tool eng needs
+#                  that is missing, from hooks/setup-check.
 #   prompt         UserPromptSubmit. On a session's first prompt, records the
 #                  uncommitted changes it started with, so they never bring
-#                  the review reminder.
+#                  the review reminder. On the first prompt of a new session
+#                  outside plan mode, it also shows the user a line when the
+#                  permission mode and rules would stop eng's writes for a
+#                  prompt, since only a prompt carries the mode.
 #   expansion      UserPromptExpansion. Blocks /code-review with --comment or
 #                  --post, and records a review you type as covering the
 #                  changes.
@@ -76,6 +81,13 @@ state=""
 # the parser and asks, rather than letting Claude Code stop the hook and run
 # the command unread. ENG_HOOK_PARSE_SECONDS can only lower it, for tests.
 PARSE_SECONDS=5
+
+# The seconds hooks/setup-check may take at session start and on the first
+# prompt, well inside those hooks' timeouts in hooks/hooks.json. Past this the
+# check is stopped and the hook goes on without its lines, so a gh or claude
+# that hangs never costs the session its contract. ENG_HOOK_SETUP_SECONDS can
+# only lower it, for tests.
+SETUP_SECONDS=3
 
 # The code-review flags that post to a pull request.
 POST_FLAGS='--comment(=[^[:space:]]*)?|--post(=[^[:space:]]*)?'
@@ -233,6 +245,39 @@ record_review() {
   printf '%s\n' "$now" > "$state/review-hash"
 }
 
+# Runs hooks/setup-check with the arguments given and prints what it printed.
+# A check still running after SETUP_SECONDS is stopped, and prints nothing.
+# Its output goes to a file rather than a pipe, so a gh it started and left
+# running cannot hold the $( ) around this call open.
+setup_lines() {
+  checker="$root/hooks/setup-check"
+  if [ ! -x "$checker" ]; then
+    log "cannot run $checker, so the setup was not checked"
+    return 0
+  fi
+  limit="$SETUP_SECONDS"
+  case "${ENG_HOOK_SETUP_SECONDS:-}" in
+    '' | *[!0-9]*) ;;
+    *) [ "$ENG_HOOK_SETUP_SECONDS" -gt 0 ] && [ "$ENG_HOOK_SETUP_SECONDS" -lt "$limit" ] && limit="$ENG_HOOK_SETUP_SECONDS" ;;
+  esac
+  sl_out="$(mktemp "${TMPDIR:-/tmp}/eng-hook-setup.XXXXXX")" || return 0
+  "$checker" "$@" > "$sl_out" 2>/dev/null < /dev/null &
+  sl_pid=$!
+  (
+    trap 'kill "$sl_nap" 2>/dev/null; exit 0' TERM
+    sleep "$limit" &
+    sl_nap=$!
+    wait "$sl_nap" && kill "$sl_pid"
+  ) > /dev/null 2>&1 &
+  sl_timer=$!
+  wait "$sl_pid" 2>/dev/null
+  sl_status=$?
+  kill "$sl_timer" 2>/dev/null
+  [ "$sl_status" -eq 0 ] && cat "$sl_out"
+  rm -f "$sl_out"
+  return 0
+}
+
 session_start() {
   contract="$root/standards/workflow.md"
   writing="$root/skills/plain-writing/SKILL.md"
@@ -274,12 +319,18 @@ $rules"
   reload=false
   [ "$source" = compact ] && reload=true
 
-  jq -n --arg ctx "$text" --argjson reload "$reload" '{
+  # The settings and tools, on a new session only, so a resume, a clear or a
+  # compaction does not say it again. The lines go to the user alone, so the
+  # model's block stays as it is.
+  missing=""
+  [ "$source" = startup ] && missing="$(setup_lines settings tools --project "$f_cwd")"
+
+  jq -n --arg ctx "$text" --argjson reload "$reload" --arg missing "$missing" '{
     hookSpecificOutput: (
       {hookEventName: "SessionStart", additionalContext: $ctx}
       + (if $reload then {reloadSkills: true} else {} end)
     )
-  }' || log "jq could not build the output"
+  } + (if $missing != "" then {systemMessage: $missing} else {} end)' || log "jq could not build the output"
 
   if find_state; then
     # A session from before 0.16.0 kept its first hash as start-hash.
@@ -293,6 +344,8 @@ $rules"
       rm -f "$state/review-hash"
       : > "$state/start-pending"
     fi
+    # The permission check waits for the first prompt, which carries the mode.
+    [ "$source" = startup ] && : > "$state/setup-pending"
     find "$CLAUDE_PLUGIN_DATA/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
       -exec rm -rf {} + 2>/dev/null
     # The slash follows /tmp where it is a link, as on macOS.
@@ -303,7 +356,20 @@ $rules"
 }
 
 on_prompt() {
-  if find_state && [ -f "$state/start-pending" ]; then
+  find_state || return 0
+  # In plan mode the check waits for a later prompt, since approving the plan
+  # picks the mode the work runs in.
+  if [ -f "$state/setup-pending" ]; then
+    pmode="$(get .permission_mode)"
+    if [ "$pmode" != plan ]; then
+      rm -f "$state/setup-pending"
+      if [ -n "$pmode" ]; then
+        stops="$(setup_lines permissions --mode "$pmode" --project "$f_cwd")"
+        [ -n "$stops" ] && jq -n --arg m "$stops" '{systemMessage: $m}'
+      fi
+    fi
+  fi
+  if [ -f "$state/start-pending" ]; then
     tree_state "$f_cwd" > "$state/review-hash" 2>/dev/null || rm -f "$state/review-hash"
     rm -f "$state/start-pending"
   fi

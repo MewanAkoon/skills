@@ -1,0 +1,15 @@
+{
+  "skillOverrides": {
+    "commit": "off",
+    "pr": "off"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "permissions": {
+    "allow": ["Bash(gh stack:*)"],
+    "ask": ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]
+  }
+}

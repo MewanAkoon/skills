@@ -40,7 +40,7 @@ run "first run"
 run "rerun"
 [ "$(grep -c "$begin" "$rules")" = 1 ] || bad "rerun: not exactly one rules block"
 grep -qx 'my own rule' "$rules" || bad "rerun: CLAUDE.md lost a line it did not write"
-# The two rules the README calls the layer to rely on.
+# The two rules cloud-setup.sh relies on, since the VM reads its CLAUDE.md.
 grep -q 'Co-Authored-By' "$rules" || bad "rerun: the rules block lost its attribution rule"
 grep -q 'never a bare commit or pr skill' "$rules" \
   || bad "rerun: the rules block lost its rule against bare commit and pr skills"

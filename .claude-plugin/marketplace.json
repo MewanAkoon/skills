@@ -9,7 +9,7 @@
     {
       "name": "eng",
       "source": "./plugins/eng",
-      "description": "Engineering skills for Claude Code: commits and PRs once you approve or name the work, TypeScript and API practice, debugging, review, and plain writing.",
+      "description": "Engineering skills for Claude Code: investigate, plan, implement, review, commit and open PRs, with hooks that block posting and confirm writes that are hard to undo.",
       "category": "engineering"
     }
   ]

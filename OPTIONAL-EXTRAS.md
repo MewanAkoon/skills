@@ -80,6 +80,24 @@ Cursor also syncs its own skills into `~/.cursor/skills-cursor`, several of
 them review skills, so read those before adding anything that reviews a diff.
 That directory is Cursor's, and nothing in this repo writes to it or prunes it.
 
+## Security reviews
+
+Noted on 2026-11-14 for licence and scope only, so put both through the four
+questions below before enabling either. The review loop's own security step
+reads one change at a time. These go further.
+
+- **Cloudflare's `security-audit`**, from
+  [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill)
+  (MIT). A full audit of a whole repo in phases, with parallel subagents, a
+  sandbox and validators. Cloudflare's write-up puts it at hours on a large
+  repo, so it suits a sweep now and then, not a check per change.
+- **Trail of Bits' `differential-review`**, from
+  [trailofbits/skills](https://github.com/trailofbits/skills). In Claude
+  Code, add the marketplace with `/plugin marketplace add trailofbits/skills`,
+  then install `differential-review@trailofbits`. A deep review of one
+  risky diff. It is CC BY-SA 4.0, which is why none of its text is in this
+  MIT repo.
+
 ## Before enabling any of them
 
 Read the files, not the README. The four questions below are the durable part

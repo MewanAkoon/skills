@@ -986,11 +986,13 @@ function gh_command(s, i,    g, c, from, comment, at) {
     return
   }
   # The gh-stack extension: push and sync push the stack's branches, submit
-  # also opens its pull requests, and the rest change them on GitHub.
+  # pushes them and opens their pull requests, link pushes the branches it
+  # names and opens or relinks theirs, and merge and unstack change the
+  # stack on GitHub.
   if (g == "stack") {
     if (c ~ /^(push|sync)$/) emit("gate push")
-    else if (c == "submit") { emit("gate push"); emit("gate pr") }
-    else if (c ~ /^(merge|unstack|link)$/) emit("confirm gh stack " c)
+    else if (c ~ /^(submit|link)$/) { emit("gate push"); emit("gate pr") }
+    else if (c ~ /^(merge|unstack)$/) emit("confirm gh stack " c)
     return
   }
 }

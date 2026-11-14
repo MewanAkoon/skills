@@ -81,7 +81,7 @@ conflicting instructions. When you find one, narrow the new description until
 they no longer collide, move the overlapping part into the existing skill's
 `references/`, or demote something. To print the set as it stands:
 
-```bash checked
+```bash
 grep -L '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' plugins/eng/skills/*/SKILL.md | xargs -r grep -h '^description:'
 ```
 
@@ -107,7 +107,7 @@ Three skills own the phases of
 [plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md):
 `investigate`, `implement`, and `pr-feedback`. Each is model-invoked, and the
 workflow names it at its step, so the change of phase is the cue rather than a
-search of the listing. Step 5's writes go through `commit`, `pr`, and `issue`,
+search of the listing. Step 4's writes go through `commit`, `pr`, and `issue`,
 named the same way. A new skill that claims a phase competes with the one that
 owns it. Move its content into that skill's `references/` instead, which is how
 `how`, `architect`, and `diagnose-bug` became part of `investigate`, and
@@ -266,8 +266,8 @@ you will not remember which files were yours.
 
 ## Before committing
 
-Run `./scripts/check.sh`. It covers the mechanical half, listed in
-[AGENTS.md](AGENTS.md).
+Run `./scripts/check.sh`. It covers the mechanical half, and each check's
+comment in the script says what it holds and why.
 
 Then read the skill back and check the half no script can:
 

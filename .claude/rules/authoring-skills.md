@@ -9,4 +9,5 @@ so a change here changes agent behaviour everywhere it is installed.
 Read `WRITING-RULES.md` in full before changing the skill. Check the result
 against its "Before committing" list, then run `./scripts/check.sh`.
 
-`AGENTS.md` holds the invariants and says which file each harness reads.
+`check.sh` holds the invariants, and `AGENTS.md` says which file each harness
+reads.

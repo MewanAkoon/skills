@@ -68,9 +68,9 @@ To remove, uninstall `eng` in the plugins view, then run
 Every skill is listed twice under the same name. In the earlier probe
 recorded in SKI-30, `/commit` loaded the Cursor plugin's copy in 2 of 2
 runs. The workflow arrives twice, about 4.4 KB each time, and each hook
-runs twice, which leaves a deny or an ask as it is. Keep one: uninstall the Cursor plugin, or turn
-off Third-Party Imports, which also drops every other Claude Code plugin and
-skill from Cursor.
+runs twice, which leaves a deny or an ask as it is. Keep one: uninstall the
+Cursor plugin, or turn off Third-Party Imports, which also drops every other
+Claude Code plugin and skill from Cursor.
 
 ## What holds in Cursor
 

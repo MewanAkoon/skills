@@ -50,8 +50,8 @@ and the numbers follow semantic versioning.
   such as an Asana task, a Monday item, a Fibery entity, a Notion page or a
   doc, not only one named for an issue, ticket or work item. Well-known
   servers that run on this machine, Playwright, Puppeteer, Serena, memory,
-  filesystem and sequential-thinking, are left out. The main session is
-  unchanged.
+  filesystem and sequential-thinking, are left out, except for an issue,
+  ticket or work item write. The main session is unchanged.
 - The README's hook table no longer says a Linear `save_comment` on an issue
   runs, that a write waits for `eng:issue` to load since your latest message,
   or that the hook reads MCP inputs through `risky_input`.

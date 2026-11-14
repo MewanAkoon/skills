@@ -49,9 +49,10 @@ values in `eng:issue`'s [estimate.md](../../issue/references/estimate.md) so
 the run asks nothing, and each in a tracker whose tools the session has, as
 `eng:issue`'s [tracker.md](../../issue/references/tracker.md) finds them,
 unless Open questions asks you to connect its server; the checks that must
-pass; and standing rules for what review may find. Delivery names no start condition that waits on work outside
-the session. Merges, releases, tags, deploys, pushes to the default branch,
-and force pushes outside `eng:commit`'s Push section never go here. When
+pass; and standing rules for what review may find. Delivery names no start
+condition that waits on work outside the session. Merges, releases, tags,
+deploys, pushes to the default branch, and force pushes outside
+`eng:commit`'s Push section never go here. When
 Changes split into two or more dependent layers that each make sense to
 review, or the branch is already in a stack, Delivery names a stack as
 `eng:implement`'s `references/stack.md` says, after the gh-stack check

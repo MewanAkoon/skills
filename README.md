@@ -3,8 +3,8 @@
 Engineering skills for Claude Code, shipped as one plugin, `eng`: a standing
 workflow from ticket to pull request, and skills for commits, PRs, issues,
 review feedback, debugging, TypeScript, API boundaries and plain writing. It
-runs in Claude Code. Cursor is not supported yet: it can import an installed
-Claude Code plugin, but eng's guards have not been shown to hold there.
+runs in Claude Code. Cursor is not supported yet, and eng's guards have not
+been shown to hold there.
 
 ## Setup
 
@@ -55,7 +55,8 @@ is the check for it.
 
 **In a session.** `/plugin marketplace add MewanAkoon/skills#stable` and
 `/plugin install eng@mewanakoon` do the same as steps 1 and 2. Both forms
-install at user scope, so the skills load in every project on the machine.
+install at user scope, as the install's `(scope: user)` line shows, so the
+skills load in every project on the machine.
 
 **Optional allow rules.** Outside auto mode, each of eng's own writes
 prompts. To stop that, add `Bash(git commit:*)`, `Bash(git push:*)`,
@@ -68,13 +69,15 @@ and only the skills hold it back.
 ([docs](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings)),
 so `eng:commit` and `eng:pr` keep working. An empty `commit` or `pr` under
 `attribution` drops that credit line, and `sessionUrl: false` drops the
-session link. The eng skills keep all of them out as well.
+session link
+([docs](https://code.claude.com/docs/en/settings-reference#attribution)). The eng skills keep all of them out as well.
 
 **Auto-update.** Claude Code leaves it off for marketplaces outside
 Anthropic's. To turn it on, open `/plugin`, go to Marketplaces, pick
 `mewanakoon`, and enable auto-update
 ([docs](https://code.claude.com/docs/en/discover-plugins#keep-plugins-updated)).
-After an update by hand, `/reload-plugins` works in place of a new session.
+After an update by hand, `/reload-plugins` works in place of a new session
+([docs](https://code.claude.com/docs/en/plugins/cli-reference#plugin-update)).
 [CHANGELOG.md](CHANGELOG.md) says what each release brought.
 
 **Removing.** An uninstall with `--keep-data` keeps the data folder, which
@@ -94,7 +97,7 @@ claude plugin install eng@mewanakoon
 ```
 
 The remove comes first because Claude Code refuses to add `mewanakoon` again
-while your settings list it at another ref. It also uninstalls `eng` and
+while your settings list it at another ref, as 2.1.318 does in testing. It also uninstalls `eng` and
 deletes its data folder. Your settings stay as they are.
 
 ## The workflow
@@ -150,8 +153,6 @@ These run only when typed, and cost no context until then.
 | [grill-me](plugins/eng/skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
 | [handoff](plugins/eng/skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
 
-`/skill-doctor` in Claude Code shows how often each skill has fired.
-
 ## Guardrails
 
 - Nothing is posted. Comments, reviews and replies are drafted to a file for
@@ -172,7 +173,7 @@ command or a tool's name:
 | A merge, release, deploy, package publish, workflow run, repo, secret or key write, `gh stack merge` or `unstack`, or an MCP write named for deleting, merging, releasing, deploying, sending or publishing | Asks you, in auto mode too |
 | A push that forces, deletes, or sends tags or push options | Asks, apart from a push with an explicit lease that names no default branch |
 | A commit, push, PR create, edit or ready, issue write, `gh stack` push, sync, submit or link, or other MCP write | Leaves it to your permission settings |
-| Any of the writes above from a subagent | Denies it |
+| Any of the writes above from a subagent | Denies it, apart from MCP servers that run on this machine |
 | A shell command it cannot read in time | Asks, still denying a post it found |
 | Changed code not reviewed since it last changed, at hand-back | Reminds once to run the review |
 | A new session's start | Shows you a line for each missing setting or tool |

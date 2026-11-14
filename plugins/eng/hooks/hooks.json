@@ -1,5 +1,5 @@
 {
-  "description": "Sends the eng workflow and core writing rules at session start and after each compaction, and tells you on a new session what eng's settings, tools and permission rules are missing. Denies every post and every remote write from a subagent, asks before merges, releases, deploys, force pushes and other writes that are hard to undo, leaves commits, pushes, PRs and issues to Claude Code's permissions, and reminds once to review changed code before hand-back.",
+  "description": "Sends the eng workflow and core writing rules at session start and after each compaction, and tells you on a new session what eng's settings, tools and permission rules are missing. Denies every post and every remote write it finds from a subagent, asks before merges, releases, deploys, force pushes and other writes that are hard to undo, leaves commits, pushes, PRs and issues to Claude Code's permissions, and reminds once to review changed code before hand-back.",
   "hooks": {
     "SessionStart": [
       {

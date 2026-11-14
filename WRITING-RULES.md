@@ -215,9 +215,7 @@ run needs.
 **Anything only some runs reach goes in `references/`,** pointed to from
 `SKILL.md` with a line saying when to read it. Keep `SKILL.md` short enough to
 read in one sitting. `check.sh` holds every `SKILL.md` to 15,000 bytes, well
-inside the 20,000 characters compaction keeps of a skill, and the lifecycle
-skills, which load in most sessions, to tighter budgets listed in
-[AGENTS.md](AGENTS.md).
+inside the 20,000 characters compaction keeps of a skill.
 
 **Every step ends on something checkable.** "Every route handler has a parse
 call at the top" is verifiable. "Validation is handled properly" is an

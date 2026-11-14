@@ -39,19 +39,24 @@ says what pairs well with it, as a recommendation rather than a dependency.
 You need Claude Code 2.1.293 or later. In any Claude Code session:
 
 ```
-/plugin marketplace add MewanAkoon/skills
+/plugin marketplace add MewanAkoon/skills#stable
 /plugin install eng@mewanakoon
 ```
 
 Or from a shell:
 
 ```bash
-claude plugin marketplace add MewanAkoon/skills
+claude plugin marketplace add 'MewanAkoon/skills#stable'
 claude plugin install eng@mewanakoon
 ```
 
 Both install at user scope, so the skills load in every project on the
 machine. There is no clone to keep and no script to run.
+
+`#stable` follows the `stable` branch, which carries the last release. Work
+lands on `main` and reaches `stable` only at a release, so an install changes
+only then. An install added without `#stable` follows `main`, and
+[Moving an install to stable](#moving-an-install-to-stable) moves it.
 
 Then turn off the bare copies of two skills. A project may carry its own
 `commit` and `pr` skills, and those load beside the plugin's today and can take
@@ -141,10 +146,38 @@ it on once in `/plugin`, under Marketplaces, or update by hand:
 claude plugin update eng@mewanakoon
 ```
 
-A release is a new `version` in `plugins/eng/.claude-plugin/plugin.json`, with
-its entry in [CHANGELOG.md](CHANGELOG.md) and a `vX.Y.Z` tag on the commit that
-brought it to `main`. An install stays on the version it has until that string
-changes.
+A release moves the entries under `## Unreleased` in
+[CHANGELOG.md](CHANGELOG.md) under the new version, bumps `version` in
+`plugins/eng/.claude-plugin/plugin.json`, tags the commit `vX.Y.Z`, and
+fast-forwards `stable` to it. Pull requests leave the version alone. An install
+stays on the version it has until that string changes, so it changes only at a
+release.
+
+### Moving an install to stable
+
+An install added as `MewanAkoon/skills`, with no `#stable`, follows `main`.
+Between releases `main` carries work not yet released under the last release's
+version, so move the install to `stable`. From a shell, with no Claude Code
+session in the middle of a task:
+
+```bash
+claude plugin marketplace remove mewanakoon
+claude plugin marketplace add 'MewanAkoon/skills#stable'
+claude plugin install eng@mewanakoon
+```
+
+The remove comes first because Claude Code refuses to add `mewanakoon` from
+GitHub while your settings still list it at another ref or pointing at a local
+clone. It also uninstalls `eng` and deletes the plugin's saved data, the
+hook's log and review state, which is why no session should be mid-task.
+Your `skillOverrides`, `attribution` and `permissions` entries stay as they
+are, and the install brings `eng` back, enabled at user scope.
+Deleting the `mewanakoon` entry from `extraKnownMarketplaces` in place of the
+remove also lets the add through, but when the old install and `stable` carry
+the same version, `claude plugin update eng@mewanakoon` then keeps the old
+files.
+
+Then start a new session, and run `./scripts/check.sh --doctor` from a clone.
 
 ### Cloud sessions
 
@@ -216,7 +249,10 @@ Add your clone as the marketplace instead of the GitHub one:
 
 Both sources are named `mewanakoon`, so if you added the GitHub one first,
 this repoints it at your clone, and the plugin you installed updates from the
-clone from then on. Claude Code prints how to undo that.
+clone from then on. Claude Code prints how to undo that. Going back to GitHub
+takes the same three commands as
+[Moving an install to stable](#moving-an-install-to-stable), since the add
+from GitHub is refused while your settings list the clone.
 
 A directory marketplace loads the plugin from the folder itself, so an edit
 shows up after `/reload-plugins`. To try the working tree for one session
@@ -551,16 +587,15 @@ a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
 including every command case under `tests/hooks/pre-tool/`, and checks what
 they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
-against scratch homes, and `./scripts/test-checks.sh`, which runs the version
-rule against scratch repos and the validator wrapper against canned output. CI
-also runs the validator on a pinned Claude Code.
+against scratch homes, and `./scripts/test-checks.sh`, which runs the
+validator wrapper against canned output. CI also runs the validator on a
+pinned Claude Code.
 
-A change to anything the plugin loads needs a new `version` in
-`plugins/eng/.claude-plugin/plugin.json`, or the checker fails. Without it,
-nobody who installed from GitHub would receive the change. A change to
-`plugins/eng/evals/` alone needs none, since no session loads an eval. Bump
-past whatever `main` carries when you merge: CI checks `main` again after each
-push, so two pull requests that picked the same version fail there.
+A pull request leaves the `version` in
+`plugins/eng/.claude-plugin/plugin.json` alone and adds its entry under
+`## Unreleased` at the top of [CHANGELOG.md](CHANGELOG.md). Installs follow
+`stable`, so a change reaches them at the next release, as
+[Updating](#updating) says.
 
 ### Evals
 

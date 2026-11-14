@@ -5,8 +5,10 @@ Each release of the `eng` plugin, newest first. The version is the one in
 `## Unreleased` and leaves the version alone. A release moves those entries
 under a heading for its version with its date, bumps `plugin.json`, tags the
 commit `vX.Y.Z`, and fast-forwards the `stable` branch that installs follow.
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the numbers follow semantic versioning.
+A version marked "not tagged" reached `main`, and every install that followed
+`main` then, but has no tag. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
+follow semantic versioning.
 
 ## Unreleased
 
@@ -79,6 +81,33 @@ and the numbers follow semantic versioning.
 
 ### Changed
 
+- `standards/workflow.md` is six steps: understand, plan and stop,
+  implement and review, writes, posting, and final updates. It now says that
+  every finding, plan and report is checked in rounds until independent
+  passes agree, that `/code-review` runs at `high` on the full diff and at
+  `medium` on each fix diff, that pushes to the default branch and changes
+  to global config need your message, that every reply leads with the
+  result, and that `eng:<name>` is the skill `<name>` where skills have no
+  plugin prefix. The contract-at-start eval asks for step 4.
+- The README leads with requirements, setup, the settings with which are
+  required, a check that needs no clone, update and removal, and follows with
+  the workflow, the skills, five guardrails and a guarantee table that
+  matches the hook. It drops the hook rules 0.16.0 removed, the old-symlink
+  migration, the Cursor copy advice and the cloud steps, which a cloud
+  session cannot use, since it loads no plugins. Working on the repo, the
+  checks, evals, subsets and sharing one skill move to a new
+  `CONTRIBUTING.md`, and `AGENTS.md` leaves the invariants to `check.sh`.
+- `check.sh` drops the per-skill size budgets, keeping the 15,000-byte cap,
+  the description budgets and `workflow.md`'s 3,000 bytes; drops the check
+  that the docs and CI state the Claude Code minimum; bans the en dash and
+  minus sign only in markdown, and the em dash everywhere; and drops the
+  `bash checked` block runner and the tools-field warning.
+- `eng:implement`'s test step says a test or subagent never writes through a
+  path that is, or was, a link to an installed binary, and never touches the
+  live Claude Code install.
+- The plugin, marketplace and hooks descriptions are short and say what the
+  plugin does now. The CHANGELOG dates 0.9.0 by its tag, dates each untagged
+  version by the day it reached `main`, and adds the missing 0.10.0 entry.
 - An approved run stops on a valid security finding left unfixed, not on
   any action that touches security.
 - `eng:issue` works any tracker through whatever MCP server is connected for
@@ -137,7 +166,7 @@ and the numbers follow semantic versioning.
   deciding error line. The hand-back leads with the result and leaves out
   empty items.
 
-## 0.22.0 - unreleased
+## 0.22.0 - 2026-11-14, not tagged
 
 ### Changed
 
@@ -166,7 +195,7 @@ and the numbers follow semantic versioning.
   given as a bare `HEAD`, a sha or another ref at the default's commit is
   still not seen.
 
-## 0.21.0 - unreleased
+## 0.21.0 - 2026-11-14, not tagged
 
 ### Changed
 
@@ -186,7 +215,7 @@ and the numbers follow semantic versioning.
   `--del`, `--m` for `--mirror`, or `--pu=` for `--push-option`, passed the
   hook with no prompt. The hook now reads it as the full option.
 
-## 0.20.0 - unreleased
+## 0.20.0 - 2026-11-13, not tagged
 
 ### Changed
 
@@ -223,7 +252,7 @@ and the numbers follow semantic versioning.
 - The manifest description says commits and PRs follow work you approve or
   name.
 
-## 0.19.0 - unreleased
+## 0.19.0 - 2026-11-13, not tagged
 
 ### Changed
 
@@ -255,7 +284,7 @@ and the numbers follow semantic versioning.
 - The `issue-draft-fields` eval case checks that an issue draft carries its
   assignee, the estimate section, and no AI credit.
 
-## 0.18.0 - unreleased
+## 0.18.0 - 2026-11-13, not tagged
 
 ### Fixed
 
@@ -272,7 +301,7 @@ and the numbers follow semantic versioning.
 - `mcp.cases` takes a leading `subagent` field, so its cases can run as a
   subagent, and a line the runner cannot read fails the count.
 
-## 0.17.0 - unreleased
+## 0.17.0 - 2026-11-13, not tagged
 
 ### Changed
 
@@ -315,7 +344,7 @@ and the numbers follow semantic versioning.
 
 - `eng:wayfinder`.
 
-## 0.16.0 - unreleased
+## 0.16.0 - 2026-11-13, not tagged
 
 ### Removed
 
@@ -359,7 +388,7 @@ and the numbers follow semantic versioning.
   clears it, whatever it was pointed at, and a tree gets the reminder once:
   a second stop on the same changes passes.
 
-## 0.15.0 - unreleased
+## 0.15.0 - 2026-11-13, not tagged
 
 ### Changed
 
@@ -395,7 +424,7 @@ and the numbers follow semantic versioning.
   scripts, so `check.sh` no longer needs Node. `npm run lint` and CI's
   pinned validator still run through npx. The hook still writes its logs.
 
-## 0.14.0 - unreleased
+## 0.14.0 - 2026-11-12, not tagged
 
 ### Changed
 
@@ -409,7 +438,7 @@ and the numbers follow semantic versioning.
   ready, before the commit, and the hand-back lists each one with its URL, or
   why it was skipped. The plan template gives Delivery a place for them.
 
-## 0.13.0 - unreleased
+## 0.13.0 - 2026-11-12, not tagged
 
 ### Changed
 
@@ -427,7 +456,7 @@ and the numbers follow semantic versioning.
   `create_issue` and `update_issue`, now go through the same gate as GitHub
   issue writes.
 
-## 0.12.0 - unreleased
+## 0.12.0 - 2026-11-12, not tagged
 
 ### Changed
 
@@ -442,7 +471,7 @@ and the numbers follow semantic versioning.
   skill and the workflow hold that rule. Any other tracker still gets
   copy-paste text.
 
-## 0.11.0 - unreleased
+## 0.11.0 - 2026-11-12, not tagged
 
 ### Changed
 
@@ -454,7 +483,28 @@ and the numbers follow semantic versioning.
   default `@me`. The explanation of its stop on an operation in flight or an
   unmerged path moves to a reference file, to make room.
 
-## 0.9.1 - unreleased
+## 0.10.0 - 2026-11-11, not tagged
+
+### Added
+
+- A plan you approved could deliver itself. The hook recorded a plain
+  approval of a plan file in `.claude/plans` that named a branch, and on that
+  branch let a plain `git push` or `gh pr create` run without a prompt once
+  a review at `high` had read the tree, while it denied a push of an
+  unreviewed tree. After a push, the Stop hook held the hand-back until the
+  whole PR was reviewed. 0.16.0 removed the grant, and approved Delivery now
+  rests on the skills and Claude Code's permissions.
+- `implement/references/deliver.md` holds the delivery steps, stops and
+  hand-back, and `investigate/references/plan.md` gains the plan file header,
+  Delivery, Walk-through and Progress.
+
+### Changed
+
+- The review loop runs until a round finds nothing valid to fix, with a
+  findings ledger so no round undoes another, and stops early only when it
+  is not converging or after six rounds.
+
+## 0.9.1 - 2026-11-10, not tagged
 
 ### Changed
 
@@ -469,7 +519,7 @@ and the numbers follow semantic versioning.
   `git apply --3way` branches. A few repeated or explanatory sentences are
   gone. What each skill does is unchanged.
 
-## 0.9.0 - unreleased
+## 0.9.0 - 2026-11-05
 
 ### Fixed
 
@@ -524,7 +574,7 @@ and the numbers follow semantic versioning.
   a subagent's push, a push with no skill loaded and a push the gate
   allows (#32).
 
-## 0.8.2 - 2026-10-29
+## 0.8.2 - 2026-10-29, not tagged
 
 ### Changed
 
@@ -536,7 +586,7 @@ and the numbers follow semantic versioning.
 - When the command parser fails, the hook asks instead of letting the
   command run, and still denies a post it had already found (#30).
 
-## 0.8.1 - 2026-10-29
+## 0.8.1 - 2026-10-29, not tagged
 
 ### Fixed
 
@@ -544,7 +594,7 @@ and the numbers follow semantic versioning.
   commands piped into a shell run unread. CI runs on Ubuntu 24.04 and
   26.04 (#29).
 
-## 0.8.0 - 2026-10-27
+## 0.8.0 - 2026-10-27, not tagged
 
 ### Changed
 

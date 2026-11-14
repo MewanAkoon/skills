@@ -31,9 +31,30 @@ and the numbers follow semantic versioning.
   and continues a stack's rebase with `gh stack rebase --continue`.
   `eng:commit` and `eng:pr` hand a paused stack rebase that lists their
   branch to it.
+- The `issue-asks-to-connect` eval: an issue run in a repo tracked in Jira,
+  with no Jira tools in the session, names the server to connect and
+  drafts nothing.
 
 ### Changed
 
+- `eng:issue` works any tracker through whatever MCP server is connected for
+  it, with one procedure in `issue/references/mcp.md`, and GitHub through
+  `gh`. `linear.md` and `jira.md` fold into it, keeping only the quirks that
+  break a write. With no tools for the tracker, the run stops, names the
+  server to connect and files nothing; the copy-paste draft comes only when
+  you say it cannot be connected. With no tracker named, it asks instead of
+  taking GitHub. `estimate.md` calibrates from any tracker's closed issues,
+  and `eng:investigate` names the server to connect for a ticket it cannot
+  read.
+- The hook denies a subagent's MCP write whatever the server or its items,
+  such as an Asana task, a Monday item, a Fibery entity, a Notion page or a
+  doc, not only one named for an issue, ticket or work item. Well-known
+  servers that run on this machine, Playwright, Puppeteer, Serena, memory,
+  filesystem and sequential-thinking, are left out. The main session is
+  unchanged.
+- The README's hook table no longer says a Linear `save_comment` on an issue
+  runs, that a write waits for `eng:issue` to load since your latest message,
+  or that the hook reads MCP inputs through `risky_input`.
 - `gh stack link` no longer asks. It pushes the branches it names, so the
   hook gates it as a push and a PR write, as it does `submit`: it runs in
   the main session and is denied in a subagent. `gh stack merge` and

@@ -12,11 +12,13 @@ AI credit, as "Never credit an AI" in `eng:commit`'s
 
 ## Step 1: Find the tracker
 
-Follow [references/tracker.md](references/tracker.md). For Linear or Jira
-with their tools, [references/linear.md](references/linear.md) or
-[references/jira.md](references/jira.md) replaces the `gh` commands below.
+Follow [references/tracker.md](references/tracker.md). It ends in GitHub,
+whose `gh` commands below apply, in another tracker's MCP tools, for which
+[references/mcp.md](references/mcp.md) replaces them, or in a stop that asks
+you.
 
-**Done when:** the tracker and its target are named, or the run asked.
+**Done when:** the tracker, its target and its tools are named, or the run
+asked and stopped.
 
 ## Step 2: Look for a duplicate
 

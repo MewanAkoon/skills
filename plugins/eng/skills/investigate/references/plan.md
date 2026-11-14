@@ -44,7 +44,10 @@ layer the run makes, which stays the base because `gh stack submit` pushes
 it; the commits as they
 will land; the push; the PR and its title, opened as a draft and marked ready
 by `eng:implement`'s `references/deliver.md`; each issue write, named as
-`eng:implement`'s `references/deliver.md` says, a new issue sized now with the
+`eng:implement`'s `references/deliver.md` says, in a tracker whose tools the
+session has, as `eng:issue`'s [tracker.md](../../issue/references/tracker.md)
+finds them, or Open questions asks you to connect its server, a new issue
+sized now with the
 values in `eng:issue`'s [estimate.md](../../issue/references/estimate.md) so
 the run asks nothing; the checks that must pass; and standing rules for what
 review may find. Delivery names no start condition that waits on work outside

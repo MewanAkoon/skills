@@ -107,6 +107,15 @@ and the numbers follow semantic versioning.
 - A plan leaves out the sections it does not need instead of writing "none",
   and its Progress holds the lists a Done-when line asks for. An answer opens
   with the result.
+- The review loop runs `code-review` at `high` on round 1 and at `medium` on
+  each later fix diff, and says `code-review` and the intent check are the
+  two passes it needs. The intent check runs no probe beyond its old-code
+  test, and the fallback for a missing `code-review` moves into
+  `intent-check.md`.
+- `eng:implement` stops after three failed fixes for the same problem and
+  names the assumption it doubts, and its report quotes a failing check's
+  deciding error line. The hand-back leads with the result and leaves out
+  empty items.
 
 ## 0.22.0 - unreleased
 

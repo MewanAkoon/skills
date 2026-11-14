@@ -1,15 +1,23 @@
 # The intent check
 
-Brief a general-purpose subagent with this, writing out `R`, the plan or
-request and the items approved, `<parent>`, the range, and the files already
-changed at the start, which are not extra.
+Brief a general-purpose subagent with this, on the model and effort in
+[models.md](../../investigate/references/models.md), writing out `R`, the
+plan or request and the items approved, `<parent>`, the range, and the files
+already changed at the start, which are not extra.
 
 It reports each plan item as done, missing, extra, or wrong, quoting the plan
 line; each bug fix's test seen failing on the old code, extracted with
 `mkdir "$R/old" && git -C "$(git rev-parse --show-toplevel)" archive <parent> | tar -x -C "$R/old"`;
-and each changed sentence of prose backed by a `file:line`. It edits,
-commits, and posts nothing, starts no subagents, and writes only under `R`.
+and each changed sentence of prose backed by a `file:line`. It compares the
+diff with the approved plan and runs no probe beyond that old-code test. It
+edits, commits, and posts nothing, starts no subagents, writes only under
+`R`, and reports findings only, about 3,000 characters at most.
 
 When the brief carries the checklist in [security.md](security.md), it also
 reports each security finding with its input, the path it takes, and the
 `file:line`, or says it found none.
+
+## Without code-review
+
+Where `code-review` is missing or fails, the session gives the intent check a
+bug lens in every round, and reports that the built-in did not run.

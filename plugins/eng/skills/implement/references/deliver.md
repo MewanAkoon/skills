@@ -72,6 +72,11 @@ On a wrong branch, after `git fetch <remote>`:
   `HEAD` with `git switch -c <branch>` when `HEAD` is a harness branch, so
   the PR never opens from a harness name.
 
+A stack layer's branch is made or joined as [stack.md](stack.md) says, from
+the layer below, both in this list and in the worktree paragraph that
+follows, or from `<remote>/<default>` when the first fallback under Rulings
+applies.
+
 Changes step 1 lists that the request does not claim stay where they are.
 The work then goes in a worktree beside the main clone, the parent of
 `git rev-parse --path-format=absolute --git-common-dir`, named
@@ -107,19 +112,27 @@ hand-back.
 
 A precondition the run can work around gets its fallback and a ruling:
 
-- a base not on the remote: the default branch, with the restack onto the
-  base named as a follow-up;
+- a base not on the remote: in a stack, a layer below that this run made,
+  which `gh stack submit` pushes with this one; any other base, such as
+  another session's unpushed layer, the default branch, and the next run on
+  the branch restacks onto the base once it is on the remote, as
+  [stack.md](stack.md) says, with no question;
 - no `<remote>/HEAD`: `git remote set-head <remote> -a`;
-- a missing tool, such as the gh-stack extension: the plain path, here plain
-  branches.
+- the gh-stack extension: checked at planning, as stack.md says; plain
+  branches only when the user declined it there.
 
 Among preconditions, only a missing credential, such as `gh` missing or not
-signed in on a GitHub remote, or a hook deny stops the run, and the
-hand-back names the fix, such as `gh auth login`. The stops `eng:commit` and
-`eng:pr` name, and those under Stops below, still hold. A run never waits on
-work in another session.
+signed in on a GitHub remote, a gh-stack extension missing mid-run that the
+user did not decline (fix: `gh extension install github/gh-stack`), or a
+hook deny stops the run, and the hand-back names the fix, such as
+`gh auth login`. The stops `eng:commit`, `eng:pr` and stack.md name, and
+those under Stops below, still hold. A run never waits on work in another
+session.
 
 ## Steps
+
+A stack runs these in the order [stack.md](stack.md) gives: steps 1, 2, 4
+and 5 for each layer in turn, then 3 and 6 to 9 for the stack.
 
 1. Before the first edit, get onto the branch as "The branch" says.
 2. When the review loop ends not ready, stop and push nothing.
@@ -168,8 +181,11 @@ not passed.
 
 The run stops with a report, not a question, only when a step would break a
 hard rule, an action cannot be undone or touches security, the plan is wrong
-beyond what a ruling fixes, the review loop ends not ready, or two pushes in
-a row bring new valid blocking findings. No turn ends with a question about a
+beyond what a ruling fixes, the review loop ends not ready, two pushes in
+a row bring new valid blocking findings, or [stack.md](stack.md) names a
+stop: a layer holding work this run cannot vouch for, "Sync aborted", a
+dirty worktree that owns a layer, or a retargeted base this run did not
+retarget. No turn ends with a question about a
 write the Delivery covers, in prose or in a harness's next-step box.
 
 **Done when:** the hand-back is written: the PR link, whether it is ready or

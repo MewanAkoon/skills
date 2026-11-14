@@ -10,8 +10,37 @@ and the numbers follow semantic versioning.
 
 ## Unreleased
 
+### Added
+
+- Stacked pull requests through gh-stack, without being asked, in
+  `implement/references/stack.md`. A plan whose Changes split into dependent
+  layers, or a branch already in a stack, names one branch per layer under
+  Delivery, after checking the gh-stack extension is installed. The run
+  builds the stack one layer at a time with `gh stack init` and
+  `gh stack add`, adopting a branch when the top layer is checked out in
+  another worktree, opens the PRs with `gh stack submit --auto`, then sets
+  each new PR's title, body, tracker line and `@me` assignee with
+  `gh pr edit`. It reviews each layer from the one below, marks each PR
+  ready on its own, and restacks with `gh stack rebase --upstack` and
+  `gh stack push` when it changes a lower layer, or `gh stack sync` when one
+  merges, with no question. Before its first stack rebase, push, submit or
+  sync, it fetches and stops with a report when a layer it has not committed
+  on differs from its remote, since `gh stack push` would overwrite or
+  publish another session's work there.
+- `eng:merge-conflicts` resolves a conflict in a rebase the run started,
+  and continues a stack's rebase with `gh stack rebase --continue`.
+  `eng:commit` and `eng:pr` hand a paused stack rebase that lists their
+  branch to it.
+
 ### Changed
 
+- `gh stack link` no longer asks. It pushes the branches it names, so the
+  hook gates it as a push and a PR write, as it does `submit`: it runs in
+  the main session and is denied in a subagent. `gh stack merge` and
+  `unstack` still ask.
+- `deliver.md` no longer hands a restack back as a follow-up, and checks the
+  gh-stack extension at planning: plain branches only when you decline it
+  there, and a run stops, naming the install, when it goes missing mid-run.
 - A pull request no longer bumps the version. `scripts/check.sh` drops the
   rule that failed a change to what the plugin loads without a newer
   `version`, with its cases in `scripts/test-checks.sh` and CI's `CHECK_BASE`

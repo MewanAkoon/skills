@@ -39,7 +39,9 @@ answer, the plan is a draft.
 **Delivery.** What approval lets the run do without asking again: `Branch:
 <feature/, fix/ or chore/><ticket key>-<short name>`, lowercase, or
 `<type>/<short name>` without a ticket; `Base: <branch>`, with the default
-branch as fallback when the base is not on origin yet; the commits as they
+branch as fallback when the base is not on origin yet, unless it is a stack
+layer the run makes, which stays the base because `gh stack submit` pushes
+it; the commits as they
 will land; the push; the PR and its title, opened as a draft and marked ready
 by `eng:implement`'s `references/deliver.md`; each issue write, named as
 `eng:implement`'s `references/deliver.md` says, a new issue sized now with the
@@ -47,10 +49,16 @@ values in `eng:issue`'s [estimate.md](../../issue/references/estimate.md) so
 the run asks nothing; the checks that must pass; and standing rules for what
 review may find. Delivery names no start condition that waits on work outside
 the session. Merges, releases, tags, deploys, pushes to the default branch,
-and force pushes outside `eng:commit`'s Push section never go here.
+and force pushes outside `eng:commit`'s Push section never go here. When
+Changes split into two or more dependent layers that each make sense to
+review, or the branch is already in a stack, Delivery names a stack as
+`eng:implement`'s `references/stack.md` says, after the gh-stack check
+there: one branch per layer, bottom first, each with its PR title and its
+tracker line.
 
 **Progress.** Empty at first. The run adds each ruling, each pushed commit,
-and `Reviewed: <sha>` for the last pushed commit the review loop read.
+and `Reviewed: <sha>` for the last pushed commit the review loop read, one
+per layer in a stack.
 
 ## Walk-through
 

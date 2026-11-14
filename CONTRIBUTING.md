@@ -118,8 +118,8 @@ claude plugin eval plugins/eng --ablation none --runs 1 --scaffold --allow-tools
 
 `--scaffold` builds the scratch repo a case needs. `--allow-tools` grants a
 gated tool to every case, whatever its `allowed_tools` lists: a run with
-`Bash Write` gave the issue cases Bash and Edit, which they do not list. So
-a grader that checks what the agent wrote reads a Bash heredoc as well as a
+`Bash Write` gave the issue cases Bash, which they do not list. So a
+grader that checks what the agent wrote reads a Bash heredoc as well as a
 Write call. To check a case's graders for free, run it with
 `--case <name> --max-cost-usd 0`, which loads that case and runs nothing.
 

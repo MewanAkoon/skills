@@ -37,8 +37,8 @@ tracker and its target.
   tracker tools, and file nothing. Say which tracker's MCP server to connect
   and ask again after, showing it through a tool that suggests connectors
   where the session has one, and say a copy-paste draft is there if it
-  cannot be connected. A comment needs no tools and is
-  drafted as [mcp.md](mcp.md) says.
+  cannot be connected. A comment needs no tools and is drafted as
+  [mcp.md](mcp.md) says.
 
 Only when the user says the server cannot be connected: skip search, labels
 and filing. Step 5's draft is the copy-paste text, with a third file,

@@ -1,8 +1,8 @@
 # Plan template
 
-A plan file opens with its title. Every section gets content or "none", kept
-to what a reviewer needs to approve or reject it. Point at code with
-`file:line` rather than pasting it.
+A plan file opens with its title. Fill each section the task needs, kept to
+what a reviewer needs to approve or reject it, and leave out the rest rather
+than writing "none". Point at code with `file:line` rather than pasting it.
 
 **Goal.** What will be true when this is done.
 
@@ -33,6 +33,10 @@ level when it ran, and any conflict with an ADR.
 
 **Out of scope.** What the plan leaves alone.
 
+**Check rounds.** How many rounds ran, as [checks.md](checks.md) says, where
+the passes disagreed, how each disagreement was settled, and each fix a
+checker verified that went in place.
+
 **Open questions.** Each with options and a recommendation. Until each has an
 answer, the plan is a draft.
 
@@ -59,9 +63,10 @@ review, or the branch is already in a stack, Delivery names a stack as
 there: one branch per layer, bottom first, each with its PR title and its
 tracker line.
 
-**Progress.** Empty at first. The run adds each ruling, each pushed commit,
-and `Reviewed: <sha>` for the last pushed commit the review loop read, one
-per layer in a stack.
+**Progress.** The lists investigate's Done-when lines ask for, such as the
+guidance files read. The run adds each ruling, each pushed commit, the terms
+searched and files corrected, and `Reviewed: <sha>` for the last pushed
+commit the review loop read, one per layer in a stack.
 
 ## Walk-through
 

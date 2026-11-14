@@ -164,7 +164,10 @@ and 5 for each layer in turn, then 3 and 6 to 9 for the stack.
 ## Ready
 
 Run `gh pr ready <n>` once the full local check and the review are clean, the
-review loop or, where none ran, the post-PR review, and CI has started. Read
+review loop or, where none ran, the post-PR review, and CI has started.
+Before the run's first `gh pr ready`, consult the advisor where the harness
+has one, as `eng:investigate`'s
+[models.md](../../investigate/references/models.md) says. Read
 CI once, with `gh pr checks <n> --json name,bucket`: any check listed means it
 started, whatever the exit code, since `gh` also exits nonzero when none are
 reported. A repo with no `.github/workflows` file and no checks has no CI and
@@ -184,16 +187,17 @@ not passed.
 
 The run stops with a report, not a question, only when a step would break a
 hard rule, an action cannot be undone, a valid security finding is left
-unfixed, the plan is wrong beyond what a ruling fixes, the review loop ends
-not ready, two pushes in a row bring new valid blocking findings, or
-[stack.md](stack.md) names a
-stop: a layer holding work this run cannot vouch for, "Sync aborted", a
-dirty worktree that owns a layer, or a retargeted base this run did not
-retarget. No turn ends with a question about a
-write the Delivery covers, in prose or in a harness's next-step box.
+unfixed, the plan is wrong beyond what a ruling fixes, three fixes for the
+same problem have failed, the review loop ends not ready, two pushes in a row
+bring new valid blocking findings, or [stack.md](stack.md) names a stop: a
+layer holding work this run cannot vouch for, "Sync aborted", a dirty
+worktree that owns a layer, or a retargeted base this run did not retarget.
+No turn ends with a question about a write the Delivery covers, in prose or
+in a harness's next-step box.
 
-**Done when:** the hand-back is written: the review report's trust-boundary
-line, the PR link, whether it is ready or why it is a draft, CI's state, each
-issue write made or skipped, what was fixed, each finding left and why, each
+**Done when:** the hand-back is written, leading with the result and leaving
+out an item with nothing in it: the review report's trust-boundary line, the
+PR link, whether it is ready or why it is a draft, CI's state, each issue
+write made or skipped, what was fixed, each finding left and why, each
 ruling, the follow-ups review turned up, what was not checked, any risk, and,
 when all is clean, that it is ready for the user to merge.

@@ -50,6 +50,12 @@ and the numbers follow semantic versioning.
 - `tests/review-loop/setup.sh` takes `shell` or `docs` to build a change that
   does or does not touch a trust boundary, and gives every scratch repo a
   bare origin with `origin/HEAD` set.
+- `investigate/references/models.md` names the model and effort for each
+  subagent: Opus at high for round 1 of a check, Sonnet at medium for later
+  rounds and the intent check, Haiku at low for a docs fetch or file search.
+  Where a harness cannot set one, the subagent runs on the session's own.
+  Where there is an advisor tool, the session consults it on the final plan
+  and before the run's first `gh pr ready`.
 
 ### Changed
 
@@ -88,6 +94,19 @@ and the numbers follow semantic versioning.
 - Setup installs from `MewanAkoon/skills#stable`, the branch only a release
   moves, so an install changes only at a release. The README says how to move
   an install that follows `main`.
+- Every plan, answer and report is checked in rounds until at least two
+  independent passes agree, in `investigate/references/checks.md`, which
+  replaces the plan check that ran only on plans spanning more than one area.
+  Round 1 starts with the investigation and settles the facts from the
+  request and its sources. Later rounds review the plan in place and read
+  only what changed. Only an unverified blocker starts another round, and one
+  still open after round 3 becomes a question to you. A checker reports
+  findings only, in about 3,000 characters, and names the strongest rival
+  explanation. The plan gains a Check rounds section, and is offered for
+  approval only once no check runs and the latest round found no blocker.
+- A plan leaves out the sections it does not need instead of writing "none",
+  and its Progress holds the lists a Done-when line asks for. An answer opens
+  with the result.
 
 ## 0.22.0 - unreleased
 

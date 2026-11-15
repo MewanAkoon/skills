@@ -48,8 +48,8 @@ plugin's data folder, `~/.claude/plugins/data/eng-mewanakoon/`.
 
 **In Cursor.** With eng installed in Claude Code, Cursor already loads it,
 and the update above updates it there too. Install nothing more, or every
-skill loads twice. Its guards hold there from the first release that carries
-the Cursor plugin. 0.22.0's import brings the skills and guards nothing. On a
+skill loads twice. Its guards hold there from 0.23.0, the first release that
+carries the Cursor plugin. 0.22.0's import brings the skills and guards nothing. On a
 machine with Cursor alone, in steps not yet run end to end:
 
 1. If `agent plugin marketplace list` shows `mewanakoon`, run

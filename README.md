@@ -1,84 +1,36 @@
-# skills
+# eng
 
-Agent skills as plain markdown, shipped as one Claude Code plugin, `eng`, from
-this repo. Install it once and every skill loads in every session, under its
-full name: `eng:commit`, `eng:pr`, `eng:why`, and so on. Nothing gets committed
-into working repos.
-
-A skill is a folder holding a `SKILL.md`: a description that decides when it
-applies, and a procedure the agent follows once it does. The plugin is the
-folder [plugins/eng/](plugins/eng), which holds the skills, the hooks, and a
-manifest and an icon in its own `.claude-plugin/`. The marketplace manifest in
-the root `.claude-plugin/` lists it with `"source": "./plugins/eng"`, so an
-install copies that folder and none of the repo's own scripts, tests or docs.
-
-## Scope
-
-Claude Code first. The skills themselves stay plain markdown that any harness
-can read, but the way they ship, the plugin and its manifests, is Claude Code
-packaging. Cursor support comes later; "If you use Cursor" below says where it
-stands.
-
-One other file ships the same way:
-[plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md), the
-standing workflow every session follows. A SessionStart hook in the plugin
-sends it, with `plain-writing`'s core rules, at the start of every session and
-again after each compaction. On a new session the same hook also tells you
-what the machine is missing, as [Setup](#setup) describes.
-[plugins/eng/standards/dependencies.md](plugins/eng/standards/dependencies.md)
-lists the tools it checks. Other hooks in the plugin enforce the rules that
-have to hold, listed under "What the hooks enforce" below. The hooks are Claude
-Code packaging, like the manifests.
-
-One narrow exception to "plain markdown", named in [AGENTS.md](AGENTS.md)
-under "What belongs here": the Cursor rules file carries a `description` that
-gives it a second way in.
-
-Other plugins stay out of this one. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md)
-says what pairs well with it, as a recommendation rather than a dependency.
+Engineering skills for Claude Code, shipped as one plugin, `eng`: a standing
+workflow from ticket to pull request, and skills for commits, PRs, issues,
+review feedback, debugging, TypeScript, API boundaries and plain writing. It
+runs in Claude Code. Cursor is not supported yet, and eng's guards have not
+been shown to hold there.
 
 ## Setup
 
-You need Claude Code 2.1.293 or later. In any Claude Code session:
+You need Claude Code 2.1.293 or later (`claude --version`), `git`, `jq`, and
+`gh` signed in, plus the gh-stack extension and skill for stacked PRs.
+Without `jq` the hooks guard nothing.
 
-```
-/plugin marketplace add MewanAkoon/skills#stable
-/plugin install eng@mewanakoon
-```
-
-Or from a shell:
-
-```bash
-claude plugin marketplace add 'MewanAkoon/skills#stable'
-claude plugin install eng@mewanakoon
-```
-
-Both install at user scope, so the skills load in every project on the
-machine. There is no clone to keep and no script to run.
-
-`#stable` follows the `stable` branch, which carries the last release. Work
-lands on `main` and reaches `stable` only at a release, so an install changes
-only then. An install added without `#stable` follows `main`, and
-[Moving an install to stable](#moving-an-install-to-stable) moves it.
-
-Then turn off the bare copies of two skills. A project may carry its own
-`commit` and `pr` skills, and those load beside the plugin's today and can take
-a request meant for it. Claude Code also reserves both names for built-in
-skills it keeps switched off for now and can switch on. Turn off the credit
-lines Claude Code adds to commits and PRs as well, and set how `gh stack` is
-allowed. Add this to `~/.claude/settings.json`:
+1. `claude plugin marketplace add 'MewanAkoon/skills#stable'`
+2. `claude plugin install eng@mewanakoon`
+3. Merge the settings below into `~/.claude/settings.json`, adding to any
+   `permissions.allow` or `permissions.ask` list already there:
+   - `skillOverrides`, required: a bare `commit` or `pr` skill cannot take a
+     request meant for `eng:commit` or `eng:pr`.
+   - `attribution`, required: no AI credit lines on commits and PRs.
+   - the `gh stack` rules, required for stacked PRs: `gh stack` runs without
+     a prompt, and a stack merge or unstack still asks.
+   - allow rules for eng's own writes, optional: they stop the prompts
+     outside auto mode, as "Setup in detail" says.
+4. Start a new session. `claude plugin list` shows `eng@mewanakoon` enabled,
+   `jq --version` prints a version, and the session shows a line starting
+   `eng:` for anything still missing.
 
 ```json
 {
-  "skillOverrides": {
-    "commit": "off",
-    "pr": "off"
-  },
-  "attribution": {
-    "commit": "",
-    "pr": "",
-    "sessionUrl": false
-  },
+  "skillOverrides": { "commit": "off", "pr": "off" },
+  "attribution": { "commit": "", "pr": "", "sessionUrl": false },
   "permissions": {
     "allow": ["Bash(gh stack:*)"],
     "ask": ["Bash(gh stack merge:*)", "Bash(gh stack unstack:*)"]
@@ -86,95 +38,57 @@ allowed. Add this to `~/.claude/settings.json`:
 }
 ```
 
-When the file already has a `permissions.allow` or `permissions.ask` list, add
-these rules to it rather than replacing it.
+To update, run `claude plugin update eng@mewanakoon` and start a new session.
+Installs follow the `stable` branch, so they change only at a release.
 
-`skillOverrides` hides a skill by name from you and the model alike, for this
-machine only, and never touches plugin skills. So `eng:commit` and `eng:pr`
-stay, and a team repo's own `commit` and `pr` stay for everyone else. On your
-machine `eng:commit` and `eng:pr` still read those files, and follow what they
-say about how a commit message or a PR should look.
+To remove, run `claude plugin uninstall eng@mewanakoon`, then
+`claude plugin marketplace remove mewanakoon`. The uninstall deletes the
+plugin's data folder, `~/.claude/plugins/data/eng-mewanakoon/`.
 
-`attribution` is what Claude Code asks the model to add. An empty `commit`
-drops the `Co-Authored-By` trailer, an empty `pr` drops the "Generated with
-Claude Code" footer, and `sessionUrl: false` drops the claude.ai session link
-that a Remote Control session adds to both. Setting `"attribution": false`
-instead drops all three. `eng:commit` and `eng:pr` keep all three out either
-way, and a `Claude-Session` trailer too, so the setting is the second lock.
-`eng:issue` keeps them out of issues and comments. A
-repo's own `.claude/settings.json` or `.claude/settings.local.json` beats this
-file, so one that sets `attribution` can turn the lines back on there. A cloud
-session reads neither this file nor the plugin installed on your machine.
-One on a single repo, outside a project's threads, reads that repo's committed
-`.claude/settings.json`, where the same `attribution` entry turns the lines
-off. [Cloud sessions](#cloud-sessions) covers the rest.
+## Setup in detail
 
-The `permissions` rules are for stacked pull requests. The allow rule lets
-`gh stack` run without a prompt, and the two ask rules keep a prompt on a stack
-merge, which lands some or all of the stack's pull requests in one step and
-cannot be undone, and on an unstack, which removes the stack on GitHub. Claude
-Code checks ask rules before allow rules, so the pair holds in either order.
-The plugin's hook still gates a stack's push, sync, submit and link, as it
-does any push or PR, and asks about a merge or an unstack either way.
+**Tools.** [dependencies.md](plugins/eng/standards/dependencies.md) lists
+each tool the skills rely on with its install command, the gh-stack extension
+and skill for stacked PRs among them. The new-session lines name the same
+list. Without `jq` the hooks send no lines and guard nothing, so `jq --version`
+is the check for it.
 
-Nothing else needs a clone. On a new session the plugin's hook shows you one
-line, starting `eng:`, for each of these settings that is missing, and for
-each tool the skills rely on that is not installed, with its install command:
-`gh` and its login, the gh-stack extension and skill, git, jq, and Claude Code
-2.1.293 or later. [plugins/eng/standards/dependencies.md](plugins/eng/standards/dependencies.md)
-is that list. Your first prompt outside plan mode adds a line when the
-permission mode would stop `git commit`, `git push`, `gh pr create`,
-`gh pr edit`, `gh pr ready`, `gh stack` or an issue write through a tracker's
-MCP server for a prompt, naming the allow rules that would let them through.
-Auto mode shows nothing. The hook installs nothing and writes no settings
-file, and with everything in place it shows nothing.
+**In a session.** `/plugin marketplace add MewanAkoon/skills#stable` and
+`/plugin install eng@mewanakoon` do the same as steps 1 and 2. Both forms
+install at user scope, as the install's `(scope: user)` line shows, so the
+skills load in every project on the machine.
 
-To confirm it worked from a clone of this repo:
+**Optional allow rules.** Outside auto mode, each of eng's own writes
+prompts. To stop that, add `Bash(git commit:*)`, `Bash(git push:*)`,
+`Bash(gh pr create:*)`, `Bash(gh pr edit:*)`, `Bash(gh pr ready:*)`, and
+`mcp__<server>` for your tracker's MCP server to `permissions.allow`. With
+`Bash(git push:*)` allowed, a plain push to `main` no longer prompts either,
+and only the skills hold it back.
 
-```bash
-./scripts/check.sh --doctor
-```
+**The settings.** `skillOverrides` hides a skill by its bare name
+([docs](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings)),
+so `eng:commit` and `eng:pr` keep working. An empty `commit` or `pr` under
+`attribution` drops that credit line, and `sessionUrl: false` drops the
+session link
+([docs](https://code.claude.com/docs/en/settings-reference#attribution)). The eng skills keep all of them out as well.
 
-A good run ends like this:
+**Auto-update.** Claude Code leaves it off for marketplaces outside
+Anthropic's. To turn it on, open `/plugin`, go to Marketplaces, pick
+`mewanakoon`, and enable auto-update
+([docs](https://code.claude.com/docs/en/discover-plugins#keep-plugins-updated)).
+After an update by hand, `/reload-plugins` works in place of a new session
+([docs](https://code.claude.com/docs/en/plugins/cli-reference#plugin-update)).
+[CHANGELOG.md](CHANGELOG.md) says what each release brought.
 
-```
-doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it, the settings and tools it needs, and no hook errors logged
-<n> skills, <m> model-invoked
-ok
-```
+**Removing.** An uninstall with `--keep-data` keeps the data folder, which
+holds the hook's log and review state; delete it yourself then
+([docs](https://code.claude.com/docs/en/plugins/cli-reference#plugin-uninstall)).
+Take the `skillOverrides`, `attribution` and `gh stack` entries out of your
+settings if you want Claude Code's defaults back.
 
-It fails when Claude Code is older than 2.1.293, when the plugin is not
-installed at user scope, is disabled, or is at another version than this clone,
-when an old link or a personal copy of one of these skills is still loading,
-when the `skillOverrides` entry is missing, when `attribution` is not turned
-off, when one of the `gh stack` permission rules is missing, when a tool in
-the dependency list is missing, when this clone's
-own `.claude/settings.json` or `settings.local.json` turns attribution back
-on, or when one of the plugin's hooks has logged an error. It reads no other
-repo's settings.
-
-### Updating
-
-Claude Code leaves auto-update off for marketplaces outside Anthropic's. Turn
-it on once in `/plugin`, under Marketplaces, or update by hand:
-
-```bash
-claude plugin update eng@mewanakoon
-```
-
-A release moves the entries under `## Unreleased` in
-[CHANGELOG.md](CHANGELOG.md) under the new version, bumps `version` in
-`plugins/eng/.claude-plugin/plugin.json`, tags the commit `vX.Y.Z`, and
-fast-forwards `stable` to it. Pull requests leave the version alone. An install
-stays on the version it has until that string changes, so it changes only at a
-release.
-
-### Moving an install to stable
-
-An install added as `MewanAkoon/skills`, with no `#stable`, follows `main`.
-Between releases `main` carries work not yet released under the last release's
-version, so move the install to `stable`. From a shell, with no Claude Code
-session in the middle of a task:
+**Moving an install that follows main.** An install added as
+`MewanAkoon/skills`, with no `#stable`, follows `main`, which carries work
+not yet released. To move it, with no session in the middle of a task:
 
 ```bash
 claude plugin marketplace remove mewanakoon
@@ -182,506 +96,120 @@ claude plugin marketplace add 'MewanAkoon/skills#stable'
 claude plugin install eng@mewanakoon
 ```
 
-The remove comes first because Claude Code refuses to add `mewanakoon` from
-GitHub while your settings still list it at another ref or pointing at a local
-clone. It also uninstalls `eng` and deletes the plugin's saved data, the
-hook's log and review state, which is why no session should be mid-task.
-Your `skillOverrides`, `attribution` and `permissions` entries stay as they
-are, and the install brings `eng` back, enabled at user scope.
-Deleting the `mewanakoon` entry from `extraKnownMarketplaces` in place of the
-remove also lets the add through, but when the old install and `stable` carry
-the same version, `claude plugin update eng@mewanakoon` then keeps the old
-files.
-
-Then start a new session, and run `./scripts/check.sh --doctor` from a clone.
-
-### Cloud sessions
-
-A cloud session runs on a fresh VM and reads nothing from your machine: not
-`~/.claude/settings.json`, not your installed plugins, not
-`~/.claude/skills`. A cloud thread in a project also skips the repo's
-`.claude/settings.json` and its `.claude/skills/`. What a
-cloud session gets comes from three places:
-
-| Place | What it carries |
-|---|---|
-| Your claude.ai account | Plugins you add at claude.ai/customize/plugins, which load as `eng@synced`. Skills you upload there. Connectors. In a project, a plugin also has to be on under **Project settings > Plugins** |
-| The cloud environment | Environment variables, such as the git identity, and the setup script |
-| The repo | The root `CLAUDE.md`, which here imports `AGENTS.md`, and `.claude/rules/`. A project's cloud thread loads only the rules that set no `paths`, and this repo's one rule sets `paths` |
-
-So, for the cloud:
-
-1. At claude.ai/customize/plugins, add the marketplace from the GitHub repo
-   `MewanAkoon/skills` and install `eng`. In a project, turn it on under
-   **Project settings > Plugins** as well.
-2. On your own environment, not a shared one, paste
-   [scripts/cloud-setup.sh](scripts/cloud-setup.sh) in as the setup script.
-   It writes the `skillOverrides`, `attribution` and `permissions` entries
-   from the setup above into the VM's `~/.claude/settings.json`, adding to any
-   permission rules already there, and the first two as rules in the VM's
-   `~/.claude/CLAUDE.md`. The docs say a cloud session loads that
-   `CLAUDE.md`. They say it reads no user settings, meaning the ones on your
-   machine, and not whether that covers a `settings.json` written this way,
-   so the rules are the layer to rely on.
-
-The docs say a synced plugin's hooks load in terminal sessions, but not
-whether they run in a project's cloud threads. If the workflow block from the
-session hook is missing from a new thread's first context, the hooks in
-[What the hooks enforce](#what-the-hooks-enforce) are not guarding it either.
-
-The environment caches the script's result for about seven days, and saving
-a changed script rebuilds the cache. The plugin is not part of that cache: a
-cloud session gets the version claude.ai holds. After a release, check that a
-new cloud session shows the new version.
-
-### Moving from the old symlinks
-
-Before the plugin, a `link.sh` script in this repo symlinked each skill into
-`~/.claude/skills`. Those links are personal skills with bare names, and they
-would load beside the plugin's copies. The script is gone, so from the clone:
-
-1. Run `./scripts/check.sh --doctor`. It names each old link in
-   `~/.claude/skills`, under the names that install used as well as today's.
-   Remove each one with `rm` on the link's path, which leaves the clone alone.
-   The doctor does not read `~/.agents/skills` or `~/.cursor/skills`, which
-   an older install also linked into, or a `SKILLS_DEST` you set, so look in
-   those by hand. A `.skillsignore` in the clone no longer does anything, so
-   delete it.
-2. Install the plugin and add the `skillOverrides`, `attribution` and
-   `permissions` entries, as above.
-3. If your `~/.claude/CLAUDE.md`, or a hook of yours, names a path under
-   `~/.claude/skills`, point it at the skill's full name instead, such as
-   `eng:plain-writing`. Those paths no longer exist.
-4. Run `./scripts/check.sh --doctor`.
-
-### Working on this repo
-
-Add your clone as the marketplace instead of the GitHub one:
-
-```
-/plugin marketplace add ~/path/to/skills
-/plugin install eng@mewanakoon
-```
-
-Both sources are named `mewanakoon`, so if you added the GitHub one first,
-this repoints it at your clone, and the plugin you installed updates from the
-clone from then on. Claude Code prints how to undo that. Going back to GitHub
-takes the same three commands as
-[Moving an install to stable](#moving-an-install-to-stable), since the add
-from GitHub is refused while your settings list the clone.
-
-A directory marketplace loads the plugin from the folder itself, so an edit
-shows up after `/reload-plugins`. To try the working tree for one session
-without installing anything:
-
-```bash
-claude --plugin-dir plugins/eng
-```
-
-### If you use Cursor
-
-Cursor reads skills from `~/.claude/skills`, which the plugin no longer fills.
-Cursor's changelog says it also imports plugins installed in Claude Code while
-**Settings, Agents, Third-Party Imports** is on, which would bring these
-skills with it. That is not yet confirmed for this plugin. A skill folder
-copied into `~/.cursor/skills` works too, with one catch: the skills name each
-other and their commands with the plugin's prefix, `eng:commit` and
-`/eng:commit`, which Cursor does not have. Drop the `eng:` prefix in a copy you
-make for Cursor.
-
-### Keeping working repos clean
-
-The plugin itself installs under `~/.claude/plugins`, outside every project.
-Some skills write working files: `investigate` under
-`.claude/plans/`, and `handoff` under `.claude/handoffs/`. `eng:commit` leaves
-them out unless you name them. As an optional safety net you can ignore them
-globally. Check what you already have first, because setting `core.excludesfile`
-replaces it:
-
-```bash
-git config --global core.excludesfile
-```
-
-If that prints a path, append to that file instead of the one below. If it
-prints nothing:
-
-```bash
-printf '.claude/\n.skills.json\n' >> ~/.gitignore_global
-git config --global core.excludesfile ~/.gitignore_global
-```
-
-Ignoring `.claude/` applies to every repo you touch, including teams that
-commit `.claude/settings.json` on purpose. Skip this step if that is you.
-
-### Taking a subset
-
-A plugin installs as a unit, and it loads every folder under
-`plugins/eng/skills/`. To take part of it, fork the repo, delete the skill
-folders you do not want along with their README rows, and install from your
-fork. `./scripts/check.sh` names anything left pointing at a skill you
-removed. Listing skills in `plugin.json` does not narrow the set, because that
-field adds to the `skills/` scan rather than replacing it.
-
-### Sharing one skill with a team
-
-Only when the team should have it too, and only from your own fork:
-
-```bash
-npx skills add <you>/skills -s why
-```
-
-That copies files into the current repo and needs Node. Default to the plugin
-instead. The copy is a project skill without the plugin's prefix, so change its
-`eng:` names to bare ones, `/eng:why` to `/why`, as for Cursor above.
-
-### Removing it
-
-```bash
-claude plugin uninstall eng@mewanakoon
-claude plugin marketplace remove mewanakoon
-```
-
-Remove the `skillOverrides` entry too if you want Claude Code's own `commit`
-and `pr` back, the `attribution` entry if you want its credit lines back, and
-the `gh stack` rules under `permissions` if you no longer want them.
+The remove comes first because Claude Code refuses to add `mewanakoon` again
+while your settings list it at another ref, as 2.1.318 does in testing. It also uninstalls `eng` and
+deletes its data folder. Your settings stay as they are.
 
 ## The workflow
 
-[plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md) is eight
-standing steps: understand first, plan and stop, implement on approval, review
-until clean, commit, push and open PRs when asked or when the work you
-approved or named, or a follow-up on your open PR, covers them, handle PR
-feedback on evidence and review the unreviewed commits after each push, post
-nothing, and report briefly.
-The plugin's SessionStart hook sends it at the start of every session and after
-each compaction, and on a new session also shows you, not the model, what the
-machine is missing. It names the skill for each step that has a procedure, so a
-change of phase is the cue to load it:
+[workflow.md](plugins/eng/standards/workflow.md) is six standing steps. The
+plugin's hook sends it, with `plain-writing`'s core rules, at the start of
+every session and after each compaction. Each step names the skill that holds
+its procedure:
 
 | Step | Skill |
 |---|---|
-| 1 and 2, understand and plan | `eng:investigate` |
-| 3, implement, and the delivery an approved plan, a named change or a follow-up on your open PR covers | `eng:implement`, and its `references/deliver.md` |
-| 4, review | `eng:implement`'s review loop, through the built-in `/code-review`, and `/security-review` when a change touches a trust boundary |
-| 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
-| 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the commits no review has read |
+| 1. Understand first, with real signal for a bug | `eng:investigate` |
+| 2. Plan, ask at planning only, check in rounds, then stop | `eng:investigate` |
+| 3. Implement, then review with `/code-review`, an intent check, and `/security-review` on a trust boundary | `eng:implement` |
+| 4. Write outside the machine only when asked or when an approved Delivery covers it | `eng:commit`, `eng:pr`, `eng:issue` |
+| 5. Post nothing; judge PR feedback on evidence | `eng:pr-feedback` |
+| 6. Lead every reply with the result | |
 
-The other skills hold knowledge a phase reaches for, or are modes you start
-yourself.
-
-Step 1 also reads the repo's own guidance: its skills and commands under
-`.claude/`, `AGENTS.md`, and `CONTRIBUTING`. Where that guidance says how a
-result should look, such as a commit message or a PR body, it beats an eng
-skill's defaults. The eng skill still runs the job, with its checks and the
-rules on writes and posting. A repo with no such guidance gets the eng
-defaults unchanged.
-
-### What the hooks enforce
-
-The skills say what to do. The plugin's hooks stop what must not happen, in
-every session and inside subagents. They run in Claude Code only.
-
-| Action | What happens |
-|---|---|
-| A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post`. The `linear comment` CLI and every Linear `save_comment`, whatever it sits on, count too | Denied, with a note to write the draft to a file |
-| A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync, submit or link, `gt submit`, and a GitHub MCP tool that writes files or pushes | Denied in a subagent. Otherwise the hook stays out, and Claude Code's own permission settings decide. `gh issue create --web`, which you submit yourself, passes |
-| A PR merge, close, reopen or branch update, a stack merge or unstack through `gh stack`, a `gt merge`, a `gh` or `glab` release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, apart from a push with an explicit lease as below, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name deletes, merges, releases, deploys, sends or publishes something, or sends, deletes or publishes a draft. The hook reads only an MCP tool's name, so it matches patterns: the word lists and `mcp_tool` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
-| Any other MCP write whose name shows it, one that only creates or changes something, such as an issue, task, card or entity in any tracker, or a doc, page or sheet edit through Claude Docs, Notion, Google Drive, Sheets or any other server | Denied in a subagent, apart from servers that run on this machine under their usual names: Playwright, Puppeteer, Serena, memory, filesystem and sequential-thinking. An issue, ticket or work item write is denied there on any server, and so is one whose verb is link, resolve, lock, pin, transfer, develop or retire, which elsewhere passes, as Asana's `pin_task` would. Otherwise the hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
-| A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
-| Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
-| Under a plan you approved, a push or a PR write | Through any tool but Bash, MCP tools included, it asks, and on the plan's branch a push or new PR through the terminal tool, Monitor or PowerShell of a tree the review loop did not read is denied. Through Bash, off the plan's branch, a push or a new PR asks. On it, it is denied when HEAD's tree is not the one the review loop last read, and it asks for any push but a plain `git push` of that branch as its own command, which also asks when git's settings would send it elsewhere, push other branches, or push tags or submodules along with it, for any new PR but a `gh pr create` on its own naming no other head or repository, and from the seventh push on. Otherwise it runs |
-| Handing back after a push that moves a remote branch other than the default to HEAD, or after opening a PR, before a review reaches that commit | One reminder per pushed commit to review the whole PR at `high`, which Claude skips when the branch has no PR. A review at `high` or above of the PR by number or by a link to the PR or its files after the push counts, and so does a range whose ends meet at or before the merge base with a remote's default branch and that ends at that commit, run after the push or as the last such range before it. Under a plan you approved, on its branch, the stop is blocked instead, once per pushed commit as the reminder is, so the review runs before the hand-back |
-
-What the hook does with each form of `git push`, in the main session. In a
-subagent every push is denied.
-
-- A plain push, such as `git push` or `git push -u origin <branch>`: no
-  decision, so Claude Code's own permission settings decide.
-- A push with an explicit lease,
-  `git push --force-with-lease=refs/heads/<branch>:<sha> origin <branch>`,
-  with `--force-if-includes` or not: no decision, the same as a plain push,
-  when the leased branch and every branch the command names are not the
-  default, and the push is the whole command, with nothing before `git`, no
-  `-C` or other option before `push`, and no `cd`, `;`, pipe or `$( )`
-  around it. A redirection such as `2>&1` is fine. The default branches are
-  `main`, `master`, and every remote's HEAD in the directory Claude Code
-  reports for the session, which may not follow a `cd` from an earlier
-  command, so in another repo only `main` and `master` are sure to count. A
-  lease forces only the branch it names, so any other branch in that push
-  goes as a plain push.
-- Anything else that can force asks: `--force`, `-f`, a `+` refspec, a lease
-  with no sha, a sha that is not hex, a lease on a bare name, which could
-  name a tag, a lease that is the default, a named branch that is the
-  default on either side of a refspec, such as `main:feature/x`, a source
-  whose last path part is a default or `HEAD` after a slash, in any case,
-  such as `origin/main:`, `origin/HEAD:`, `feature/main:` or `Main:`, one
-  built from `$`, `~`
-  or braces, and a lease push in a directory with no remote HEAD, or not run
-  as its own command.
-- `--delete`, `-d`, a `:<branch>` refspec, `--mirror`, `--prune`, `--tags`,
-  `--follow-tags`, a tag refspec, and push options through `-o` or
-  `--push-option` ask too, with a lease or without one. git takes any
-  unique prefix of a long option, such as `--force-w=` or `--del`, and the
-  hook reads it as the full option.
-
-The Claude app's own MCP servers, such as the one a project thread replies
-through, are exempt from every check, because they carry the conversation
-with you. Two of their tools are the exception. A command the terminal tool
-runs is read like any other, and the tool that turns on a PR's auto-merge
-asks like a merge. Three hints are best effort: a review comment link
-names `eng:pr-feedback`, a pull request link with no request gets a note to
-ask what you want, and a git conflict names `eng:merge-conflicts`.
-
-A write runs unless your latest message plainly says not to, including a
-write the message never names. A plain no is a negation tied to the write:
-"don't commit", "no PR", "don't stage, commit or push", "commit without
-pushing", "hold the push", "never mind the push", "I'll push it myself", or a
-deferral right after it, such as "push it later" or "push once I approve".
-Reading back from the last place the message names the write, the first that
-refuses or asks for it decides. So "commit, but don't push" lets the commit
-run and denies the push, and "I didn't push it, can you push" or "don't push.
-Actually, push it" asks for the push. A refusal that only narrows the write,
-such as "don't commit the .env file" or "don't push to main", is not a no, and
-neither is a fact such as "there's no PR yet" or "it wasn't pushed". A
-question that opens with a question word is not read, so "why don't you push,
-then?" refuses nothing, while "don't push yet, okay?" still refuses. Anything subtler, such as a
-takeback ("actually, just commit"), a wait ("wait for CI before you push") or a
-condition ("let me review first"), the hook lets run, and the skills hold it
-back: `eng:commit`, `eng:pr` and `eng:issue` read what you meant and act only
-on what you asked for. A subagent's report, a background task or a CI event is
-not your message, so it changes none of this. When the hook cannot read its
-state at all, it lets the write run.
-
-A plan you approve can grant its own writes. The plan has to be a file in
-`.claude/plans` of the session's own checkout, holding `Plan name: <name>`
-and, in its first five lines, `Status: awaiting approval`. It has to have
-changed since the session started, and it needs a line that starts with
-`Branch:` and names a branch that is not a default one. Your own message
-approves it in plain words, such as "I like this plan, I approve it, let's go
-ahead". Only a plain approval of the plan counts. The first sentence that says
-"approve" or "approved" holds the approval, such as "I approve it", "approve
-the plan", "I want to approve it" or "the plan is approved", and between its
-commas, colons or dashes only go-ahead words, such as "okay", "looks good", "I
-like this plan", "let's go ahead" or "commit the changes". The message does
-not open like a question, has no line that ends in a colon or opens with ">",
-which would mean it quotes someone, and is not signed: no sentence after the
-approval opens with a dash, and none is a short one such as a name, though a
-go-ahead such as "Thanks" is fine. So "I approve it", "approve the plan",
-"Yes, approved" and "I like this plan and want to approve it" grant, while
-"approve the dependabot PR", "Sam approved it", "I would definitely approve
-it" and a message that opens like a question grant nothing. A message also
-does not approve when it asks for changes or sets a condition: a question
-mark, a negation, a word in `NOT_APPROVAL` in
-[plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook), such as "but",
-"before", "wait", "once", "until" or "if", a change, changes, an edit, edits
-or a tweak, unless a phrase
-that ends its clause has the run finish them ("finalize the changes" or
-"finalize the changes and the PR" is fine, while "commit the changes and push"
-is read as asking for changes, so give each step its own clause), or a no to a
-commit, push or PR. When several plans are waiting, the message names one. The
-hook says in the session whether it recorded a grant, and marks the plan
-`Status: approved`, so a later "approve" does not grant it again. A grant ends
-when another plan is approved, at `/clear`, when your message says no to a
-commit, push or PR, or when a later message speaks of approving along with a
-negation or a take-back word, as in "I don't approve", "I disapprove" or "I
-revoked my approval", or opens with "hold" or "wait". A compaction or resume
-keeps it. The grant and each push or PR made on its branch are logged to
-`grant-writes.log` in the plugin's data directory. A grant never covers
-merges, releases, tags, deploys or force pushes: they ask as before, and on
-the plan's branch a push of an unreviewed tree through Bash or a shell tool is
-denied whatever its form. Of issue writes, a grant covers only the ones
-Delivery names: an edit, label change or close by the issue and the change,
-and a new issue by its team or repo and what it is about. It never covers a
-comment.
-
-The hooks catch a slip, not a determined bypass. They read commands the way
-a POSIX shell splits them, so a quoted
-`gh pr comment` in a grep or a heredoc stays allowed, while a command inside
-`$( )`, a heredoc fed to a shell, or a command behind `npm exec` or a runner
-such as `op run`, `uv run` or `direnv exec` is read too. For a runner that is
-the words after its `--`, and before it the first four words and any later
-word that names a command the hook has a rule for. A chain of more than 50
-commands behind one another asks. A PowerShell
-command is read by those same rules, so its own quoting and escapes, and a
-command it starts through `Start-Process` or `cmd /c`, can hide what it runs. They cannot see git aliases, a gh alias set before the session, push settings outside a grant's plain-push check, a tag pushed
-by its bare name, a remote HEAD left stale after a repo's default branch was
-renamed, the default of a remote with no HEAD or of one reached by a path or
-`--repo=` rather than a remote name, a default branch's history pushed as a
-bare `HEAD`, a sha or another ref at its commit, such as `FETCH_HEAD`, a commit made by anything but `git commit`, such as
-`git merge`, `pull`, `rebase` or `cherry-pick`, a command built at run time or hidden in a script,
-an MCP tool whose name hides what it does, such as Plane's `workitem`, which takes its action in its input, or a browser posting through a web
-page. The reminder to review the whole PR reads only the Bash tool. It misses
-a PR opened through an MCP tool or `glab api`, a push run in the background, a push to a URL
-rather than a named remote, a push from a clone that tracks only one
-branch, and a push run after a `cd` that leaves the directory the session started in or is outside git. It reads a short commit hash made only of digits as a PR number, counts a review of any PR by number or link, whichever PR it is, and counts no range as the whole PR on a remote whose default branch is unnamed and neither main nor master, or for a PR based on another branch, such as one in a stack. When the reminder cannot go out in the turn of the push, it goes out at the end of a later turn. It keeps one pushed commit per session, so of two branches pushed in one turn only the last gets a reminder, and `gt submit` counts as opening a PR even when it only updates one, which can bring a second reminder for the same commit. A PR opened with `--head` for another branch counts as one for the branch HEAD is on, when that branch is pushed. It checks only the repo the session is in at the stop, so a PR pushed from another repo gets no reminder once the session moves on, and it counts a review when the review starts, so one that is cancelled still counts. A hook that breaks fails open: it logs an error, which
-`./scripts/check.sh --doctor` reports, and the session carries on. The
-exception is the command parser: when it fails on a shell command, the hook
-still denies what it found before it failed that it would deny anyway, such
-as a post, and otherwise asks before the command runs, because it cannot tell
-whether the command posts or writes. The parser has a time limit,
-`PARSE_SECONDS` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook), set below the hook's
-timeout in [plugins/eng/hooks/hooks.json](plugins/eng/hooks/hooks.json). A command it cannot read in
-time, such as one with a couple of thousand nested `$( )`, is handled the same way, so
-it asks, and a post the parser found before it stopped is still denied. A
-megabyte in a quoted string or a heredoc reads in a second or two. Only a hook run
-that outlasts that timeout as a whole, such as on a machine too loaded to run
-it, goes on to Claude Code's usual
-permission check unread.
+A repo's own guidance, such as `AGENTS.md`, `CONTRIBUTING` or its `.claude/`
+skills, beats an eng skill's defaults on how a result should look. The eng
+skill still runs the job, with its checks and its rules on writes.
 
 ## Skills
 
-Every skill loads as `eng:<name>`. The tables link the folders.
+Every skill loads as `eng:<name>`. Type the full name: a bare `commit` or `pr`
+is not sure to reach the plugin's skill.
 
 ### Model-invoked
 
-These fire on their own when the description matches. What limits the list is
-not its length, it is conflict. Several of these firing at once is fine and
-often right, since `commit` shapes a commit and `plain-writing` shapes the
-words in it. What costs you is two skills claiming the same decision, because
-the agent picks one, reads a whole `SKILL.md`, and follows the wrong
-procedure. Add a skill when nothing here would contradict it.
-
-Two of these assume a stack, and say so in their own descriptions:
-`ts-types` is TypeScript only, and `api-boundaries` is written for Node
-services. The rest are language-neutral, though a few reach
-for a TypeScript example. If you work in something else, "Taking a subset"
-above leaves out the ones you do not want.
+These fire on their own when the description matches.
 
 | Skill | Fires on | What it does |
 |---|---|---|
-| [investigate](plugins/eng/skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings, ends with a plan and stops |
-| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change in the repo's patterns, test-first unless it is a small named change, corrects docs it makes false, reviews it through `/code-review`, then delivers it: the ticket's branch, commits, a push, a draft PR, and ready once checks and review are clean and CI has started. Work that splits into dependent layers goes out as a gh-stack stack, one PR per layer |
+| [investigate](plugins/eng/skills/investigate/SKILL.md) | A ticket, thread, issue, error or log, bug report, or question about the code | Reads the sources and the code, checks the findings in rounds, ends with a plan and stops |
+| [implement](plugins/eng/skills/implement/SKILL.md) | An approved plan, or a request that names the exact change | Makes the change, tests it, corrects docs it makes false, reviews it, and delivers it: branch, commits, push, draft PR, ready once clean. Dependent layers go out as a gh-stack stack |
 | [pr-feedback](plugins/eng/skills/pr-feedback/SKILL.md) | A PR comment link, or a request to address review feedback | Judges each comment on evidence, fixes the valid ones, drafts replies to a file |
-| [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells, enforces plain language, gates code comments. Its core reaches every session through the hook |
-| [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change, matches the repo's own commit guidance or message convention, survives hooks |
-| [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base without asking, writes title and body from the diff in the repo's own PR format, opens it as a draft or updates it, and marks it ready by `eng:implement`'s rule |
-| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker and works it through `gh` or that tracker's MCP server, asking you to connect one the session lacks, drafts from its template and labels to files, assigns you and sizes, prioritises and dates each new issue, files only when asked or when an approved plan's Delivery names the write, and drafts every comment to a file |
-| [ts-types](plugins/eng/skills/ts-types/SKILL.md) | Designing or editing a TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
-| [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
-| [merge-conflicts](plugins/eng/skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when your latest message asks to resolve them, reports them, or asks for that operation, or a rebase the run started stopped on them | Traces both sides, resolves hunk by hunk, finishes the operation |
-| [why](plugins/eng/skills/why/SKILL.md) | Removing or rewriting a guard, retry, timeout, special case, odd constant, or redundant-looking code that the request did not name, or asking why code is shaped the way it is | Traces the rationale from git history, evidence apart from inference |
-| [blast-radius](plugins/eng/skills/blast-radius/SKILL.md) | Planning a change to something shared, or a question about what a change breaks | What a change breaks elsewhere, with evidence levels |
+| [plain-writing](plugins/eng/skills/plain-writing/SKILL.md) | Prose that outlives the chat, such as a doc, a commit message, a PR or issue body, or a long reply | Strips AI tells and keeps language plain. Its core reaches every session through the hook |
+| [commit](plugins/eng/skills/commit/SKILL.md) | A message asking to commit or push | Stages one change and matches the repo's commit convention |
+| [pr](plugins/eng/skills/pr/SKILL.md) | A message asking to open or update a PR | Resolves the base, writes the title and body from the diff, opens a draft assigned to you |
+| [issue](plugins/eng/skills/issue/SKILL.md) | A message asking to draft, file, edit, label, close, or comment on an issue | Finds the repo's tracker and works it through `gh` or its MCP server, sizes and dates each new issue, drafts every comment to a file |
+| [ts-types](plugins/eng/skills/ts-types/SKILL.md) | A TypeScript type, interface or signature, a type error, or a diff adding `any`, a cast, or a non-null assertion | Discriminated unions, brands, narrowing, exhaustiveness |
+| [api-boundaries](plugins/eng/skills/api-boundaries/SKILL.md) | Node handlers, middleware, config, consumers, third-party calls, or where a check belongs | Validation at the edge, no guards inside |
+| [merge-conflicts](plugins/eng/skills/merge-conflicts/SKILL.md) | Unmerged paths or conflict markers, when you ask to resolve them or report them, or a rebase the run started stops on them | Traces both sides, resolves hunk by hunk, finishes the operation |
+| [why](plugins/eng/skills/why/SKILL.md) | Removing a guard, retry, timeout, special case or odd constant the request did not name, or asking why code is shaped the way it is | Traces the reason through git history and PRs |
+| [blast-radius](plugins/eng/skills/blast-radius/SKILL.md) | Planning a change to something shared, or asking what a change breaks | What breaks elsewhere, with evidence levels |
 
 ### User-invoked
 
-Only fire when typed. Zero context cost.
+These run only when typed, and cost no context until then.
 
 | Skill | Invoke | What it does |
 |---|---|---|
 | [grill-me](plugins/eng/skills/grill-me/SKILL.md) | `/eng:grill-me` | Interview until the design has no open branches |
 | [handoff](plugins/eng/skills/handoff/SKILL.md) | `/eng:handoff` | Compact this session for the next one |
 
-To see a change working in the running app, Claude Code's built-in `/run`
-launches and drives it, and `eng:implement`'s review names it when a change
-alters what the app does.
+## Guardrails
 
-Type the full name. A bare name is not sure to reach the plugin's skill:
-`commit` and `pr` are names Claude Code keeps for skills of its own.
+- Nothing is posted. Comments, reviews and replies are drafted to a file for
+  you to post.
+- Merges, releases, tags, deploys and force pushes wait for your own message.
+- Commits, pushes and PRs happen when you ask, or when a plan you approved, a
+  change you named, or a follow-up on your open PR covers them.
+- A subagent writes nothing outside your machine.
+- Work is reviewed before it comes back to you.
 
-## Writing new skills
+The skills hold all five. The plugin's hook enforces what can be read from a
+command or a tool's name:
 
-Read [WRITING-RULES.md](WRITING-RULES.md) first. It is the standard every file
-here follows.
+| Action | What the hook does |
+|---|---|
+| A comment, review or reply through `gh`, an API call, a tracker CLI, a chat webhook, or an MCP tool named for posting, Linear's `save_comment` included | Denies it, with a note to draft it to a file |
+| `/code-review` with `--comment` or `--post`, or one the model starts with `ultra` or `--fix` | Denies it |
+| A merge, release, deploy, package publish, workflow run, repo, secret or key write, `gh stack merge` or `unstack`, or an MCP write named for deleting, merging, releasing, deploying, sending or publishing | Asks you, in auto mode too |
+| A push that forces, deletes, or sends tags or push options | Asks, apart from a push with an explicit lease that names no default branch |
+| A commit, push, PR create, edit or ready, issue write, `gh stack` push, sync, submit or link, or other MCP write | Leaves it to your permission settings |
+| Any of the writes above from a subagent | Denies it, apart from MCP servers that run on this machine |
+| A shell command it cannot read in time | Asks, still denying a post it found |
+| Changed code not reviewed since it last changed, at hand-back | Reminds once to run the review |
+| A new session's start | Shows you a line for each missing setting or tool |
+| The first prompt outside plan mode | In default, accept-edits or don't-ask mode, shows you a line when your permission rules would stop eng's writes |
 
-Run the checker before committing, and the plugin validator when a manifest
-changes. Run the validator on the same pinned Claude Code as CI, because its
-rules change between releases:
+The header of [eng-hook](plugins/eng/hooks/eng-hook) says what each hook
+decides, and the cases under [tests/hooks/](tests/hooks/) show the exact
+rules. The hook catches a slip, not a determined bypass: a git alias, a
+command built at run time, a script that runs one, or an MCP tool whose name
+hides what it does all get past it.
 
-```bash
-./scripts/check.sh
-CLAUDE_BIN="npx --yes @anthropic-ai/claude-code@2.1.293" ./scripts/validate-plugin.sh
-```
+## Cloud sessions
 
-Without `CLAUDE_BIN` it uses the `claude` on your PATH, which may disagree
-with CI.
+eng does not run in Claude Code cloud sessions yet, because they load no
+plugins from your machine or your settings.
+([docs](https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup))
 
-The checker covers the mechanical half of that standard, and
-[AGENTS.md](AGENTS.md) lists what it checks. CI runs it on every pull request
-and on every push to `main`, on Linux and on macOS, without `--doctor`, since
-a fresh runner has no Claude Code install to inspect. The checker also runs
-`./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
-including every command case under `tests/hooks/pre-tool/`, and checks what
-they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
-against scratch homes, and `./scripts/test-checks.sh`, which runs the
-validator wrapper against canned output. CI also runs the validator on a
-pinned Claude Code.
+## Working files
 
-A pull request leaves the `version` in
-`plugins/eng/.claude-plugin/plugin.json` alone and adds its entry under
-`## Unreleased` at the top of [CHANGELOG.md](CHANGELOG.md). Installs follow
-`stable`, so a change reaches them at the next release, as
-[Updating](#updating) says.
+Plans go under `.claude/plans/` and handoffs under `.claude/handoffs/` in the
+repo you work in, and `eng:commit` leaves them out unless you name them. To
+keep them out of every repo, add `.claude/` to your global git ignore file,
+unless a team you work with commits `.claude/settings.json`.
 
-### Evals
+## More
 
-`plugins/eng/evals/` holds cases for `claude plugin eval`: each workflow skill
-loads at its moment, a request to open a PR among them, `eng:issue` stays out
-of "look into issue 42", an issue draft carries its assignee and estimate, an
-issue run with no tools for the repo's tracker asks you to connect its server,
-the contract is in context at the start, looking into a repo commits nothing, a
-commit waits for `eng:commit`, and an unreviewed hand-back gets the review
-gate's reminder. Every run is a model call on your account, so they stay out
-of CI. Run them before a release:
-
-```bash
-claude plugin eval plugins/eng --ablation none --runs 1 --scaffold --allow-tools Bash Write Edit \
-  --no-publish --max-cost-usd 3
-```
-
-`--scaffold` builds the scratch repo one case needs. Bash, Write and Edit are
-gated tools, so a case gets one only when it lists it in `allowed_tools` and
-the run passes it to `--allow-tools`; the case that forbids `git commit` does
-both for Bash, and the issue draft case for Write.
-
-The eval sandbox blocks `git`, so two things are checked by hand: the review
-loop, and whether Claude acts on the reminder to review the whole PR after a
-push. `./scripts/test-hooks.sh` covers when that reminder fires. For the
-review loop, in an empty directory, run `tests/review-loop/setup.sh` from the
-clone, or `setup.sh shell` or `setup.sh docs` for the security step, then:
-
-```bash
-claude -p "The plan in PLAN.md is approved. Implement it." \
-  --plugin-dir <clone>/plugins/eng --allowedTools "Read Glob Grep Edit Write Bash Skill Agent" \
-  --output-format stream-json --verbose
-```
-
-A good run calls `code-review` with `high` and a `<hash>..<hash>` range,
-briefs the intent check beside it, and commits nothing. With `shell`, the
-report names a shell trust boundary, the intent check carries the security
-checklist, and after one local commit a subagent calls `security-review`
-once. With `docs`, the report says `Trust boundary: none`, and neither runs.
-
-For the reminder, push a PR's branch in a live session: the next hand-back
-runs `code-review` with `high` on the whole PR, or says that review is still
-owed.
-
-## Usage counts
-
-A skill stays whether or not it fires. To see how often each one has fired,
-run `/skill-doctor` in Claude Code. It lists every loaded skill with its uses,
-when it last ran, and what its description costs on every turn.
-
-Every script you run while working here is also an `npm run` target, which is
-the only reason `package.json` exists. It declares no dependencies. The setup
-scripts under `tests/` and `plugins/eng/evals/` have none, because each builds
-a scratch repo for one check.
-
-## Optional extras
-
-Other plugins, and anything else your tool loads alongside these skills, sit
-outside this repo. [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md) holds the notes:
-what pairs well with Claude Code, what was found on the Cursor side, what to
-look at before enabling any of it, and what was tried and dropped.
-
-## Instructions for agents
-
-[AGENTS.md](AGENTS.md) holds the rules for any agent working in this repo, and
-its table says which file each harness reads.
+- [CONTRIBUTING.md](CONTRIBUTING.md): working on this repo, the checks,
+  evals, taking a subset of the skills, and sharing one skill.
+- [AGENTS.md](AGENTS.md): the rules for any agent working in this repo.
+- [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md): what pairs well with eng, and
+  what was tried and dropped.
 
 ## Attribution
 
-Most skills here are adapted from two MIT-licensed repos, and each of those
-names its source at the bottom. The rest were written for this repo.
+Most skills here are adapted from two MIT-licensed repos, and each names its
+source at the bottom. The rest were written for this repo.
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)
 - [cursor/plugins pstack](https://github.com/cursor/plugins/tree/main/pstack),

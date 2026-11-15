@@ -2,11 +2,8 @@
 
 Nothing in this file is part of this repo's plugin. The skills work with none
 of it installed, no session loads it, and no skill or script depends on it.
-`check.sh` checks that its relative links resolve and that it holds no em
-dash, en dash or minus sign, as it does for every file here, and that is the
-whole of its involvement. These are notes on what pairs well with
-these skills in each tool, written down so the same ground is not covered
-twice.
+These are notes on what pairs well with these skills in each tool, written
+down so the same ground is not covered twice.
 
 What the skills do rely on is a different list.
 [plugins/eng/standards/dependencies.md](plugins/eng/standards/dependencies.md)

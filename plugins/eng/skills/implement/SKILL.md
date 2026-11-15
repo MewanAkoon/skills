@@ -59,8 +59,11 @@ its reason named.
 
 Test at the level a caller sees. Run targeted tests as you go and the repo's
 full check (lint, typecheck, tests) at the end. A bug fix's test comes from
-the reproduction, named after what broke. After three failed fixes for the
-same problem, stop the run and name the assumption you now doubt.
+the reproduction, named after what broke. A test or subagent never writes
+through a path that is, or was, a link to an installed binary, and never
+touches the live Claude Code install: a stand-in goes in a scratch directory
+put first on `PATH`. After three failed fixes for the same problem, stop the
+run and name the assumption you now doubt.
 
 **Done when:** the full check passes, and each change in behaviour has a test
 seen failing on its assertion, then passing, or the report says why not.

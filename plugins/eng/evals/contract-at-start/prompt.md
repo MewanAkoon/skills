@@ -8,4 +8,4 @@ timeout_seconds: 120
 allowed_tools: []
 ---
 
-Without using any tools, quote step 5 of the standing workflow you were given at the start of this session, word for word. If you were given none, say so.
+Without using any tools, quote step 4 of the standing workflow you were given at the start of this session, word for word. If you were given none, say so.

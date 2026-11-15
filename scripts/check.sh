@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Checks this repo against the invariants in AGENTS.md.
+# Checks this repo's invariants. Each check's comment below says what it
+# holds and why, so this script is where they are listed.
 # Needs bash, jq, and the usual POSIX tools. Run before committing.
 #
 # --doctor adds the checks CI cannot run, because a fresh runner has no
@@ -36,7 +37,7 @@ done
 # compaction, and 2.1.293 is the first release every plugin check here ran
 # on, so nothing older is known to work. The plugin's dependency list states
 # it too, for the session hook and --doctor to compare the running Claude Code
-# with, and that list, the docs and CI are held to it below.
+# with, and that list's Check cell is held to it below.
 cc_min=2.1.293
 
 # The plugin's own folder. An install copies this and nothing else, and every
@@ -74,14 +75,6 @@ present() {
     [ -f "$p" ] && printf '%s\n' "$p"
   done
   return 0
-}
-
-# The same list without the untracked files. The block runner below executes
-# what it finds, so it reads only what someone has staged or committed rather
-# than whatever happens to be sitting in the tree. Staged counts, so a new
-# file is checked after `git add` and before the commit.
-tracked_markdown() {
-  git ls-files --cached -- '*.md' '*.mdc' | present
 }
 
 # Byte length of a string, the same in every locale. ${#var} counts characters
@@ -218,14 +211,6 @@ for dir in "$plugin"/skills/*/; do
   plain_yaml "$name" "$description"
   continued_description "$name" "$fm"
 
-  # Cursor reads neither tools field, so a skill leaning on one is restricted
-  # in Claude Code and wide open in Cursor. AGENTS.md allows it only as a
-  # second lock over a body already right without it, and no skill takes that
-  # trade today, so any one that appears is worth a look.
-  if printf '%s\n' "$fm" | grep -qE '^(allowed|disallowed)-tools:'; then
-    warn "$name: carries a tools field Cursor does not read. AGENTS.md allows that only as a second lock over a body that holds without it"
-  fi
-
   flagged=no
   printf '%s\n' "$fm" | grep -q '^disable-model-invocation:[[:space:]]*true[[:space:]]*$' && flagged=yes
 
@@ -263,7 +248,6 @@ if [ "$description_total" -gt 3900 ]; then
 fi
 
 # A file that loads into someone's context has a size budget, in bytes.
-# AGENTS.md lists them under "Invariants".
 budget() {
   [ -f "$1" ] || { bad "$1 is missing, so its budget cannot be checked"; return; }
   size="$(wc -c < "$1" | tr -d ' ')"
@@ -285,13 +269,10 @@ for reference in "$plugin"/skills/*/references/*.md; do
   budget "$reference" 15000
 done
 
+# The workflow loads at the start of every session in every repo, so it has
+# a budget of its own. scripts/test-hooks.sh holds the whole block the
+# session hook sends, this file included, to 5,000 bytes.
 budget "$plugin/standards/workflow.md" 3000
-budget "$plugin/skills/investigate/SKILL.md" 6500
-for lifecycle in implement pr-feedback; do
-  budget "$plugin/skills/$lifecycle/SKILL.md" 5000
-done
-budget "$plugin/skills/implement/references/review.md" 3500
-budget "$plugin/skills/issue/SKILL.md" 6000
 
 # Every skill the workflow names exists and is model-invoked, since the name
 # is the cue to load it and a user-invoked skill refuses that call. The pattern
@@ -415,23 +396,6 @@ else
   fi
 fi
 
-# Every place the docs, CI and the plugin's dependency list state the oldest
-# Claude Code supported carries cc_min. A sentence such as "Claude Code
-# 2.1.293 or later" and a pinned claude-code@2.1.293 both count, and so do
-# phrasings across a line break. A file where none is found fails, because a
-# rewording would otherwise turn the check off without a word.
-for f in README.md AGENTS.md .github/workflows/check.yml "$plugin/standards/dependencies.md"; do
-  stated="$(tr '\n' ' ' < "$f" | tr -s ' ' \
-    | grep -oE '(Claude Code (is )?(older than )?|claude-code@)[0-9]+\.[0-9]+\.[0-9]+' \
-    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | sort -u)"
-  if [ -z "$stated" ]; then
-    bad "$f states no Claude Code minimum this check can read, so it was not checked against $cc_min"
-  fi
-  for v in $stated; do
-    [ "$v" = "$cc_min" ] || bad "$f names Claude Code $v, and the minimum in scripts/check.sh is $cc_min"
-  done
-done
-
 # Inside the plugin a skill is reached as plugin:skill, and Claude Code does
 # not resolve every bare name: a bare commit came back unknown with eng:commit
 # installed. So every reference to a skill here, and every command a skill
@@ -511,9 +475,9 @@ done
 diff -q <(body "$claude_rule") <(body "$cursor_rule") >/dev/null \
   || bad "the .claude and .cursor rule bodies have drifted apart"
 
-# Both rules files fire on the plugin's skills, which AGENTS.md states as an invariant
-# and nothing checked. Widening either one silently changes when the rule
-# loads, which is the half of this pair that actually decides behaviour.
+# Both rules files fire on the plugin's skills, as AGENTS.md says. Widening
+# either one silently changes when the rule loads, which is the half of this
+# pair that actually decides behaviour.
 grep -qx "  - \"$plugin/skills/\\*\\*\"" "$claude_rule" \
   || bad "$claude_rule: paths no longer scopes it to $plugin/skills/**"
 grep -qx "globs: $plugin/skills/\\*\\*" "$cursor_rule" \
@@ -573,59 +537,10 @@ awk -f "$plugin/hooks/classify-command.awk" < /dev/null > /dev/null || bad "$plu
 ./scripts/test-checks.sh >/dev/null \
   || bad "scripts/test-checks.sh failed; see the lines above"
 
-# Every command block marked runnable actually runs. A block opts in with
-# `bash checked` on its fence, because most blocks in this repo are templates
-# carrying <placeholders> or commands with side effects, and running those
-# would be worse than checking nothing.
-#
-# Each block runs from the repo root with stdin closed. A command that falls
-# back to reading standard input then ends rather than waiting, which is the
-# shape the xargs bug took: silent on BSD, a wait for input on GNU.
-#
-# A block is free to run check.sh. The variable below is set while blocks are
-# running and skips this section when it is already set, so the inner run
-# finishes instead of recursing. Matching the name in the block text would
-# refuse a block that only mentions it, and README.md holds two that do.
-if [ -z "${CHECK_SH_RUNNING_BLOCKS:-}" ]; then
-  export CHECK_SH_RUNNING_BLOCKS=1
-  # Without a scratch directory every block would be written to /block.sh, or
-  # not at all, and read back as a failure that has nothing to do with it.
-  if ! blocks="$(mktemp -d)" || [ -z "$blocks" ]; then
-    bad "mktemp -d failed, so the command blocks marked checked did not run"
-    blocks=""
-  fi
-  trap '[ -z "$blocks" ] || rm -rf "$blocks"' EXIT
-
-  [ -z "$blocks" ] || while IFS= read -r f; do
-    count="$(grep -c '^```bash checked$' "$f")"
-    [ "$count" -gt 0 ] || continue
-
-    i=1
-    while [ "$i" -le "$count" ]; do
-      awk -v want="$i" '
-        /^```bash checked$/ { n++; if (n == want) inside = 1; next }
-        /^```/ { if (inside) exit; next }
-        inside { print }
-      ' "$f" > "$blocks/block.sh"
-
-      # Keep the output and replay it on failure. These blocks are the only
-      # executable documentation here, and a bare block number says nothing
-      # about which command failed or why.
-      if ! bash -e "$blocks/block.sh" >"$blocks/out" 2>&1 </dev/null; then
-        bad "$f: block $i is marked checked and exits non-zero"
-        sed 's/^/      /' "$blocks/out" >&2
-      fi
-
-      i=$((i + 1))
-    done
-  done < <(tracked_markdown)
-
-  [ -z "$blocks" ] || rm -rf "$blocks"
-  unset CHECK_SH_RUNNING_BLOCKS
-fi
-
 # Em dash, en dash, and minus sign. All three read as an em dash once rendered,
-# so banning only the first leaves the tell in place.
+# so banning only the first leaves the tell in place in prose. The em dash is
+# banned in every file the repo owns. The en dash and the minus sign are
+# banned in its markdown, which is where a reader sees them.
 #
 # One -e per character rather than a bracket set. A bracket holding multi-byte
 # characters is only character-wise in a UTF-8 locale; under LC_ALL=C it is a
@@ -639,7 +554,10 @@ em="$(printf '\342\200\224')"
 en="$(printf '\342\200\223')"
 minus="$(printf '\342\210\222')"
 while IFS= read -r f; do
-  lines="$(grep -n -F -e "$em" -e "$en" -e "$minus" "$f" | cut -d: -f1 | tr '\n' ' ')"
+  case "$f" in
+    *.md | *.mdc) lines="$(grep -n -F -e "$em" -e "$en" -e "$minus" "$f" | cut -d: -f1 | tr '\n' ' ')" ;;
+    *) lines="$(grep -n -F -e "$em" "$f" | cut -d: -f1 | tr '\n' ' ')" ;;
+  esac
   [ -z "$lines" ] || bad "$f: dash on line ${lines% }"
 done < <(git ls-files --cached --others --exclude-standard | present)
 

@@ -345,7 +345,7 @@ change of phase is the cue to load it:
 |---|---|
 | 1 and 2, understand and plan | `eng:investigate` |
 | 3, implement, and the delivery an approved plan, a named change or a follow-up on your open PR covers | `eng:implement`, and its `references/deliver.md` |
-| 4, review | `eng:implement`'s review loop, through the built-in `/code-review` |
+| 4, review | `eng:implement`'s review loop, through the built-in `/code-review`, and `/security-review` when a change touches a trust boundary |
 | 5, writes outside this machine | `eng:commit`, `eng:pr`, `eng:issue` |
 | 6, PR feedback and the review after each push | `eng:pr-feedback`, and the built-in `/code-review` at `high` on the commits no review has read |
 
@@ -620,7 +620,7 @@ The eval sandbox blocks `git`, so two things are checked by hand: the review
 loop, and whether Claude acts on the reminder to review the whole PR after a
 push. `./scripts/test-hooks.sh` covers when that reminder fires. For the
 review loop, in an empty directory, run `tests/review-loop/setup.sh` from the
-clone, then:
+clone, or `setup.sh shell` or `setup.sh docs` for the security step, then:
 
 ```bash
 claude -p "The plan in PLAN.md is approved. Implement it." \
@@ -629,9 +629,14 @@ claude -p "The plan in PLAN.md is approved. Implement it." \
 ```
 
 A good run calls `code-review` with `high` and a `<hash>..<hash>` range,
-briefs the intent check beside it, and commits nothing. For the reminder,
-push a PR's branch in a live session: the next hand-back runs `code-review`
-with `high` on the whole PR, or says that review is still owed.
+briefs the intent check beside it, and commits nothing. With `shell`, the
+report names a shell trust boundary, the intent check carries the security
+checklist, and after one local commit a subagent calls `security-review`
+once. With `docs`, the report says `Trust boundary: none`, and neither runs.
+
+For the reminder, push a PR's branch in a live session: the next hand-back
+runs `code-review` with `high` on the whole PR, or says that review is still
+owed.
 
 ## Usage counts
 

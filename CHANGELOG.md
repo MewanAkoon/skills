@@ -34,9 +34,27 @@ and the numbers follow semantic versioning.
 - The `issue-asks-to-connect` eval: an issue run in a repo tracked in Jira,
   with no Jira tools in the session, names the server to connect and
   drafts nothing.
+- A security review when a change touches a trust boundary, in
+  `implement/references/security.md`. Every review report opens with one
+  line naming the trust boundaries the diff touches, or none. When it
+  touches one, the intent check reads the diff against a security checklist
+  in this repo's own words, and once the work is committed, a subagent runs
+  Claude Code's built-in `security-review` once before the push, since it
+  reads only committed changes. Their valid findings go through the review
+  loop's ledger and fixes. Where the built-in is missing or cannot run, the
+  report says so. The fast path runs the intent check for the checklist
+  alone on such a change.
+- `OPTIONAL-EXTRAS.md` lists Cloudflare's `security-audit` for a whole-repo
+  audit now and then, and Trail of Bits' `differential-review` for a deep
+  review of one risky diff.
+- `tests/review-loop/setup.sh` takes `shell` or `docs` to build a change that
+  does or does not touch a trust boundary, and gives every scratch repo a
+  bare origin with `origin/HEAD` set.
 
 ### Changed
 
+- An approved run stops on a valid security finding left unfixed, not on
+  any action that touches security.
 - `eng:issue` works any tracker through whatever MCP server is connected for
   it, with one procedure in `issue/references/mcp.md`, and GitHub through
   `gh`. `linear.md` and `jira.md` fold into it, keeping only the quirks that

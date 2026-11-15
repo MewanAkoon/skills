@@ -11,7 +11,8 @@ request to investigate or plan goes to `eng:investigate`, and one to review a
 PR or diff goes to `/code-review`.
 
 **The fast path.** A change the user names exactly, of a few lines with no
-behaviour to design, skips the test-first loop and the intent check: get onto
+behaviour to design, skips the test-first loop and the intent check, but for
+the one [references/security.md](references/security.md) asks for: get onto
 the branch as step 1 says, make it, run the repo's checks, correct what it
 made false, review it as step 5 says, and deliver it as step 6 says.
 Everything else runs every step.
@@ -73,7 +74,8 @@ from the new behaviour. Code comments follow `eng:plain-writing`.
 ## Step 5: Review
 
 Follow [references/review.md](references/review.md). On the fast path, run
-`code-review` at `medium` in place of `high`, with no intent check.
+`code-review` at `medium` in place of `high`, with no intent check but the
+security one.
 
 **Done when:** its report says ready, or not ready with each blocker named, or
 the review still runs in the background and the reply says so.

@@ -142,7 +142,10 @@ and 5 for each layer in turn, then 3 and 6 to 9 for the stack.
    stays uncommitted, as a ruling.
 5. Check the tree: `git diff --stat "$(tail -1 "$R/snapshots")" HEAD` lists
    nothing, or only files left out by a ruling. Any other path goes back
-   through the review loop.
+   through the review loop. When the review report names a trust boundary,
+   or on a stack any layer's report does, run the built-in as
+   [security.md](security.md) says, once per run, at the top layer; a valid
+   finding goes back through the review loop and steps 4 and 5.
 6. Push as `eng:commit`'s Push section says. Note each pushed commit where
    rulings go, and record the first that passed step 5 as `Reviewed: <sha>`.
 7. Open the PR through `eng:pr`, always as a draft. A plan whose Delivery
@@ -180,16 +183,17 @@ not passed.
 ## Stops
 
 The run stops with a report, not a question, only when a step would break a
-hard rule, an action cannot be undone or touches security, the plan is wrong
-beyond what a ruling fixes, the review loop ends not ready, two pushes in
-a row bring new valid blocking findings, or [stack.md](stack.md) names a
+hard rule, an action cannot be undone, a valid security finding is left
+unfixed, the plan is wrong beyond what a ruling fixes, the review loop ends
+not ready, two pushes in a row bring new valid blocking findings, or
+[stack.md](stack.md) names a
 stop: a layer holding work this run cannot vouch for, "Sync aborted", a
 dirty worktree that owns a layer, or a retargeted base this run did not
 retarget. No turn ends with a question about a
 write the Delivery covers, in prose or in a harness's next-step box.
 
-**Done when:** the hand-back is written: the PR link, whether it is ready or
-why it is a draft, CI's state, each issue write made or skipped, what was
-fixed, each finding left and why, each ruling, the follow-ups review turned
-up, what was not checked, any risk, and, when all is clean, that it is ready
-for the user to merge.
+**Done when:** the hand-back is written: the review report's trust-boundary
+line, the PR link, whether it is ready or why it is a draft, CI's state, each
+issue write made or skipped, what was fixed, each finding left and why, each
+ruling, the follow-ups review turned up, what was not checked, any risk, and,
+when all is clean, that it is ready for the user to merge.

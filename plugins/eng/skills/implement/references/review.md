@@ -27,6 +27,8 @@ tool with `code-review` and `high <parent>..<snapshot>`, hashes written out.
 In round 1, brief the intent check in [intent-check.md](intent-check.md) at
 the same time. When a later round finds nothing to fix, brief it once more on
 that snapshot, with step 1's commit as `<parent>`, before the report. When
+the diff touches a trust boundary, as [security.md](security.md) says, each
+brief carries its checklist. When
 `code-review` runs in the background and the turn must end first, say so, and
 carry on from section 3 when it reports.
 
@@ -56,11 +58,10 @@ valid findings, or after six rounds.
 
 Ready only when every check passes, no valid blocking finding remains, the
 intent check ran on round 1 and on the final tree, except on implement's fast
-path, and the last review saw the final tree. List what was fixed, each
-finding left and why, the follow-ups, and what was not checked. Name
-`/security-review` when the diff touches authentication, payments, secrets, or
-cryptography, and `/run` when the change alters what the running app does, or
-give the commands that show it running.
+path with no trust boundary, and the last review saw the final tree. Open with
+the trust-boundary line. List what was fixed, each finding left and why, the
+follow-ups, and what was not checked. Name `/run` when the change alters what
+the running app does, or give the commands that show it running.
 
 **Done when:** the report says ready or not ready, and why.
 

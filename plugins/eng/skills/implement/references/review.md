@@ -23,10 +23,13 @@ git commit-tree "$tree" -p <parent> -m review | tee -a "$R/snapshots"
 ## 2. Check and review
 
 Run the repo's lint, typecheck, and tests in report-only modes. Call the Skill
-tool with `code-review` and `high <parent>..<snapshot>`, hashes written out.
-In round 1, brief the intent check in [intent-check.md](intent-check.md) at
-the same time. When a later round finds nothing to fix, brief it once more on
-that snapshot, with step 1's commit as `<parent>`, before the report. When
+tool with `code-review` and `high <parent>..<snapshot>`, or `medium` after
+round 1, hashes written out. In round 1, brief the intent check in
+[intent-check.md](intent-check.md) at the same time. When a later round finds
+nothing to fix, brief it once more on that snapshot, with step 1's commit as
+`<parent>`, before the report. `code-review` and the intent check are the
+independent passes the loop needs, so add no third; without `code-review`,
+see [intent-check.md](intent-check.md). When
 the diff touches a trust boundary, as [security.md](security.md) says, each
 brief carries its checklist. When
 `code-review` runs in the background and the turn must end first, say so, and
@@ -64,8 +67,3 @@ follow-ups, and what was not checked. Name `/run` when the change alters what
 the running app does, or give the commands that show it running.
 
 **Done when:** the report says ready or not ready, and why.
-
-## Without code-review
-
-Where `code-review` is missing or fails, give the intent check a bug lens in
-every round, and report that the built-in did not run.

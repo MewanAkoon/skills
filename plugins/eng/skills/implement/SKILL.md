@@ -8,7 +8,8 @@ description: Use when the user approves a plan or names the exact change to make
 Carry an agreed change into the code, test what changed, correct what it made
 false, review it, and deliver it as the Delivery that covers the run allows. A
 request to investigate or plan goes to `eng:investigate`, and one to review a
-PR or diff goes to `/code-review`.
+PR or diff goes to `/code-review`. Every subagent runs on the model and
+effort in [models.md](../investigate/references/models.md).
 
 **The fast path.** A change the user names exactly, of a few lines with no
 behaviour to design, skips the test-first loop and the intent check, but for
@@ -58,7 +59,8 @@ its reason named.
 
 Test at the level a caller sees. Run targeted tests as you go and the repo's
 full check (lint, typecheck, tests) at the end. A bug fix's test comes from
-the reproduction, named after what broke.
+the reproduction, named after what broke. After three failed fixes for the
+same problem, stop the run and name the assumption you now doubt.
 
 **Done when:** the full check passes, and each change in behaviour has a test
 seen failing on its assertion, then passing, or the report says why not.
@@ -69,7 +71,8 @@ Search for every place that describes the changed behaviour: docs, READMEs,
 comments, help text, the strings a script prints, `AGENTS.md`. Re-derive each
 from the new behaviour. Code comments follow `eng:plain-writing`.
 
-**Done when:** the terms searched and the files corrected are listed.
+**Done when:** the terms searched and the files corrected are listed where
+`deliver.md` logs rulings.
 
 ## Step 5: Review
 
@@ -90,8 +93,9 @@ named, or the follow-up one on the user's open PR.
 
 ## Report
 
-What changed, by file; every check run, with its result; anything done
-outside the plan; the review report; what was not checked; any risk.
+What changed, by file; every check run, with its result, quoting a failing
+one's deciding error line exactly; anything done outside the plan; the review
+report; what was not checked; any risk.
 
 ---
 

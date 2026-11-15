@@ -8,9 +8,11 @@ description: Use at the start of a task, before changing code, when given a tick
 Find out what is true before anything changes, write a plan checked against
 it, and stop. A request that names the exact change, or points to an approved
 plan, goes to `eng:implement` instead. One to review a PR or a diff goes to
-`/code-review`. A question about the code, rather than a task, follows
+`/code-review`. A question about the code, rather than a task, or a report
+such as an audit or a status review, follows
 [references/answers.md](references/answers.md) and ends in an answer, with no
-plan and no stop.
+plan and no stop. Every subagent runs on the model and effort in
+[references/models.md](references/models.md).
 
 ## Step 1: Read the sources
 
@@ -24,8 +26,13 @@ the session has none for that tracker, say which tracker's MCP server to
 connect, and read nothing in its place: no guess at the ticket from its key,
 a branch name or a search.
 
+On a task, launch round 1 of the check in
+[references/checks.md](references/checks.md) in the background as the reading
+starts, beside your own, briefed with the request and the sources, not an
+answer.
+
 **Done when:** every source the request names is read, or listed with the
-reason it could not be.
+reason it could not be, and on a task round 1 is running.
 
 ## Step 2: Read what the repo says about itself
 
@@ -72,28 +79,35 @@ names the missing signal, or the task is not a bug.
 
 Fill in [references/plan.md](references/plan.md). The plan goes in
 `<repo>/.claude/plans/<slug>.md` whenever its Delivery lists writes, or when it
-is longer than a screen.
+is longer than a screen. The lists steps 1 to 3 ask for go in its Progress,
+not the reply.
 
-**Done when:** every section of the template holds content or reads "none".
+**Done when:** every section the task needs is filled, and the rest are
+left out.
 
-## Step 6: Check it
+## Step 6: Check it in rounds
 
-Read the plan against the code, the findings and the request: each change
-names its file, each change in behaviour its test, each doc it makes false is
-listed, and nothing asked for is missing. When the plan spans more than one
-area, one general-purpose subagent also runs the check in
-[references/checks.md](references/checks.md), claims and plan together. Drop a
-finding it refutes, or mark it disputed with both sides. Revise and read
-again.
+Check every plan in rounds, as [references/checks.md](references/checks.md)
+says: round 1 settles the facts from the question and the sources, and each
+later round reviews the plan in place, reading only what changed. Only a
+blocking finding starts another round. Record each round in the plan's Check
+rounds section.
 
-**Done when:** a pass turns up nothing new, or what remains is listed under
-open questions.
+**Done when:** at least two rounds ran and the latest found no blocker, or a
+blocker still open after round 3 is a question to the user.
 
 ## Step 7: Stop
 
-Present the plan and wait. Repo files other than the plan file stay unedited,
-and the branch stays as it is, until the user approves. A yes that names items
-approves those items. In Claude Code plan mode, call ExitPlanMode with the
+Present the plan only once it is final: no check is running, the latest
+round found no blocker, and nothing has changed since that round read it but
+its own smaller points. Until then ask for no approval, in prose or in a
+harness's next-step box, and say only that planning continues. A re-check
+started after an approval ask withdraws it, and that turn ends with no
+approval button. Where the harness has an advisor tool, consult it on the
+final plan first. Lead with the result and any departure from the request,
+then wait. Repo files other than the plan file stay unedited, and the branch
+stays as it is, until the user approves. A yes that names items approves
+those items. In Claude Code plan mode, call ExitPlanMode with the
 plan. When several decisions are still open, suggest `/eng:grill-me`.
 
 **Done when:** the plan is in front of the user and the turn has ended, or

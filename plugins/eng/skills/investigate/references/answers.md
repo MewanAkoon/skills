@@ -1,9 +1,10 @@
 # Answering a question about the code
 
 Read this when the request is a question, such as how a subsystem works or
-where new code belongs, rather than a task. A question about why code is
-shaped the way it is goes to `eng:why`. For any other, run `SKILL.md`'s steps
-1 to 3, then answer in the shape below.
+where new code belongs, or a report, such as an audit or a status review,
+rather than a task. A question about why code is shaped the way it is goes to
+`eng:why`. For any other, run `SKILL.md`'s steps 1 to 3, check the answer in
+rounds as [checks.md](checks.md) says, then answer in the shape below.
 
 A narrow question gets one trace. A wide one, across packages, gets two to
 four: usually the entry path, the data model and its writes, and the
@@ -11,8 +12,9 @@ configuration.
 
 ## The answer
 
-Restate the question in one line, then use these headings, dropping any the
-question does not need.
+Open with the answer in a sentence or two, then use these headings, dropping
+any the question does not need. Close with one line on the check: how many
+rounds ran, and where the passes disagreed and how that was settled.
 
 - **Overview.** What this is and why it exists.
 - **Key pieces.** What the rest depends on.
@@ -25,8 +27,8 @@ question does not need.
   candidates, each with what it owns, imports, and is imported by, one
   picked, and the runner-up with why it lost.
 
-**Done when:** the question is restated and every hop in the path has a
-`file:line`.
+**Done when:** the answer opens with the result, at least two passes agree
+on it, and every hop in the path has a `file:line`.
 
 ---
 

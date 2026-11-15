@@ -23,12 +23,13 @@ reports each security finding with its input, the path it takes, and the
 From round 2 on, `review.md` reviews the fix diff in a general-purpose
 subagent on Sonnet at medium effort, whose description starts with
 `code-review medium`, so the Stop hook waits for it when it runs in the
-background. Its brief, with the hashes written out:
-call the Skill tool with `code-review` and `medium <parent>..<snapshot>`,
-follow it, and reply with each finding's `file:line`, its point and its
-failure scenario, or "none". It edits, commits, and posts nothing, starts no
-subagents, and does not call the advisor. When it cannot call the Skill
-tool, the main session runs the review itself and the report says so.
+background. Its brief, with the hashes written out: call the Skill tool
+with `code-review` and `medium <parent>..<snapshot>`, follow it on that
+range alone, not the uncommitted tree, which earlier rounds read, and reply
+with each finding's `file:line`, its point and its failure scenario, or
+"none". It edits, commits, and posts nothing, starts no subagents, and does
+not call the advisor. When it cannot call the Skill tool, the main session
+runs the same review itself, on that range alone, and the report says so.
 
 ## Without code-review
 

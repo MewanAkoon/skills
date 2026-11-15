@@ -5,14 +5,26 @@ Brief a general-purpose subagent with this, on Sonnet at medium effort, as
 plan or request and the items approved, `<parent>`, the range, and the files
 already changed at the start, which are not extra.
 
-It reports each plan item as done, missing, extra, or wrong, quoting the plan
-line; each bug fix's test seen failing on the old code, extracted with
-`mkdir "$R/old" && git -C "$(git rev-parse --show-toplevel)" archive <parent> | tar -x -C "$R/old"`;
-and each changed sentence of prose backed by a `file:line`. It compares the
-diff with the approved plan and runs no probe beyond that old-code test. It
-edits, commits, and posts nothing, starts no subagents, does not call the
-advisor, writes only under `R`, and reports findings only, about 3,000
-characters at most.
+Put these in the brief word for word, as
+[checks.md](../../investigate/references/checks.md) does for every other
+check:
+
+- Read and run, never write. Use `git log`, `git show`, `git blame`, search,
+  and the repo's checks in their report-only modes. Edit no file, commit
+  nothing, post nothing, start no subagents, and do not call the advisor.
+  Write only under `R`. Compare the diff with the approved plan, and run no
+  probe beyond the old-code test below.
+- Report each plan item as done, missing, extra, or wrong, quoting the plan
+  line. Report each bug fix's test as seen failing on the old code, extracted
+  with
+  `mkdir "$R/old" && git -C "$(git rev-parse --show-toplevel)" archive <parent> | tar -x -C "$R/old"`.
+  Back each changed sentence of prose with a `file:line`.
+- Every other finding gives a `file:line` or the command run, what is wrong
+  in one sentence, a confidence of high, medium, or low, and whether it
+  blocks. Twelve at most, the most serious first, and the cap never cuts the
+  item report. "None" is a valid result. About 3,000 characters at most.
+- A backing line that says something narrower than the claim fails. Watch
+  for a fact true in one place and stale in its twin elsewhere.
 
 When the brief carries the checklist in [security.md](security.md), it also
 reports each security finding with its input, the path it takes, and the

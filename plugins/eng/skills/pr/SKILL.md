@@ -102,7 +102,12 @@ diff touching migrations, Terraform, Docker, Kubernetes, workflows, or an
 
 ## 6. Create
 
-Push as `eng:commit`'s Push section says, unless the upstream holds `HEAD`.
+Push as `eng:commit`'s Push section says, unless
+`git ls-remote --exit-code <remote> refs/heads/<branch>`, with the remote
+Push picks, prints `HEAD`'s commit. Any other result pushes: a missing branch
+(exit 2), one behind `HEAD`, or a failed call. A local tracking ref can
+outlive a branch deleted on the remote, and a short name also matches
+`feat/<branch>`.
 Write title and body to files in the scratchpad, or `mktemp -d`. Every PR
 opens as a draft. Assign whoever the user names, else `@me`; add no
 reviewer. A stack opens through `gh stack submit --auto`, which drafts each

@@ -13,8 +13,34 @@ follow semantic versioning.
 
 ## Unreleased
 
+## 0.23.1 - 2026-11-16
+
 ### Fixed
 
+- The review reminder at hand-back fires only on changes the session made.
+  The hook kept one hash per session, so moving into another repo, such as a
+  worktree holding someone else's edits, reminded about them, and moving back
+  reminded again. It now keeps a line per repo in `review-hash`. A repo first
+  seen at a stop is recorded and reminds only when a change there is newer
+  than the session's first prompt, which `started` in the session's state
+  dates, with a deleted file's folder standing in for its time. A git error
+  while reading the tree no longer reads as a change, and Claude Code's
+  `.claude/.cc-writes` folder no longer counts. A session begun outside git
+  keeps `started` through a resume or compaction, a hash from before 0.23.1
+  still counts for any repo with no line of its own, and a repo whose path
+  holds a newline is never checked.
+- `eng:pr` no longer skips the push for a branch deleted on the remote. It
+  read "the upstream holds `HEAD`" from the local tracking ref, which outlives
+  the remote branch, so `gh pr create` then failed. It now asks the remote
+  with `git ls-remote --exit-code <remote> refs/heads/<branch>`.
+- `eng:commit` no longer pushes a branch that tracks another branch on
+  another remote, such as `upstream/main` in a fork, to that remote. The
+  upstream's remote is used only when the upstream is a branch of the same
+  name, and otherwise `origin`.
+- The intent check's brief carries the same rules as every other check
+  brief: each finding's confidence and whether it blocks, a cap that never
+  cuts the item report, "None" as a result, and the rule that a narrower
+  backing line fails.
 - CI's shellcheck job passes `GITHUB_TOKEN` to the npm wrapper, which
   sends it when it downloads the shellcheck binary from github.com. Without
   it the download counted against the limit github.com sets per runner

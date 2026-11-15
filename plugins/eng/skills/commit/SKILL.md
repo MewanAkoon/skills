@@ -104,11 +104,14 @@ Print `git log --oneline -<n>` for this run's commits.
 ## Push
 
 On a request to push, or a push Delivery lists. `git rev-parse --abbrev-ref
-HEAD` printing `HEAD` means detached: stop. The remote is the upstream's,
-else `origin`, else the only one; with several and no `origin`, ask; with
-none, stop. Confirm before pushing the default branch, which
+HEAD` printing `HEAD` means detached: stop. Read the upstream with the
+command below, which prints `<remote>/<name>`. When `<name>` is this
+branch's own name, the remote is that `<remote>`. Otherwise it is `origin`,
+else the only remote; with several and no `origin`, ask; with none, stop. So
+a branch tracking `upstream/main` in a fork never pushes to the parent.
+Confirm before pushing the default branch, which
 `git symbolic-ref --short refs/remotes/<remote>/HEAD` names after
-`git remote set-head <remote> -a`. Read the upstream:
+`git remote set-head <remote> -a`. The upstream:
 
 ```bash
 git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"
@@ -122,8 +125,8 @@ only forced update on a stack, never `--force` or `-f`. A rejected
 
 Otherwise, `<remote>/<branch>`: `git push`. Empty:
 `git push -u <remote> <branch>`. Another branch, such as `origin/main`: under
-a Delivery, push with `-u` to its branch and log a ruling; otherwise ask
-first.
+a Delivery, `git push -u <remote> <branch>`, the remote above and this
+branch's own name, and log a ruling; otherwise ask first.
 
 When a push is rejected as non-fast-forward after a rebase this run made,
 push again with an explicit lease. `<branch>` is the branch on `<remote>`

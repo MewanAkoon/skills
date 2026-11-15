@@ -1,6 +1,5 @@
 ---
-type: tool_used
-tool: Write
-input_match: '[Aa]ssignee[*\s]*[:|]'
-min: 1
+type: regex
+target: trace
+pattern: '"name":"(?:Bash|Write)","input":\{(?:"\w+":(?:"(?:[^"\\]|\\.)*"|true|false|-?\d+(?:\.\d+)?),)*"(?:command|content)":"(?:[^"\\]|\\.)*?[Aa]ssignee[*\s]*[:|]'
 ---

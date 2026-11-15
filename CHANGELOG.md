@@ -123,6 +123,18 @@ follow semantic versioning.
   that the docs and CI state the Claude Code minimum; bans the en dash and
   minus sign only in markdown, and the em dash everywhere; and drops the
   `bash checked` block runner and the tools-field warning.
+- The `issue-draft-fields` eval reads the draft whether the agent writes it
+  with Write or a Bash heredoc. A run that grants Bash, as the release
+  command does, gives it to every case, and a draft written that way failed
+  the graders that read only Write calls. That case also checks that no
+  Bash command writes an AI credit, and `issue-asks-to-connect` that none
+  writes a draft.
+- `CONTRIBUTING.md` says `--allow-tools` grants a gated tool to every case,
+  whatever its `allowed_tools` lists, and that `--max-cost-usd 0` checks a
+  case's graders for free. Its list of eval cases no longer claims that a
+  commit waits for `eng:commit`, which no case has checked since 0.16.0, and
+  it says a plan's check rounds are checked by hand, since one run costs
+  more than the whole suite.
 - `eng:implement`'s test step says a test or subagent never writes through a
   path that is, or was, a link to an installed binary, and never touches the
   live Claude Code install.

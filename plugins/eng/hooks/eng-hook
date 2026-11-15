@@ -17,11 +17,12 @@
 #                  not the model, a line for each setting or tool eng needs
 #                  that is missing, from hooks/setup-check.
 #   prompt         UserPromptSubmit. On a session's first prompt, records the
-#                  uncommitted changes it started with, so they never bring
-#                  the review reminder. On the first prompt of a new session
-#                  outside plan mode, it also shows the user a line when the
-#                  permission mode and rules would stop eng's writes for a
-#                  prompt, since only a prompt carries the mode.
+#                  uncommitted changes it started with, and when it started,
+#                  so they never bring the review reminder. On the first
+#                  prompt of a new session outside plan mode, it also shows
+#                  the user a line when the permission mode and rules would
+#                  stop eng's writes for a prompt, since only a prompt
+#                  carries the mode.
 #   expansion      UserPromptExpansion. Blocks /code-review with --comment or
 #                  --post, and records a review you type as covering the
 #                  changes.
@@ -64,12 +65,17 @@
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates. Cursor sets no plugin data folder, so there it lives under
 # ${XDG_STATE_HOME:-$HOME/.local/state}/eng instead, and so does the log.
-# review-hash holds a hash of the uncommitted changes as they stood when the
-# session started, when a code-review last ran, or when the stop last
-# reminded about them. start-pending marks a session whose first prompt has
-# yet to take that first hash. A session from before 0.16.0 kept its first
-# hash as start-hash, which session start renames to review-hash when it has
-# none.
+# review-hash holds a line per repo: a hash of its uncommitted changes as
+# they stood when the session started, when a code-review last ran, or when
+# the stop last reminded about them, and the repo's top-level path, since a
+# session's working directory can move into another repo, such as a
+# worktree. A line with no path, from before 0.23.1, stays and counts for any
+# repo with no line of its own, so a resumed session keeps the baseline of the
+# repo it started in. started dates the session's first prompt, which
+# decides whether changes in a repo first seen at a stop are the session's
+# own. start-pending marks a session whose first prompt has yet to take that
+# first hash. A session from before 0.16.0 kept its first hash as start-hash,
+# which session start renames to review-hash when it has none.
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
 # fails open and lets the tool run, except two. A read of the remote HEADs
@@ -224,26 +230,53 @@ has_word() {
   printf ' %s ' "$1" | tr '\t\n' '  ' | grep -Eiq "[[:space:]]($2)[[:space:]]"
 }
 
-# Prints a hash of the uncommitted changes in the repo holding directory $1,
-# tracked and untracked, leaving out .claude/plans and .claude/handoffs. Prints "clean" when there
-# are none, and fails outside a git repo.
+# Runs git with the arguments given in the repo at $top, over the paths whose
+# changes count: all but .claude/plans and .claude/handoffs, as the review
+# loop's snapshot leaves them out, and .claude/.cc-writes, which is Claude
+# Code's own state and never work to review.
+in_tree() {
+  git -C "$top" "$@" -- . ':(exclude).claude/plans' ':(exclude).claude/handoffs' \
+    ':(exclude).claude/.cc-writes'
+}
+
+# Sets $base to what the changes in $top are measured against: HEAD, or the
+# empty tree in a repo with no commit yet.
+tree_base() {
+  base=HEAD
+  git -C "$top" rev-parse -q --verify HEAD >/dev/null 2>&1 ||
+    base=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+}
+
+# Prints one review-hash line for the repo holding directory $1: a hash of its
+# uncommitted changes, tracked and untracked, or "clean" when there are none,
+# then a space and the repo's top-level path. Fails outside a git repo, and
+# when git fails, so an error is never read as a change. The callers run it
+# in $( ), which keeps no variable it sets, so the path travels in the line.
 tree_state() {
   top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || return 1
   [ -n "$top" ] || return 1
-  base=HEAD
-  # A repo with no commit yet compares against the empty tree.
-  git -C "$top" rev-parse -q --verify HEAD >/dev/null 2>&1 ||
-    base=4b825dc642cb6eb9a060e54bf8d69288fbee4904
-  # Plans and handoffs are left out, as the review loop's snapshot leaves them.
+  # A path holding a newline cannot sit on one line, so such a repo is never
+  # checked.
+  case "$top" in *'
+'*) return 1 ;; esac
+  tree_base
   # The untracked names are listed once, NUL-separated, so a quote or a
   # newline in one cannot break the list.
   ts_list="$(mktemp "${TMPDIR:-/tmp}/eng-hook-untracked.XXXXXX")" || return 1
-  git -C "$top" ls-files -z --others --exclude-standard -- . \
-    ':(exclude).claude/plans' ':(exclude).claude/handoffs' > "$ts_list" 2>/dev/null
-  if git -C "$top" diff --quiet "$base" -- . ':(exclude).claude/plans' ':(exclude).claude/handoffs' 2>/dev/null &&
-    [ ! -s "$ts_list" ]; then
+  if ! in_tree ls-files -z --others --exclude-standard > "$ts_list" 2>/dev/null; then
     rm -f "$ts_list"
-    printf 'clean\n'
+    return 1
+  fi
+  # git diff --quiet exits 1 for a change and above 1 for an error.
+  in_tree diff --quiet "$base" 2>/dev/null
+  ts_diff=$?
+  if [ "$ts_diff" -gt 1 ]; then
+    rm -f "$ts_list"
+    return 1
+  fi
+  if [ "$ts_diff" -eq 0 ] && [ ! -s "$ts_list" ]; then
+    rm -f "$ts_list"
+    printf 'clean %s\n' "$top"
     return 0
   fi
   # The diff streams into the hash rather than sitting in a variable. The
@@ -254,7 +287,7 @@ tree_state() {
   # shellcheck disable=SC2016
   ts_hash="$(
     {
-      git -C "$top" diff --binary "$base" -- . ':(exclude).claude/plans' ':(exclude).claude/handoffs' 2>/dev/null
+      in_tree diff --binary "$base" 2>/dev/null
       tr '\0' '\n' < "$ts_list"
       [ -s "$ts_list" ] && (cd "$top" && xargs -0 -n 100 sh -c '
         out="$(git hash-object -- "$@" 2>/dev/null)" && { printf "%s\n" "$out"; exit 0; }
@@ -264,7 +297,72 @@ tree_state() {
   )"
   rm -f "$ts_list"
   [ -n "$ts_hash" ] || return 1
-  printf '%s\n' "$ts_hash"
+  printf '%s %s\n' "$ts_hash" "$top"
+}
+
+# Prints the hash review-hash holds for the repo at $1. A line with only a
+# hash comes from a session that started before 0.23.1, which kept one hash
+# for every repo, so it still counts for any repo with no line of its own.
+# Fails when there is none. The path is read from the environment, since
+# awk -v would expand a backslash in it.
+review_get() {
+  [ -f "$state/review-hash" ] || return 1
+  RG_TOP="$1" awk '
+    index($0, " ") == 0 { legacy = $0; next }
+    substr($0, index($0, " ") + 1) == ENVIRON["RG_TOP"] {
+      print substr($0, 1, index($0, " ") - 1); found = 1; exit
+    }
+    END { if (!found && legacy == "") exit 1; if (!found) print legacy }
+  ' "$state/review-hash"
+}
+
+# Stores the review-hash line in $1, replacing the line for its repo. A line
+# from before 0.23.1 stays, as review_get reads it for a repo with no line.
+review_set() {
+  # A temp file of its own, so two hooks of one session writing at once
+  # cannot garble the file. One of their two updates can still be lost,
+  # which costs one extra reminder or one quiet stop.
+  rs_new="$(mktemp "$state/review-hash.XXXXXX")" || return 0
+  if { [ -f "$state/review-hash" ] && cat "$state/review-hash"; } |
+    RS_LINE="$1" RS_TOP="${1#* }" awk '
+      index($0, " ") > 0 && substr($0, index($0, " ") + 1) == ENVIRON["RS_TOP"] { next }
+      { print }
+      END { print ENVIRON["RS_LINE"] }
+    ' > "$rs_new"; then
+    mv "$rs_new" "$state/review-hash"
+  else
+    rm -f "$rs_new"
+  fi
+}
+
+# True when a changed or untracked path in the repo at $1, as tree_state
+# selects them, was modified after this session's first prompt, which left
+# $state/started. A deleted path has no time, so its nearest existing folder
+# stands in, since removing a file updates its folder's time. Paths are
+# tested from the top, as ./<path> so none reads as an option to find, with
+# -maxdepth 0 so a nested repo is not walked.
+changed_since_start() {
+  [ -f "$state/started" ] || return 1
+  cs_mark="$(cd "$state" && pwd)/started" || return 1
+  top="$1"
+  tree_base
+  # shellcheck disable=SC2016
+  cs_out="$(
+    { in_tree diff --name-only -z "$base"; in_tree ls-files -z --others --exclude-standard; } 2>/dev/null |
+      (cd "$top" && xargs -0 sh -c '
+        mark="$1"; shift; n=$#
+        for p; do
+          while [ ! -e "$p" ] && [ ! -L "$p" ]; do
+            case "$p" in */*) p="${p%/*}" ;; *) p=. ;; esac
+          done
+          set -- "$@" "./$p"
+        done
+        shift "$n"
+        [ "$#" -gt 0 ] && find "$@" -maxdepth 0 -newer "$mark" -print 2>/dev/null
+        exit 0
+      ' sh "$cs_mark")
+  )"
+  [ -n "$cs_out" ]
 }
 
 # Records the uncommitted changes as they stand now as reviewed. Any
@@ -273,7 +371,7 @@ tree_state() {
 record_review() {
   find_state || return 0
   now="$(tree_state "$f_cwd")" || return 0
-  printf '%s\n' "$now" > "$state/review-hash"
+  review_set "$now"
 }
 
 # Runs hooks/setup-check with the arguments given and prints what it printed.
@@ -372,7 +470,7 @@ $rules"
     # could cost the block its timeout, so the first prompt hashes it instead,
     # before the model can change anything.
     if [ "$source" = startup ] || [ "$source" = clear ] || [ ! -f "$state/review-hash" ]; then
-      rm -f "$state/review-hash"
+      rm -f "$state/review-hash" "$state/started"
       : > "$state/start-pending"
     fi
     # The permission check waits for the first prompt, which carries the mode.
@@ -401,7 +499,12 @@ on_prompt() {
     fi
   fi
   if [ -f "$state/start-pending" ]; then
-    tree_state "$f_cwd" > "$state/review-hash" 2>/dev/null || rm -f "$state/review-hash"
+    # started dates the first prompt, inside git or not, so a repo first seen
+    # later can tell this session's edits from older ones.
+    : > "$state/started"
+    # Outside git the file stays, empty, so a resume or compaction keeps
+    # started rather than taking it again.
+    tree_state "$f_cwd" > "$state/review-hash" 2>/dev/null || : > "$state/review-hash"
     rm -f "$state/start-pending"
   fi
 }
@@ -720,11 +823,21 @@ on_stop() {
   fi
   find_state || return 0
   now="$(tree_state "$f_cwd")" || return 0
-  [ "$now" != clean ] || return 0
-  [ "$now" != "$(cat "$state/review-hash" 2>/dev/null)" ] || return 0
-  # Once per tree: the hash is kept as though reviewed, so a later stop on the
-  # same changes passes, and an edit after it reminds again.
-  printf '%s\n' "$now" > "$state/review-hash"
+  hash="${now%% *}"
+  # A repo with no line is one this session has not seen, such as a worktree
+  # it moved into. Its tree is recorded, clean or not, and reminds only when a
+  # change there is newer than the session's first prompt, so another
+  # session's old edits stay quiet and this session's own still remind.
+  if ! seen="$(review_get "${now#* }")"; then
+    review_set "$now"
+    [ "$hash" != clean ] && changed_since_start "${now#* }" || return 0
+  else
+    [ "$hash" != clean ] || return 0
+    [ "$hash" != "$seen" ] || return 0
+    # Once per tree: the hash is kept as though reviewed, so a later stop on
+    # the same changes passes, and an edit after it reminds again.
+    review_set "$now"
+  fi
   context Stop "$REVIEW_REMINDER"
 }
 

@@ -837,6 +837,182 @@ stop plain '' "$scratch/plain"
 [ ! -s "$scratch/out" ] || bad "review gate: a directory outside git got a reminder"
 [ "$status" -eq 0 ] || bad "review gate: exited $status outside git"
 
+# The hash is kept per repo, so moving into another repo, such as a worktree
+# holding someone else's edits, brings no reminder about them. A repo first
+# seen at a stop reminds only on paths changed after the session's first
+# prompt, which leaves `started` behind. Each session's `started` is set to
+# 2021 and old edits to 2020, so a filesystem with coarse times cannot put an
+# edit in the same tick as the marker.
+other_repo() {
+  mkdir -p "$1/d"
+  git -C "$1" init -q
+  printf 'one\n' > "$1/a.txt"
+  printf 'b\n' > "$1/d/b.txt"
+  git -C "$1" add a.txt d/b.txt
+  git -C "$1" -c user.name=t -c user.email=t@t commit -qm init
+}
+aged() { touch -t 202001010000 "$@"; }
+marked() { touch -t 202101010000 "$data/sessions/$1/started"; }
+git -C "$repo" checkout -q -- a.txt
+printf 'own\n' > "$repo/a.txt"
+start moved
+marked moved
+old="$scratch/old-edits"
+other_repo "$old"
+printf 'someone else\n' > "$old/a.txt"
+aged "$old/a.txt"
+stop moved '' "$old"
+[ ! -s "$scratch/out" ] || bad "review gate: another repo's old edits got a reminder"
+printf 'mine\n' > "$old/a.txt"
+stop moved '' "$old"
+reminded || bad "review gate: an edit in a repo moved into got no reminder"
+stop moved
+[ ! -s "$scratch/out" ] || bad "review gate: moving back to an unchanged repo got a reminder"
+# A repo first seen with changes made after the first prompt reminds.
+fresh="$scratch/fresh-edits"
+other_repo "$fresh"
+printf 'new\n' > "$fresh/a.txt"
+stop moved '' "$fresh"
+reminded || bad "review gate: a new edit in a repo first seen at a stop got no reminder"
+# A repo first seen clean is recorded, so its next edit reminds.
+clean="$scratch/first-clean"
+other_repo "$clean"
+stop moved '' "$clean"
+[ ! -s "$scratch/out" ] || bad "review gate: a clean repo first seen at a stop got a reminder"
+printf 'two\n' > "$clean/a.txt"
+stop moved '' "$clean"
+reminded || bad "review gate: an edit in a repo first seen clean got no reminder"
+# A plan written now does not count, like plans anywhere else.
+planned="$scratch/planned"
+other_repo "$planned"
+printf 'someone else\n' > "$planned/a.txt"
+aged "$planned/a.txt"
+mkdir -p "$planned/.claude/plans"
+printf 'plan\n' > "$planned/.claude/plans/p.md"
+stop moved '' "$planned"
+[ ! -s "$scratch/out" ] || bad "review gate: a new plan in a repo with old edits got a reminder"
+# A deleted file has no time, so its folder's stands in.
+gone="$scratch/old-delete"
+other_repo "$gone"
+rm "$gone/d/b.txt"
+aged "$gone/d"
+stop moved '' "$gone"
+[ ! -s "$scratch/out" ] || bad "review gate: another session's old delete got a reminder"
+gone="$scratch/new-delete"
+other_repo "$gone"
+rm "$gone/d/b.txt"
+stop moved '' "$gone"
+reminded || bad "review gate: a new delete in a repo first seen at a stop got no reminder"
+git -C "$repo" checkout -q -- a.txt
+# A session whose first prompt ran outside git has no hash, and another
+# repo's old edits still bring no reminder.
+hook_run session-start "$(jq -cn --arg d "$scratch/plain" '{session_id: "outside", cwd: $d, source: "startup"}')"
+hook_run prompt "$(jq -cn --arg d "$scratch/plain" '{session_id: "outside", cwd: $d, prompt: "go"}')"
+# A compaction before any stop keeps that session's start, so its first
+# sight still tells old edits from new.
+hook_run session-start "$(jq -cn --arg d "$scratch/plain" '{session_id: "outside", cwd: $d, source: "compact"}')"
+[ -f "$data/sessions/outside/started" ] || bad "session start: a compaction dropped started for a session begun outside git"
+marked outside
+stop outside '' "$planned"
+[ ! -s "$scratch/out" ] || bad "review gate: a session started outside git got a reminder about old edits"
+# A session from before 0.23.1 has no started, so a first sight records
+# quietly, whatever the times.
+start nostart
+rm -f "$data/sessions/nostart/started"
+gone="$scratch/no-marker"
+other_repo "$gone"
+printf 'new\n' > "$gone/a.txt"
+stop nostart '' "$gone"
+[ ! -s "$scratch/out" ] || bad "review gate: a first sight with no started got a reminder"
+# Claude Code's own .claude/.cc-writes is not work to review.
+start ccwrites
+mkdir -p "$repo/.claude/.cc-writes"
+printf 'x\n' > "$repo/.claude/.cc-writes/tmp"
+stop ccwrites
+[ ! -s "$scratch/out" ] || bad "review gate: a file under .claude/.cc-writes got a reminder"
+rm -r "$repo/.claude/.cc-writes"
+# A git that fails reads as nothing known, never as a change. The stand-in
+# is a new script, not a link, that runs the real git for all but diff.
+fakegit="$scratch/fakegit"
+mkdir -p "$fakegit"
+realgit="$(command -v git)"
+cat > "$fakegit/git" <<EOF
+#!/bin/sh
+for a; do
+  case "\$a" in -C|-c) skip=1; continue ;; esac
+  [ -n "\${skip:-}" ] && { skip=; continue; }
+  [ "\$a" = diff ] && exit 128
+  break
+done
+exec "$realgit" "\$@"
+EOF
+chmod +x "$fakegit/git"
+start failing
+jq -cn --arg d "$repo" '{session_id: "failing", cwd: $d, hook_event_name: "Stop", stop_hook_active: false, background_tasks: []}' |
+  env PATH="$fakegit:$PATH" CLAUDE_PLUGIN_DATA="$data" "$hook" stop > "$scratch/out" 2> "$scratch/err"
+status=$?
+[ ! -s "$scratch/out" ] || bad "review gate: a git diff that failed got a reminder"
+[ "$status" -eq 0 ] || bad "review gate: exited $status when git diff failed"
+# A failing ls-files at the first prompt hid untracked files the session
+# started with, so a later stop reminded about them. Now nothing is recorded,
+# and the old file reads as older than the session.
+sed 's/= diff ]/= ls-files ]/' "$fakegit/git" > "$fakegit/git.new" && mv "$fakegit/git.new" "$fakegit/git"
+chmod +x "$fakegit/git"
+grep -q '= ls-files ]' "$fakegit/git" || bad "review gate: the stand-in git does not fail ls-files"
+printf 'x\n' > "$repo/untracked.txt"
+aged "$repo/untracked.txt"
+for event in session-start prompt; do
+  jq -cn --arg d "$repo" '{session_id: "failing2", cwd: $d, source: "startup", prompt: "go"}' |
+    env PATH="$fakegit:$PATH" CLAUDE_PLUGIN_DATA="$data" "$hook" "$event" > "$scratch/out" 2> "$scratch/err"
+done
+[ ! -s "$data/sessions/failing2/review-hash" ] ||
+  bad "review gate: a failing ls-files at the first prompt still recorded a tree"
+marked failing2
+stop failing2
+[ ! -s "$scratch/out" ] || bad "review gate: untracked files hidden by a failing ls-files got a reminder"
+rm "$repo/untracked.txt"
+# A repo whose path holds a newline cannot sit on one line, so it is never
+# checked.
+nlrepo="$scratch/new
+line"
+other_repo "$nlrepo"
+start nlpath
+marked nlpath
+printf 'edit\n' > "$nlrepo/a.txt"
+stop nlpath '' "$nlrepo"
+[ ! -s "$scratch/out" ] || bad "review gate: a repo whose path holds a newline got a reminder"
+[ "$(wc -l < "$data/sessions/nlpath/review-hash" | tr -d ' ')" = 1 ] ||
+  bad "review gate: a repo whose path holds a newline wrote to review-hash"
+rm -rf "$nlrepo"
+# A hash from before 0.23.1, with no repo beside it, still counts.
+start legacy
+cut -d' ' -f1 "$data/sessions/legacy/review-hash" > "$scratch/legacy" &&
+  mv "$scratch/legacy" "$data/sessions/legacy/review-hash"
+stop legacy
+[ ! -s "$scratch/out" ] || bad "review gate: a hash from before 0.23.1 lost its tree"
+edit
+stop legacy
+reminded || bad "review gate: an edit after a hash from before 0.23.1 got no reminder"
+lines="$(cat "$data/sessions/legacy/review-hash")"
+top="$(git -C "$repo" rev-parse --show-toplevel)"
+if [ "$(printf '%s\n' "$lines" | grep -c ' ')" != 1 ] ||
+  [ "$(printf '%s\n' "$lines" | grep -vc ' ')" != 1 ] ||
+  ! printf '%s\n' "$lines" | grep -qF " $top"; then
+  bad "review gate: after a hash from before 0.23.1, want it kept and one line for its repo, got: $lines"
+fi
+# The old hash stays, so a session from before 0.23.1, which has no started,
+# still compares its start repo against it after a stop in another repo.
+git -C "$repo" checkout -q -- a.txt
+start legacy2
+cut -d' ' -f1 "$data/sessions/legacy2/review-hash" > "$scratch/legacy" &&
+  mv "$scratch/legacy" "$data/sessions/legacy2/review-hash"
+rm -f "$data/sessions/legacy2/started"
+stop legacy2 '' "$fresh"
+edit
+stop legacy2
+reminded || bad "review gate: a session from before 0.23.1 lost its start repo's baseline after another repo's stop"
+git -C "$repo" checkout -q -- a.txt
+
 # Monitor and PowerShell commands are read like Bash ones.
 for tool in Monitor PowerShell; do
   hook_run pre-tool "$(jq -cn --arg t "$tool" '{session_id: "all", cwd: "/tmp", tool_name: $t, tool_input: {command: "gh pr comment 5 -b x"}}')"

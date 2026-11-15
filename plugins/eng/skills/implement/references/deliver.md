@@ -155,9 +155,10 @@ and 5 for each layer in turn, then 3 and 6 to 9 for the stack.
    or from the merge base when no local loop ran, judge the findings as
    `eng:pr-feedback` does, fix the valid ones through the review loop, then
    steps 4 to 6 again, and move `Reviewed:` to the new head. Then, whether or
-   not a review was due, when the new commits made the PR's title or body
-   false, update them through `eng:pr`'s
-   [update.md](../../pr/references/update.md), with no question.
+   not a review was due, when the new commits, or a later run's result such
+   as an eval or a hand run, made the PR's title or body false, update them
+   through `eng:pr`'s [update.md](../../pr/references/update.md), with no
+   question.
 9. Mark the PR ready as the next section says. Without a PR, steps 8 and 9
    end at the push.
 
@@ -167,11 +168,16 @@ Run `gh pr ready <n>` once the full local check and the review are clean, the
 review loop or, where none ran, the post-PR review, and CI has started.
 Before the run's first `gh pr ready`, consult the advisor where the harness
 has one, as `eng:investigate`'s
-[models.md](../../investigate/references/models.md) says. Read
-CI once, with `gh pr checks <n> --json name,bucket`: any check listed means it
+[models.md](../../investigate/references/models.md) says. Read CI once,
+with `gh pr checks <n> --json name,bucket,link`: any check listed means it
 started, whatever the exit code, since `gh` also exits nonzero when none are
 reported. A repo with no `.github/workflows` file and no checks has no CI and
 counts as started. A `fail` bucket, then or later, is fixed like a finding.
+When a GitHub Actions job's `gh run view <run-id> --log-failed`, with the id
+from the check's link, shows a failure outside the code, such as a rate
+limit or a runner outage, the run gets one `gh run rerun <run-id> --failed`,
+with no question, logged as a ruling. A second failure of that kind goes in
+the hand-back.
 
 Never poll CI. Where the harness watches the PR's CI, as the Claude desktop
 app does, leave it to the harness. Otherwise the next turn on that branch

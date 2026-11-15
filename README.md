@@ -195,7 +195,7 @@ command or a tool's name:
 | `/code-review` with `--comment` or `--post`, or one the model starts with `ultra` or `--fix` | Denies it |
 | A merge, release, deploy, package publish, workflow run, repo, secret or key write, `gh stack merge` or `unstack`, or an MCP write named for deleting, merging, releasing, deploying, sending or publishing | Asks you, in auto mode too |
 | A push that forces, deletes, or sends tags or push options | Asks, apart from a push with an explicit lease that names no default branch |
-| A commit, push, PR create, edit or ready, issue write, `gh stack` push, sync, submit or link, or other MCP write | Leaves it to your permission settings |
+| A commit, push, PR create, edit or ready, issue write, `gh stack` push, sync, submit or link, `gh run rerun`, or other MCP write | Leaves it to your permission settings |
 | Any of the writes above from a subagent | Denies it, apart from MCP servers that run on this machine |
 | A shell command it cannot read in time | Asks, still denying a post it found |
 | Changed code not reviewed since it last changed, at hand-back | Reminds once to run the review |

@@ -130,7 +130,7 @@ empty directory, run `tests/review-loop/setup.sh` from the clone, or
 ```bash
 claude -p "The plan in PLAN.md is approved. Implement it." \
   --plugin-dir <clone>/plugins/eng --allowedTools "Read Glob Grep Edit Write Bash Skill Agent" \
-  --output-format stream-json --verbose
+  --output-format stream-json --verbose --max-budget-usd 3
 ```
 
 A good run calls `code-review` with `high` and a `<hash>..<hash>` range,

@@ -4,11 +4,11 @@
 # case are these notes.
 #
 # The first 42 cases are the old block-pr-comments.sh battery. Every case runs
-# in the main session, where a commit, push, pull request or issue write gets
-# no decision, so each result is what the post guard and the confirmation
-# prompt decide. Each runs in a scratch repo whose origin/HEAD is main, which
-# a push with an explicit lease reads for the default branch. The deny on a
-# subagent's writes has its own cases in scripts/test-hooks.sh.
+# in the main session, where a commit, push, pull request, issue write or CI
+# rerun gets no decision, so each result is what the post guard and the
+# confirmation prompt decide. Each runs in a scratch repo whose origin/HEAD is
+# main, which a push with an explicit lease reads for the default branch. The
+# deny on a subagent's writes has its own cases in scripts/test-hooks.sh.
 == deny posting
 gh pr comment 5 --body "hi"
 == deny
@@ -357,7 +357,9 @@ gh release create v1.0.0 --notes-file notes.md
 == ask
 gh workflow run check.yml
 == ask
-gh run rerun 123
+gh run cancel 123
+== allow a CI rerun is left to the permission settings
+gh run rerun 123 --failed
 == ask
 gh pr reopen 5
 == ask

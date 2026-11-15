@@ -39,19 +39,24 @@ says what pairs well with it, as a recommendation rather than a dependency.
 You need Claude Code 2.1.293 or later. In any Claude Code session:
 
 ```
-/plugin marketplace add MewanAkoon/skills
+/plugin marketplace add MewanAkoon/skills#stable
 /plugin install eng@mewanakoon
 ```
 
 Or from a shell:
 
 ```bash
-claude plugin marketplace add MewanAkoon/skills
+claude plugin marketplace add 'MewanAkoon/skills#stable'
 claude plugin install eng@mewanakoon
 ```
 
 Both install at user scope, so the skills load in every project on the
 machine. There is no clone to keep and no script to run.
+
+`#stable` follows the `stable` branch, which carries the last release. Work
+lands on `main` and reaches `stable` only at a release, so an install changes
+only then. An install added without `#stable` follows `main`, and
+[Moving an install to stable](#moving-an-install-to-stable) moves it.
 
 Then turn off the bare copies of two skills. A project may carry its own
 `commit` and `pr` skills, and those load beside the plugin's today and can take
@@ -141,10 +146,38 @@ it on once in `/plugin`, under Marketplaces, or update by hand:
 claude plugin update eng@mewanakoon
 ```
 
-A release is a new `version` in `plugins/eng/.claude-plugin/plugin.json`, with
-its entry in [CHANGELOG.md](CHANGELOG.md) and a `vX.Y.Z` tag on the commit that
-brought it to `main`. An install stays on the version it has until that string
-changes.
+A release moves the entries under `## Unreleased` in
+[CHANGELOG.md](CHANGELOG.md) under the new version, bumps `version` in
+`plugins/eng/.claude-plugin/plugin.json`, tags the commit `vX.Y.Z`, and
+fast-forwards `stable` to it. Pull requests leave the version alone. An install
+stays on the version it has until that string changes, so it changes only at a
+release.
+
+### Moving an install to stable
+
+An install added as `MewanAkoon/skills`, with no `#stable`, follows `main`.
+Between releases `main` carries work not yet released under the last release's
+version, so move the install to `stable`. From a shell, with no Claude Code
+session in the middle of a task:
+
+```bash
+claude plugin marketplace remove mewanakoon
+claude plugin marketplace add 'MewanAkoon/skills#stable'
+claude plugin install eng@mewanakoon
+```
+
+The remove comes first because Claude Code refuses to add `mewanakoon` from
+GitHub while your settings still list it at another ref or pointing at a local
+clone. It also uninstalls `eng` and deletes the plugin's saved data, the
+hook's log and review state, which is why no session should be mid-task.
+Your `skillOverrides`, `attribution` and `permissions` entries stay as they
+are, and the install brings `eng` back, enabled at user scope.
+Deleting the `mewanakoon` entry from `extraKnownMarketplaces` in place of the
+remove also lets the add through, but when the old install and `stable` carry
+the same version, `claude plugin update eng@mewanakoon` then keeps the old
+files.
+
+Then start a new session, and run `./scripts/check.sh --doctor` from a clone.
 
 ### Cloud sessions
 
@@ -216,7 +249,10 @@ Add your clone as the marketplace instead of the GitHub one:
 
 Both sources are named `mewanakoon`, so if you added the GitHub one first,
 this repoints it at your clone, and the plugin you installed updates from the
-clone from then on. Claude Code prints how to undo that.
+clone from then on. Claude Code prints how to undo that. Going back to GitHub
+takes the same three commands as
+[Moving an install to stable](#moving-an-install-to-stable), since the add
+from GitHub is refused while your settings list the clone.
 
 A directory marketplace loads the plugin from the folder itself, so an edit
 shows up after `/reload-plugins`. To try the working tree for one session
@@ -332,7 +368,7 @@ every session and inside subagents. They run in Claude Code only.
 |---|---|
 | A comment, review or reply: `gh pr comment`, `gh pr review`, `gh issue comment`, `gh discussion comment`, a close or reopen with `--comment`, an API write to a comment, review or reply endpoint, a GraphQL comment or review mutation, a tracker CLI's comment or approval such as `glab mr note`, a chat webhook post, an MCP tool named for posting, or a code-review run with `--comment` or `--post`. The `linear comment` CLI, and a Linear comment that edits, replies, or sits on anything but an issue, count too | Denied, with a note to write the draft to a file |
 | A `git commit` or push, a PR create, edit, ready, lock or unlock, an issue or label write, a `gh stack` push, sync or submit, `gt submit`, a GitHub MCP tool that writes files or pushes, an issue, ticket or work item write through any tracker's MCP tool, and a comment on a Linear issue through Linear's `save_comment` with only the issue and the body | Denied in a subagent, when `eng:commit`, `eng:pr` or `eng:issue` has not loaded since your latest message, and when your latest message says not to. Otherwise it runs, with no prompt. `gh issue create --web`, which you submit yourself, passes. A Linear comment that mentions someone also asks you to confirm it, and with no state to read it is denied |
-| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, apart from a push with an explicit lease as below, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
+| A PR merge, close, reopen or branch update, a stack merge, unstack or link through `gh stack`, a `gt merge`, a `gh` or `glab` release, a workflow run or rerun, a repo, gist, project, secret, variable, deploy key, SSH or GPG key, codespace or discussion write, a gh alias, which can name any command, a push that forces, deletes or sends tags or push options, apart from a push with an explicit lease as below, `git send-email`, a package or image publish, a deploy through gcloud, firebase, terraform, kubectl, helm, vercel, fly, netlify, wrangler, serverless, aws or a `deploy*.sh` script, `prisma migrate deploy`, and an MCP write whose name or input looks risky, such as one that deletes, trashes, archives, clears, moves, shares, sends, uploads, publishes, merges, runs, deploys, restores, resets, enables or disables something, whose input adds a comment, or assigns, invites or names anyone but you, where a `user://` link counts even when it names you, or whose name touches access, money, releases, secrets, tokens, webhooks or calendars. The hook reads only names and inputs, so it matches patterns: the word lists, `mcp_tool` and `risky_input` in [plugins/eng/hooks/eng-hook](plugins/eng/hooks/eng-hook) hold the exact rules, and [mcp.cases](tests/hooks/pre-tool/mcp.cases) shows each case | You confirm it in a prompt, auto mode included |
 | Any other MCP write, one that only creates or changes something, such as a doc, page or sheet edit through Claude Docs, Notion, Google Drive, Sheets or any other server, apart from an issue, ticket or work item write | The hook stays out. Claude Code's own permission settings decide, so "always allow" on a tool, or a `permissions.allow` rule, stops its prompt, and in auto mode the classifier decides. Deleting text inside a doc through an op, as Claude Docs does, counts as editing it |
 | A code-review Claude starts with `ultra` or `--fix` | Denied. One you type yourself is yours |
 | Handing back changed code that has not been reviewed since it last changed | One reminder to run the review step |
@@ -551,16 +587,15 @@ a fresh runner has no Claude Code install to inspect. The checker also runs
 `./scripts/test-hooks.sh`, which feeds the plugin's hooks their inputs,
 including every command case under `tests/hooks/pre-tool/`, and checks what
 they send, `./scripts/test-cloud-setup.sh`, which runs the cloud setup script
-against scratch homes, and `./scripts/test-checks.sh`, which runs the version
-rule against scratch repos and the validator wrapper against canned output. CI
-also runs the validator on a pinned Claude Code.
+against scratch homes, and `./scripts/test-checks.sh`, which runs the
+validator wrapper against canned output. CI also runs the validator on a
+pinned Claude Code.
 
-A change to anything the plugin loads needs a new `version` in
-`plugins/eng/.claude-plugin/plugin.json`, or the checker fails. Without it,
-nobody who installed from GitHub would receive the change. A change to
-`plugins/eng/evals/` alone needs none, since no session loads an eval. Bump
-past whatever `main` carries when you merge: CI checks `main` again after each
-push, so two pull requests that picked the same version fail there.
+A pull request leaves the `version` in
+`plugins/eng/.claude-plugin/plugin.json` alone and adds its entry under
+`## Unreleased` at the top of [CHANGELOG.md](CHANGELOG.md). Installs follow
+`stable`, so a change reaches them at the next release, as
+[Updating](#updating) says.
 
 ### Evals
 

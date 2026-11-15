@@ -359,7 +359,8 @@ else
   [ -n "$market_name" ] || bad "$market_json: no name"
 
   # Claude Code does not check the format. Semver is this repo's convention,
-  # and the version rule below compares the string, so it has to be one.
+  # and a release's vX.Y.Z tag and CHANGELOG heading are named from it, so it
+  # has to be one.
   printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' \
     || bad "$plugin_json: version '$version' is not MAJOR.MINOR.PATCH"
 
@@ -441,46 +442,6 @@ for f in README.md AGENTS.md .github/workflows/check.yml; do
     [ "$v" = "$cc_min" ] || bad "$f names Claude Code $v, and the minimum in scripts/check.sh is $cc_min"
   done
 done
-
-# A change to what the plugin loads needs a new version. Claude Code keeps an
-# install on the version it has until the string changes, so an edit without a
-# bump never reaches anyone who installed the plugin from GitHub. plugin.json
-# counts too, since it can declare hooks and servers inline, and so does the
-# icon beside it. evals/ is left out: an install copies it, but no session
-# loads it, so an eval edit needs no release. The base is
-# origin/main unless CHECK_BASE names another ref.
-loaded=""
-for part in skills hooks standards agents commands output-styles themes monitors workflows bin .mcp.json .lsp.json .claude-plugin; do
-  loaded="$loaded $plugin/$part"
-done
-base="${CHECK_BASE:-origin/main}"
-if [ -n "$version" ]; then
-  if ! git rev-parse --verify -q "$base^{commit}" >/dev/null 2>&1; then
-    warn "no $base to compare against, so the version rule was not checked"
-  else
-    mb="$(git merge-base HEAD "$base" 2>/dev/null || true)"
-    # Before 0.15.0 the manifest sat at the repo root, so a base from then has
-    # it there. Without that second path the rule would find no manifest at
-    # such a base and skip itself on every branch that moves the plugin.
-    old_json=""
-    for candidate in "$plugin_json" .claude-plugin/plugin.json; do
-      if [ -n "$mb" ] && git cat-file -e "$mb:$candidate" 2>/dev/null; then
-        old_json="$candidate"
-        break
-      fi
-    done
-    # Before the base had a manifest there is no earlier version to compare.
-    if [ -n "$old_json" ]; then
-      old="$(git show "$mb:$old_json" | jq -r '.version // empty')"
-      # shellcheck disable=SC2086
-      if ! git diff --quiet "$mb" -- $loaded ||
-         [ -n "$(git ls-files --others --exclude-standard -- $loaded)" ]; then
-        newer "$version" "$old" \
-          || bad "$plugin_json: what the plugin loads changed since $base, so version $version must be newer than $old"
-      fi
-    fi
-  fi
-fi
 
 # Inside the plugin a skill is reached as plugin:skill, and Claude Code does
 # not resolve every bare name: a bare commit came back unknown with eng:commit
@@ -602,9 +563,8 @@ awk -f "$plugin/hooks/classify-command.awk" < /dev/null > /dev/null || bad "$plu
 ./scripts/test-cloud-setup.sh >/dev/null \
   || bad "scripts/test-cloud-setup.sh failed; see the lines above"
 
-# The version rule above and the finding count in scripts/validate-plugin.sh
-# both fail quietly, by skipping the rule or reading no finding, so their
-# cases run here against scratch repos and a stand-in claude.
+# The finding count in scripts/validate-plugin.sh fails quietly, by reading
+# no finding, so its cases run here against a stand-in claude.
 ./scripts/test-checks.sh >/dev/null \
   || bad "scripts/test-checks.sh failed; see the lines above"
 
@@ -693,7 +653,7 @@ if [ "$doctor" = yes ]; then
 
   # Installed, enabled, and at the version this clone carries. Auto-update is
   # off for a marketplace outside Anthropic's, so a stale version is the
-  # common case after a pull.
+  # common case after a release.
   id="$plugin_name@$market_name"
   if [ -z "$plugin_name" ] || [ -z "$market_name" ]; then
     fix "the manifests above could not be read, so the install cannot be checked"

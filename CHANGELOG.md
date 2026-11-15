@@ -1,10 +1,25 @@
 # Changelog
 
 Each release of the `eng` plugin, newest first. The version is the one in
-`plugins/eng/.claude-plugin/plugin.json`, and a release covers every pull request merged
-while `main` carried it. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
-follow semantic versioning.
+`plugins/eng/.claude-plugin/plugin.json`. A pull request adds its entry under
+`## Unreleased` and leaves the version alone. A release moves those entries
+under a heading for its version with its date, bumps `plugin.json`, tags the
+commit `vX.Y.Z`, and fast-forwards the `stable` branch that installs follow.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the numbers follow semantic versioning.
+
+## Unreleased
+
+### Changed
+
+- A pull request no longer bumps the version. `scripts/check.sh` drops the
+  rule that failed a change to what the plugin loads without a newer
+  `version`, with its cases in `scripts/test-checks.sh` and CI's `CHECK_BASE`
+  and full-history fetch. It still checks that `plugin.json` carries a
+  `MAJOR.MINOR.PATCH` version.
+- Setup installs from `MewanAkoon/skills#stable`, the branch only a release
+  moves, so an install changes only at a release. The README says how to move
+  an install that follows `main`.
 
 ## 0.22.0 - unreleased
 

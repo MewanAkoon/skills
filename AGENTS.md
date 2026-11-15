@@ -6,11 +6,11 @@ For any agent working in this repo.
 
 A source of agent skills, not an application, shipped as one Claude Code
 plugin, `eng`. There is nothing to build. The tests that run are the fixtures
-`check.sh` runs for the hook, for `scripts/cloud-setup.sh`, and for
-`check.sh`'s own version rule and the validator wrapper. `tests/review-loop/`
-holds the setup for a check run by hand, and `plugins/eng/evals/` the cases for
-`claude plugin eval`, also run by hand. Every `SKILL.md` loads into some other
-repo's session, so a change here changes how an agent behaves everywhere.
+`check.sh` runs for the hook, for `scripts/cloud-setup.sh`, and for the
+validator wrapper. `tests/review-loop/` holds the setup for a check run by
+hand, and `plugins/eng/evals/` the cases for `claude plugin eval`, also run by
+hand. Every `SKILL.md` loads into some other repo's session, so a change here
+changes how an agent behaves everywhere.
 
 The repo is the marketplace, and the plugin is one folder in it,
 `plugins/eng/`, so an install copies that folder and nothing else.
@@ -30,7 +30,7 @@ Six scripts, all in bash, and no build step. The commands they carry:
 | `./scripts/check.sh --doctor` | Adds the install checks, which need a machine to inspect. Fails when anything needs fixing. |
 | `./scripts/validate-plugin.sh` | Runs `claude plugin validate` over the root and, with `--strict`, over `plugins/eng`, and fails on any finding, plugin directory warnings included. CI runs it on a pinned Claude Code. |
 | `./scripts/test-hooks.sh` | Feeds `plugins/eng/hooks/eng-hook` its inputs, from `tests/hooks/` and its own cases, and checks what it sends. `check.sh` runs it. |
-| `./scripts/test-checks.sh` | Runs `check.sh`'s version rule in scratch repos and `validate-plugin.sh` against a stand-in `claude` that prints canned output, since both fail quietly when they break. `check.sh` runs it. |
+| `./scripts/test-checks.sh` | Runs `validate-plugin.sh` against a stand-in `claude` that prints canned output, since its finding count fails quietly when it breaks. `check.sh` runs it. |
 | `./scripts/test-cloud-setup.sh` | Runs `cloud-setup.sh` against scratch homes and checks what it writes and what it leaves alone. `check.sh` runs it. |
 | `scripts/cloud-setup.sh` | The setup script for a personal cloud environment, pasted in at claude.ai rather than run here. It writes the attribution and `skillOverrides` settings, and rules that carry them, into the cloud VM's `~/.claude`, and adds the `gh stack` permission rules to its settings, joining any lists already there, and writes nothing unless it runs as root on Linux, the way a cloud VM runs it. `CLOUD_SETUP_HOME` points it at another home on any system, which is how `test-cloud-setup.sh` runs it against scratch ones. |
 
@@ -66,12 +66,12 @@ them. The session hook reads `standards/workflow.md` and `plain-writing` at run
 time and adds nothing of its own, so a file read outside the plugin still reads
 the same. The other hooks enforce the workflow's rules on posting, remote
 writes and review, and in places go further. For example, a subagent never runs
-`git commit` or pushes, a PR merge, release or deploy always asks, even when
-your message asked for it, and under a plan you approved, a push of a tree the
-review loop did not read is denied on the plan's branch, and any push off it
-asks. Where no hook runs, the session reads an approval by the rule in
-`plugins/eng/skills/implement/references/deliver.md`, and nothing checks the
-pushed tree.
+`git commit` or pushes, a PR merge, a `gh release` or a deploy always asks,
+even when your message asked for it, and under a plan you approved, a push of
+a tree the review loop did not read is denied on the plan's branch, and any
+push off it asks. Where no hook runs, the session reads an approval by the
+rule in `plugins/eng/skills/implement/references/deliver.md`, and nothing
+checks the pushed tree.
 
 Other plugins stay out, even when useful on the machine you are sitting at.
 Recommendations of that kind live in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md),
@@ -134,6 +134,24 @@ Dependabot pull requests are the one exception.
   `Fixes`.
 - A Linear issue never names a pull request by number.
 - Story points are 1, 2, 3, 5 or 8.
+
+## Versions and releases
+
+Installs follow the `stable` branch, as the README's Setup says, and Claude
+Code updates an install only when the `version` in
+`plugins/eng/.claude-plugin/plugin.json` changes. So:
+
+- A pull request leaves `version` alone and adds its entry under the
+  `## Unreleased` heading at the top of `CHANGELOG.md`, starting that heading
+  when there is none.
+- A release moves those entries under a heading for the new version with its
+  date, bumps `version` in `plugin.json`, tags the release commit on `main` as
+  `vX.Y.Z`, and fast-forwards `stable` to that commit. `stable` moves no other
+  way, and never by a force push.
+- The merge, the tag and the push to `stable` each wait for the user's own
+  message. The hook does not read a push to `stable` as a release, so that
+  rests on the session, and on a GitHub branch rule for `stable` once the
+  user sets one.
 
 ## Invariants
 
@@ -199,18 +217,6 @@ Dependabot pull requests are the one exception.
 - `README.md`, `AGENTS.md` and `.github/workflows/check.yml` each state the
   oldest Claude Code these skills support, and state the same one as `cc_min`
   in `scripts/check.sh`.
-- When anything the plugin loads changed since the branch left `origin/main`
-  (under `plugins/eng/`: `skills/`, `standards/`, `hooks/` and
-  `.claude-plugin/` today; `agents/`, `commands/`, `output-styles/`, `themes/`,
-  `monitors/`, `workflows/`, `bin/`, `.mcp.json` and `.lsp.json` once they
-  exist), the version is newer than the one at that point, compared field by
-  field. `evals/` is left out, since no session loads it. A base from before
-  0.15.0 carries `plugin.json` at the root, and the rule reads it there.
-  `CHECK_BASE` names another base. A clone without that ref gets a warning
-  instead. CI on a push to `main` sets it to `main` as it was before the push,
-  so two pull requests that bumped to the same version fail once the second
-  lands. Requiring branches to be up to date before merging stops that
-  earlier.
 - No skill takes a name Claude Code uses for a built-in command or bundled
   skill. `commit` and `pr` are the two kept on purpose, because every
   reference writes them `eng:commit` and `eng:pr` and the README's

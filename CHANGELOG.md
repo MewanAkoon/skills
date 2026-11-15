@@ -27,6 +27,14 @@ follow semantic versioning.
   keeps `started` through a resume or compaction, a hash from before 0.23.1
   still counts for any repo with no line of its own, and a repo whose path
   holds a newline is never checked.
+- `eng:pr` no longer skips the push for a branch deleted on the remote. It
+  read "the upstream holds `HEAD`" from the local tracking ref, which outlives
+  the remote branch, so `gh pr create` then failed. It now asks the remote
+  with `git ls-remote --exit-code <remote> refs/heads/<branch>`.
+- `eng:commit` no longer pushes a branch that tracks another branch on
+  another remote, such as `upstream/main` in a fork, to that remote. The
+  upstream's remote is used only when the upstream is a branch of the same
+  name, and otherwise `origin`.
 - CI's shellcheck job passes `GITHUB_TOKEN` to the npm wrapper, which
   sends it when it downloads the shellcheck binary from github.com. Without
   it the download counted against the limit github.com sets per runner

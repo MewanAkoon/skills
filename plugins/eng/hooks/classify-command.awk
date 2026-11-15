@@ -2,10 +2,10 @@
 # remote write it finds, for hooks/eng-hook to decide on:
 #
 #   post <what>            a comment, review or reply; always denied
-#   gate commit|push|pr|issue
-#                          a commit, push, pull request or issue write;
-#                          denied in a subagent, and otherwise left to Claude
-#                          Code's own permission settings
+#   gate commit|push|pr|issue|ci
+#                          a commit, push, pull request, issue write or CI
+#                          rerun; denied in a subagent, and otherwise left to
+#                          Claude Code's own permission settings
 #   confirm <what>         any other write outside this machine; asks, and
 #                          denied in a subagent
 #
@@ -968,7 +968,12 @@ function gh_command(s, i,    g, c, from, comment, at) {
   if (g == "label" && c ~ /^(create|edit|delete|clone)$/) { emit("gate issue"); return }
   if (g == "release" && c ~ /^(create|edit|delete|delete-asset|upload)$/) { emit("confirm gh release " c); return }
   if (g == "workflow" && c ~ /^(run|enable|disable)$/) { emit("confirm gh workflow " c); return }
-  if (g == "run" && c ~ /^(rerun|cancel|delete)$/) { emit("confirm gh run " c); return }
+  # A rerun repeats a run that already ran once, whatever its workflow, a
+  # deploy's included. It is a gate, not a confirm, so a job that a rate limit
+  # or a runner outage failed can be rerun without a question, and Claude
+  # Code's permission settings still decide it.
+  if (g == "run" && c == "rerun") { emit("gate ci"); return }
+  if (g == "run" && c ~ /^(cancel|delete)$/) { emit("confirm gh run " c); return }
   if (g == "repo" && c ~ /^(create|delete|edit|archive|unarchive|rename|fork|sync)$/) { emit("confirm gh repo " c); return }
   if (g == "gist" && c ~ /^(create|new|edit|delete|rename)$/) { emit("confirm gh gist " c); return }
   if (g == "cache" && c == "delete") { emit("confirm gh cache delete"); return }

@@ -198,6 +198,25 @@ follow semantic versioning.
   names the assumption it doubts, and its report quotes a failing check's
   deciding error line. The hand-back leads with the result and leaves out
   empty items.
+- A session asks you only when no default settles a choice. At planning, a
+  question whose recommended answer stays in scope, adds no spend beyond the
+  plan's cap and can be undone is decided and listed under the plan's new
+  Decided section, and so is a checkers' disagreement over your preference
+  when one option is recommended. A question is asked only for spend beyond
+  the cap, a change of scope, an irreversible or outward step the rules keep
+  for you, a change to global config, or a choice with no recommended
+  answer. A plan's Delivery names a spend cap for every paid run, a run
+  inside it needs no question, and the hand-run command in `CONTRIBUTING.md`
+  carries `--max-budget-usd`. A CI job that fails for a reason outside the
+  code gets one `gh run rerun --failed` as a ruling, and a later run's result
+  that makes a PR's body false refreshes it.
+- `gh run rerun` is a gate, like a commit or a push, so the hook leaves it
+  to your permission settings in the main session, and still denies it in a
+  subagent. `gh run cancel` and `delete` still ask.
+- The rule against touching a live install moves from `eng:implement`'s
+  step 3 to `references/tdd.md`, and covers every tool's install: a run
+  that starts another tool's CLI to see what it does sets `HOME` to a
+  scratch folder.
 
 ## 0.22.0 - 2026-11-14, not tagged
 

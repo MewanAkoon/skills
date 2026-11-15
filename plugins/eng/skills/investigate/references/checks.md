@@ -38,9 +38,12 @@ in place and log it, and start no round for it. Fixing a round's own smaller
 points is not a change that needs another read, so the work is final once at
 least two rounds ran and the latest found no blocker.
 
-A disagreement that turns on the user's preference, or a blocker still open
-after round 3, becomes a planning question to the user, one at a time with a
-recommendation. Write the answer in before the next round.
+A disagreement that turns on the user's preference is decided when one
+option is recommended, and listed under the plan's Decided, or in the answer
+or report, as [plan.md](plan.md)'s walk-through says. One with no
+recommended option, or a blocker still open after round 3, becomes a
+planning question to the user, one at a time with a recommendation. Write
+the answer in before the next round.
 
 ## What is presented
 

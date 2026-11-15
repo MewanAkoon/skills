@@ -390,9 +390,9 @@ expect_bash() {
   fi
 }
 
-# The main session leaves a commit, push, pull request or issue write to
-# Claude Code's own permissions, so the command cases, all run in session
-# "all", read what the post guard and the confirmation prompt decide.
+# The main session leaves a commit, push, pull request, issue write or CI
+# rerun to Claude Code's own permissions, so the command cases, all run in
+# session "all", read what the post guard and the confirmation prompt decide.
 
 # Makes a scratch repo at $1 with one commit and, for each remote and branch
 # pair after it, a remote-tracking branch and that remote's HEAD pointing at
@@ -605,7 +605,8 @@ long_post "a quoted string cut up by escapes"
 subagent='{"agent_id": "a1", "agent_type": "general-purpose"}'
 for command in 'gh stack push' 'gh stack sync' 'gh stack submit --auto' 'gh stack merge 42 --yes' \
   'gh stack unstack' 'gh stack link 41 42' 'git commit -m x' 'git push origin x' 'gh pr create --fill' \
-  'gh issue create -t x' 'gh release create v1' 'git push --force origin x' 'gh pr comment 5 -b x'; do
+  'gh issue create -t x' 'gh release create v1' 'git push --force origin x' 'gh pr comment 5 -b x' \
+  'gh run rerun 123 --failed'; do
   bash_call all "$command" "$subagent"
   [ "$(verdict)" = deny ] || { bad "subagent: '$command' got $(verdict), want deny"; continue; }
   jq -r '.hookSpecificOutput.permissionDecisionReason' "$scratch/out" 2>/dev/null | grep -q 'A subagent does not' \

@@ -54,11 +54,11 @@
 #
 # The hook decides deny or ask, and never allow. In the main session a post
 # is denied, a write that is hard to take back asks, and a commit, push, pull
-# request, issue or other MCP write gets no decision, so Claude Code's own
-# permission settings decide it. A push with an explicit lease that names no
-# default branch, as the lease, source or destination, counts as a plain
-# push, with a source read as classify-command.awk says. In a subagent every
-# remote write the hook finds is denied.
+# request, issue, CI rerun or other MCP write gets no decision, so Claude
+# Code's own permission settings decide it. A push with an explicit lease that
+# names no default branch, as the lease, source or destination, counts as a
+# plain push, with a source read as classify-command.awk says. In a subagent
+# every remote write the hook finds is denied.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates. Cursor sets no plugin data folder, so there it lives under
@@ -676,7 +676,7 @@ on_pre_tool() {
 
   # Any write found from a subagent is denied. In the main session a post is
   # denied, a confirm line asks, and a gate line, a commit, push, pull
-  # request, issue or other MCP write, is left to Claude Code's own
+  # request, issue, CI rerun or other MCP write, is left to Claude Code's own
   # permission settings.
   deny="" ask=""
   [ -n "$found" ] && [ -n "$f_agent" ] && deny="$SUBAGENT_REASON"

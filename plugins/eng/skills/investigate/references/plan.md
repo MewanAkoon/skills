@@ -37,8 +37,11 @@ level when it ran, and any conflict with an ADR.
 the passes disagreed, how each disagreement was settled, and each fix a
 checker verified that went in place.
 
-**Open questions.** Each with options and a recommendation. Until each has an
-answer, the plan is a draft.
+**Decided.** Each question the walk-through settled without asking: the
+choice, why, and what it costs if wrong. Approving the plan approves these.
+
+**Open questions.** Only those the walk-through says to ask, each with
+options and a recommendation. Until each has an answer, the plan is a draft.
 
 **Delivery.** What approval lets the run do without asking again: `Branch:
 <feature/, fix/ or chore/><ticket key>-<short name>`, lowercase, or
@@ -53,15 +56,15 @@ values in `eng:issue`'s [estimate.md](../../issue/references/estimate.md) so
 the run asks nothing, and each in a tracker whose tools the session has, as
 `eng:issue`'s [tracker.md](../../issue/references/tracker.md) finds them,
 unless Open questions asks you to connect its server; the checks that must
-pass; and standing rules for what review may find. Delivery names no start
-condition that waits on work outside the session. Merges, releases, tags,
-deploys, pushes to the default branch, and force pushes outside
-`eng:commit`'s Push section never go here. When
-Changes split into two or more dependent layers that each make sense to
-review, or the branch is already in a stack, Delivery names a stack as
-`eng:implement`'s `references/stack.md` says, after the gh-stack check
-there: one branch per layer, bottom first, each with its PR title and its
-tracker line.
+pass; a spend cap in dollars for every paid run, such as a `claude -p` hand
+run or a `claude plugin eval`; and standing rules for what review may find.
+Delivery names no start condition that waits on work outside the session.
+Merges, releases, tags, deploys, pushes to the default branch, and force
+pushes outside `eng:commit`'s Push section never go here. When Changes
+split into two or more dependent layers that each make sense to review, or
+the branch is already in a stack, Delivery names a stack as `eng:implement`'s
+`references/stack.md` says, after the gh-stack check there: one branch per
+layer, bottom first, each with its PR title and its tracker line.
 
 **Progress.** The lists investigate's Done-when lines ask for, such as the
 guidance files read. The run adds each ruling, each pushed commit, the terms
@@ -72,7 +75,12 @@ commit the review loop read, one per layer in a stack.
 
 Before presenting, go through each change as if implementing it: files,
 tests, review, commits, PR. Each decision the code or the repo's patterns
-answer goes in the plan. Ask the rest one at a time, each with a
-recommendation, and write each answer in. For what only the run can know,
-such as what review will find, ask for a standing rule.
+answer goes in the plan. A question whose recommended answer stays in scope,
+adds no spend beyond the plan's cap, and can be undone is decided, not asked,
+and goes under Decided. Ask only for spend beyond the cap, a change of scope,
+an irreversible or outward step the rules keep for the user, a change to
+global config, or a choice with no recommended answer: one at a time, each
+with a recommendation, and write each answer in. For what only the run can
+know, such as what review will find, write a standing rule into Delivery,
+decided or asked by the same test.
 

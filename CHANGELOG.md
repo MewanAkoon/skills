@@ -35,6 +35,10 @@ follow semantic versioning.
   another remote, such as `upstream/main` in a fork, to that remote. The
   upstream's remote is used only when the upstream is a branch of the same
   name, and otherwise `origin`.
+- The intent check's brief carries the same rules as every other check
+  brief: each finding's confidence and whether it blocks, a cap that never
+  cuts the item report, "None" as a result, and the rule that a narrower
+  backing line fails.
 - CI's shellcheck job passes `GITHUB_TOKEN` to the npm wrapper, which
   sends it when it downloads the shellcheck binary from github.com. Without
   it the download counted against the limit github.com sets per runner

@@ -1,6 +1,6 @@
 {
   "name": "eng",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Engineering skills for Claude Code and Cursor: investigate, plan, implement, review, commit and open PRs, with hooks that block posting and confirm writes that are hard to undo.",
   "author": {
     "name": "MewanAkoon",

@@ -13,6 +13,8 @@ follow semantic versioning.
 
 ## Unreleased
 
+## 0.23.0 - 2026-11-15
+
 ### Added
 
 - eng as a Cursor plugin. `plugins/eng/.cursor-plugin/plugin.json` and a

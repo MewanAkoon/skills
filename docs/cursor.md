@@ -9,8 +9,8 @@ otherwise. The Cursor IDE was not tested.
 ## Which way in
 
 - **eng is installed in Claude Code on this machine.** Install nothing in
-  Cursor. Until a release that carries this change is installed, which
-  0.22.0 does not, the import brings the skills and the workflow and guards
+  Cursor. Until 0.23.0 or later is installed, the first release that
+  carries this change, the import brings the skills and the workflow and guards
   nothing, as "What the import brings" says. Cursor imports installed
   Claude Code plugins by default, through Cursor Settings, Agents,
   Third-Party Imports, "Include Third-Party Plugins, Skills, and Other

@@ -13,6 +13,8 @@ follow semantic versioning.
 
 ## Unreleased
 
+## 0.23.1 - 2026-11-16
+
 ### Fixed
 
 - The review reminder at hand-back fires only on changes the session made.

@@ -14,16 +14,17 @@ unloaded and unchecked.
 
 ## Why other plugins stay out
 
-This repo ships one Claude Code plugin, `eng`, and nothing else rides inside
-it. Bundling someone else's plugin would make every install carry components
-nobody here audited, and would tie this one's release to theirs.
+This repo ships one plugin, `eng`, for Claude Code and Cursor, and nothing
+else rides inside it. Bundling someone else's plugin would make every install
+carry components nobody here audited, and would tie this one's release to
+theirs.
 
 A Claude Code plugin and a Cursor plugin are also different artifacts. Claude
 Code installs one under `~/.claude/plugins` and reads its manifest at
 `.claude-plugin/plugin.json`. Cursor installs from its own marketplace under
 `~/.cursor/plugins` and reads `.cursor-plugin/plugin.json`. A vendor can ship
-both manifests from one repo, as `figma` does, and it is still two installs
-with two enabled states.
+both manifests from one repo, as `figma` does, or from one folder, as `eng`
+does, and it is still two installs with two enabled states.
 
 [AGENTS.md](AGENTS.md) under "What belongs here" holds the rule. Install what
 you want in your own tool. What follows is a recommendation, never a

@@ -3,6 +3,10 @@
 #
 #   eng-hook <mode>
 #
+# and hooks/hooks-cursor.json, Cursor's own hooks file, as
+#
+#   eng-hook <mode> cursor
+#
 # with the hook's JSON input on stdin, one mode per event:
 #
 #   session-start  SessionStart. Sends the workflow contract and the
@@ -29,6 +33,25 @@
 #                  main session ran as covering the changes.
 #   stop           Stop. The review reminder.
 #
+# Cursor runs it two ways. Its own hooks file runs session-start on
+# sessionStart, and pre-tool on beforeShellExecution and beforeMCPExecution,
+# with the cursor argument. The hook then turns what the mode printed into
+# Cursor's shape once, at the end: the context as additional_context, and a
+# decision as permission, user_message and agent_message. When the mode made
+# no decision, or the input is not JSON, or jq is missing, it prints {}, so
+# Cursor's failClosed never blocks a command for want of an answer. Cursor
+# also imports an installed Claude Code plugin and may run hooks/hooks.json
+# itself, with Claude's shape, which Cursor honours.
+#
+# Cursor is detected from the cursor argument, cursor_version in the input,
+# or CURSOR_VERSION. Detection only fills what Cursor leaves out, so Claude
+# Code sees no change: Cursor's Shell tool is read as Bash, its MCP:<tool>
+# name as an MCP tool with no server, the command from .command where it is
+# not under tool_input, and an empty cwd from CURSOR_PROJECT_DIR, else the
+# first workspace root. prompt, expansion, post-tool and stop do nothing when
+# the input comes from Cursor, so the review reminder and the setup lines
+# stay Claude Code's.
+#
 # The hook decides deny or ask, and never allow. In the main session a post
 # is denied, a write that is hard to take back asks, and a commit, push, pull
 # request, issue or other MCP write gets no decision, so Claude Code's own
@@ -38,12 +61,14 @@
 # remote write the hook finds is denied.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
-# plugin updates. review-hash holds a hash of the uncommitted changes as they
-# stood when the session started, when a code-review last ran, or when the
-# stop last reminded about them. start-pending marks a session whose first
-# prompt has yet to take that first hash. A session from before 0.16.0 kept
-# its first hash as start-hash, which session start renames to review-hash
-# when it has none.
+# plugin updates. Cursor sets no plugin data folder, so there it lives under
+# ${XDG_STATE_HOME:-$HOME/.local/state}/eng instead, and so does the log.
+# review-hash holds a hash of the uncommitted changes as they stood when the
+# session started, when a code-review last ran, or when the stop last
+# reminded about them. start-pending marks a session whose first prompt has
+# yet to take that first hash. A session from before 0.16.0 kept its first
+# hash as start-hash, which session start renames to review-hash when it has
+# none.
 #
 # Every failure exits 0, so a broken hook never stops a session. Each check
 # fails open and lets the tool run, except two. A read of the remote HEADs
@@ -56,7 +81,8 @@
 # run the command unread. A failure, though not a timeout, is written to
 # eng-hook.log in ${CLAUDE_PLUGIN_DATA}, which check.sh --doctor reads, and
 # cut to its last 1000 lines once it passes 2000. A hook stopped by a signal
-# exits 143 instead. Needs jq. Without it the session block goes out as plain
+# exits 143 instead, and prints nothing, which Cursor's failClosed blocks.
+# Needs jq. Without it the session block goes out as plain
 # text, which Claude Code also takes as context, and every other mode does
 # nothing.
 
@@ -72,9 +98,13 @@ trap 'rm -f "$ts_list"' EXIT
 trap 'exit 143' TERM INT HUP
 
 mode="${1:-}"
+shape="${2:-}"
 root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 input=""
 state=""
+# The folder that holds the sessions' state and the log. Under Cursor, which
+# sets none, the fallback below fills it once the input is read.
+data="${CLAUDE_PLUGIN_DATA:-}"
 
 # The seconds the command parser may take, below the PreToolUse timeout in
 # hooks/hooks.json, which check.sh holds above it. Past this the hook stops
@@ -130,17 +160,17 @@ say so and end the turn."
 
 log() {
   printf 'eng-hook: %s\n' "$1" >&2
-  [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || return 0
-  mkdir -p "$CLAUDE_PLUGIN_DATA" 2>/dev/null || return 0
+  [ -n "$data" ] || return 0
+  mkdir -p "$data" 2>/dev/null || return 0
   printf '%s %s error: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$mode" "$1" \
-    >> "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
+    >> "$data/eng-hook.log" 2>/dev/null
   # Once the log passes 2000 lines it is cut to its last 1000, so a fault that
   # repeats cannot fill the disk. The copy is named for this process, so two
   # hooks cutting at once do not write the same file.
-  if [ "$( (wc -l < "$CLAUDE_PLUGIN_DATA/eng-hook.log") 2>/dev/null || echo 0)" -gt 2000 ]; then
-    tail -n 1000 "$CLAUDE_PLUGIN_DATA/eng-hook.log" > "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" 2>/dev/null &&
-      mv "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$" "$CLAUDE_PLUGIN_DATA/eng-hook.log" 2>/dev/null
-    rm -f "$CLAUDE_PLUGIN_DATA/eng-hook.log.$$"
+  if [ "$( (wc -l < "$data/eng-hook.log") 2>/dev/null || echo 0)" -gt 2000 ]; then
+    tail -n 1000 "$data/eng-hook.log" > "$data/eng-hook.log.$$" 2>/dev/null &&
+      mv "$data/eng-hook.log.$$" "$data/eng-hook.log" 2>/dev/null
+    rm -f "$data/eng-hook.log.$$"
   fi
   return 0
 }
@@ -167,10 +197,10 @@ decision() {
 # there is no data directory or no session id.
 find_state() {
   [ -z "$state" ] || return 0
-  [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || return 1
+  [ -n "$data" ] || return 1
   sid="$(printf '%s' "$f_sid" | tr -c 'A-Za-z0-9_-' '-')"
   [ -n "$sid" ] || return 1
-  state="$CLAUDE_PLUGIN_DATA/sessions/$sid"
+  state="$data/sessions/$sid"
   if ! mkdir -p "$state" 2>/dev/null; then
     log "cannot create $state"
     state=""
@@ -346,7 +376,7 @@ $rules"
     fi
     # The permission check waits for the first prompt, which carries the mode.
     [ "$source" = startup ] && : > "$state/setup-pending"
-    find "$CLAUDE_PLUGIN_DATA/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
+    find "$data/sessions" -mindepth 1 -maxdepth 1 -type d -mtime +30 \
       -exec rm -rf {} + 2>/dev/null
     # The slash follows /tmp where it is a link, as on macOS.
     find "${TMPDIR:-/tmp}/" -maxdepth 1 -type f -name 'eng-hook-*' -mtime +0 \
@@ -616,7 +646,10 @@ on_pre_tool() {
   failed=""
   case "$tool" in
     Bash | Monitor | PowerShell | mcp__terminal__run_in_terminal)
-      command="$(get .tool_input.command)"
+      # Cursor's beforeShellExecution puts the command at the top, and its
+      # beforeMCPExecution sends tool_input as a JSON string, beside a
+      # command that starts the MCP server rather than one the tool runs.
+      command="$(get '(.tool_input | if type == "string" then (fromjson? // {}) else . end | objects | .command) // (select(.hook_event_name != "beforeMCPExecution") | .command)')"
       [ -n "$command" ] || return 0
       # Unlike the other checks, a classifier that fails asks rather than
       # allows, because a command it could not read may post or write. What
@@ -694,27 +727,90 @@ on_stop() {
   context Stop "$REVIEW_REMINDER"
 }
 
+# Prints, in Cursor's shape, the Claude-shaped answer in $1: the context as
+# additional_context, a decision as permission with its reason as both
+# messages, and {} for anything else, nothing included.
+cursor_answer() {
+  if [ -n "$1" ] && command -v jq >/dev/null 2>&1 &&
+    printf '%s' "$1" | jq -ce '.hookSpecificOutput // {} |
+      if .permissionDecision then
+        {permission: .permissionDecision,
+         user_message: (.permissionDecisionReason // ""),
+         agent_message: (.permissionDecisionReason // "")}
+      elif .additionalContext then {additional_context: .additionalContext}
+      else {} end' 2>/dev/null; then
+    return 0
+  fi
+  printf '{}\n'
+}
+
+run_mode() {
+  case "$mode" in
+    session-start) session_start ;;
+    prompt | expansion | pre-tool | post-tool | stop)
+      if ! command -v jq >/dev/null 2>&1; then
+        log "jq not found, so the $mode hook did nothing"
+        return 0
+      fi
+      # The review reminder and the setup check stay Claude Code's, so an
+      # imported UserPromptSubmit or Stop in Cursor does nothing. This reads
+      # the input, not CURSOR_VERSION, which a Claude Code session started
+      # from a Cursor shell can inherit.
+      if [ "$shape" = cursor ] || [ -n "$f_cursor" ]; then
+        [ "$mode" = pre-tool ] || return 0
+      fi
+      case "$mode" in
+        prompt) on_prompt ;;
+        expansion) on_expansion ;;
+        pre-tool) on_pre_tool ;;
+        post-tool) on_post_tool ;;
+        stop) on_stop ;;
+      esac ;;
+    *) log "unknown mode '$mode'" ;;
+  esac
+  return 0
+}
+
 input="$(cat)"
 # The fields most modes read, parsed once.
-f_sid="" f_cwd="" f_agent="" f_tool=""
+f_sid="" f_cwd="" f_agent="" f_tool="" f_event="" f_cursor="" f_server="" f_root=""
 if command -v jq >/dev/null 2>&1; then
   # tostring keeps every value one quoted word, whatever its JSON type.
-  eval "$(printf '%s' "$input" | jq -r '@sh "f_sid=\(.session_id // "" | tostring) f_cwd=\(.cwd // "" | tostring) f_agent=\(.agent_id // "" | tostring) f_tool=\(.tool_name // "" | tostring)"' 2>/dev/null)"
+  eval "$(printf '%s' "$input" | jq -r '@sh "f_sid=\(.session_id // "" | tostring) f_cwd=\(.cwd // "" | tostring) f_agent=\(.agent_id // "" | tostring) f_tool=\(.tool_name // "" | tostring) f_event=\(.hook_event_name // "" | tostring) f_cursor=\(.cursor_version // "" | tostring) f_server=\(.mcp_server_name // "" | tostring) f_root=\(.workspace_roots[0]? // "" | tostring)"' 2>/dev/null)"
 fi
-case "$mode" in
-  session-start) session_start ;;
-  prompt | expansion | pre-tool | post-tool | stop)
-    if ! command -v jq >/dev/null 2>&1; then
-      log "jq not found, so the $mode hook did nothing"
-      exit 0
+
+# Cursor fills less of the input than Claude Code does. Each line below only
+# fills what is missing, so Claude Code's input passes unchanged.
+cursor=""
+[ "$shape" = cursor ] || [ -n "$f_cursor" ] || [ -n "${CURSOR_VERSION:-}" ] && cursor=yes
+if [ -n "$cursor" ]; then
+  # Cursor's own hooks file names the event and no tool: a command, or a
+  # bare MCP tool name beside its server.
+  if [ "$shape" = cursor ]; then
+    case "$f_event" in
+      beforeShellExecution) f_tool=Bash ;;
+      beforeMCPExecution) f_tool="mcp__${f_server}__${f_tool}" ;;
+    esac
+  fi
+  # Through an imported hooks.json, Cursor names its shell tool Shell, and an
+  # MCP tool MCP:<tool>, with no server.
+  case "$f_tool" in
+    Shell) f_tool=Bash ;;
+    MCP:*) f_tool="mcp____${f_tool#MCP:}" ;;
+  esac
+  [ -n "$f_cwd" ] || f_cwd="${CURSOR_PROJECT_DIR:-$f_root}"
+  if [ -z "$data" ]; then
+    if [ -n "${XDG_STATE_HOME:-}" ]; then
+      data="$XDG_STATE_HOME/eng"
+    elif [ -n "${HOME:-}" ]; then
+      data="$HOME/.local/state/eng"
     fi
-    case "$mode" in
-      prompt) on_prompt ;;
-      expansion) on_expansion ;;
-      pre-tool) on_pre_tool ;;
-      post-tool) on_post_tool ;;
-      stop) on_stop ;;
-    esac ;;
-  *) log "unknown mode '$mode'" ;;
-esac
+  fi
+fi
+
+if [ "$shape" = cursor ]; then
+  cursor_answer "$(run_mode)"
+else
+  run_mode
+fi
 exit 0

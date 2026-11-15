@@ -1,0 +1,1 @@
+{"conversation_id":"cursor-shell","generation_id":"g-2","model":"default","command":"gh pr comment 1 --body x","cwd":"","sandbox":false,"tool_use_id":"t-2","session_id":"cursor-shell","hook_event_name":"beforeShellExecution","cursor_version":"2026.11.11-b912975","workspace_roots":["/tmp"],"user_email":"user@example.com","transcript_path":null}

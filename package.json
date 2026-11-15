@@ -1,7 +1,7 @@
 {
   "name": "skills",
   "private": true,
-  "description": "Engineering skills for Claude Code, shipped as the plugin eng",
+  "description": "Engineering skills for Claude Code and Cursor, shipped as the plugin eng",
   "license": "MIT",
   "scripts": {
     "check": "./scripts/check.sh",

@@ -4,16 +4,20 @@ For any agent working in this repo.
 
 ## What this repo is
 
-A source of agent skills, shipped as one Claude Code plugin, `eng`. There is
-nothing to build. Every `SKILL.md` loads into some other repo's session, so a
-change here changes how an agent behaves everywhere.
+A source of agent skills, shipped as one plugin, `eng`, for Claude Code and
+Cursor. There is nothing to build. Every `SKILL.md` loads into some other
+repo's session, so a change here changes how an agent behaves everywhere.
 
 The repo is the marketplace, `mewanakoon`, and the plugin is one folder in it,
 `plugins/eng/`, so an install copies that folder and nothing else.
 `plugins/eng/.claude-plugin/plugin.json` names the plugin and carries its
 version, beside its `icon.png`. `.claude-plugin/marketplace.json` lists the one
-plugin with `"source": "./plugins/eng"`. Inside the plugin each skill is
-`eng:<name>`, and that full name is how skills refer to each other.
+plugin with `"source": "./plugins/eng"`. Cursor reads the twins,
+`plugins/eng/.cursor-plugin/plugin.json` and `.cursor-plugin/marketplace.json`,
+which `check.sh` holds to the same name, version, description and source.
+Inside the plugin each skill is `eng:<name>`, and that full name is how skills
+refer to each other. Cursor lists them by the bare name, and `workflow.md`
+says what that means.
 
 The scripts are bash and need only `jq` and `git`, plus `claude` for the
 validator and `--doctor`. The oldest Claude Code supported is 2.1.293, set as
@@ -45,7 +49,9 @@ A dependency is something a skill needs to work as written, and goes in
 `dependencies.md`. An optional extra pairs well but nothing needs it, and goes
 in [OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md), which nothing loads.
 
-The manifests and `plugins/eng/hooks/` are Claude Code packaging. The session
+The manifests and `plugins/eng/hooks/` are Claude Code and Cursor packaging.
+Cursor runs `hooks/hooks-cursor.json`, and Claude Code `hooks/hooks.json`, and
+both run the one `eng-hook`. The session
 hook sends `workflow.md` and `plain-writing`'s Punctuation and Word choice
 sections, read at run time, and on a new session shows you what the machine
 is missing, from `hooks/setup-check`. What the other hooks decide is in the
@@ -102,13 +108,15 @@ Dependabot pull requests are the one exception.
 ## Versions and releases
 
 Installs follow the `stable` branch, and Claude Code updates an install only
-when `version` in `plugins/eng/.claude-plugin/plugin.json` changes.
+when `version` in `plugins/eng/.claude-plugin/plugin.json` changes. The Cursor
+manifest carries the same `version`, and a release bumps both.
 
 - A pull request leaves `version` alone and adds its entry under
   `## Unreleased` at the top of `CHANGELOG.md`.
 - A release moves those entries under the new version and its date, bumps
-  `version`, tags the commit on `main` as `vX.Y.Z`, and fast-forwards
-  `stable` to it. `stable` moves no other way, and never by a force push.
+  `version` in both manifests, tags the commit on `main` as `vX.Y.Z`, and
+  fast-forwards `stable` to it. `stable` moves no other way, and never by a
+  force push.
 - The merge, the tag and the push to `stable` each wait for the user's own
   message. The hook does not read a push to `stable` as a release.
 
@@ -143,8 +151,9 @@ governs this repo's own files too.
 | `CLAUDE.md` | Claude Code, which imports `AGENTS.md` |
 | `.cursor/rules/*.mdc` | Cursor |
 | `.claude/rules/*.md` | Claude Code |
-| `plugins/eng/skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is not settled. |
-| `plugins/eng/standards/workflow.md` | Claude Code, through the plugin's SessionStart hook, with `plain-writing`'s Punctuation and Word choice sections |
+| `plugins/eng/skills/*/SKILL.md` | Claude Code and Cursor, through the `eng` plugin, which Cursor installs itself or imports from Claude Code. Cursor lists each under its bare name. |
+| `plugins/eng/standards/workflow.md` | Claude Code and Cursor, through the plugin's session start hook, with `plain-writing`'s Punctuation and Word choice sections. Not under Cursor's ACP, which loads no plugin. |
+| `plugins/eng/.cursor-plugin/plugin.json`, `.cursor-plugin/marketplace.json`, `plugins/eng/hooks/hooks-cursor.json` | Cursor |
 | `plugins/eng/standards/dependencies.md` | The plugin's `hooks/setup-check`, at session start and from `--doctor`. No model reads it. |
 
 Anything true for both harnesses belongs here. The two rules files carry one

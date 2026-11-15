@@ -396,6 +396,68 @@ else
   fi
 fi
 
+# The Cursor twins of the manifests above. Cursor installs the same folder
+# from its own manifest and marketplace, so each says what its Claude Code
+# twin says: the release bumps both versions, and a listing reads the same
+# in either tool. The manifest names the skills folder and Cursor's own hooks
+# file, since a missing hooks field makes Cursor read hooks/hooks.json, the
+# Claude Code file.
+cursor_json="$plugin/.cursor-plugin/plugin.json"
+cursor_market=.cursor-plugin/marketplace.json
+cursor_hooks="$plugin/hooks/hooks-cursor.json"
+if ! command -v jq >/dev/null 2>&1; then
+  bad "jq is not installed, so the Cursor manifests cannot be read"
+elif [ ! -f "$cursor_json" ] || [ ! -f "$cursor_market" ]; then
+  bad "$cursor_json and $cursor_market must both exist"
+elif ! jq empty "$cursor_json" 2>/dev/null; then
+  bad "$cursor_json is not valid JSON"
+elif ! jq empty "$cursor_market" 2>/dev/null; then
+  bad "$cursor_market is not valid JSON"
+elif jq empty "$plugin_json" 2>/dev/null && jq empty "$market_json" 2>/dev/null; then
+  for field in name version description; do
+    [ "$(jq -r ".$field // empty" "$cursor_json")" = "$(jq -r ".$field // empty" "$plugin_json")" ] \
+      || bad "$cursor_json: its $field differs from the one in $plugin_json"
+  done
+  [ "$(jq -r '.name // empty' "$cursor_market")" = "$(jq -r '.name // empty' "$market_json")" ] \
+    || bad "$cursor_market: its name differs from the one in $market_json"
+  [ "$(jq '.plugins | length' "$cursor_market")" = 1 ] \
+    || bad "$cursor_market: lists other than exactly one plugin"
+  for field in name source description; do
+    [ "$(jq -r ".plugins[0].$field // empty" "$cursor_market")" = "$(jq -r ".plugins[0].$field // empty" "$market_json")" ] \
+      || bad "$cursor_market: its plugin's $field differs from the one in $market_json"
+  done
+  [ "$(jq -r '.skills // empty' "$cursor_json")" = ./skills/ ] \
+    || bad "$cursor_json: skills is not ./skills/"
+  [ "$(jq -r '.hooks // empty' "$cursor_json")" = ./hooks/hooks-cursor.json ] \
+    || bad "$cursor_json: hooks is not ./hooks/hooks-cursor.json"
+  cursor_logo="$(jq -r '.logo // empty' "$cursor_json")"
+  [ -n "$cursor_logo" ] && [ -f "$plugin/$cursor_logo" ] \
+    || bad "$cursor_json: logo '$cursor_logo' is not a file in $plugin"
+fi
+
+# Cursor's hooks file. The shell and MCP hooks fail closed, so a hook that
+# crashes or runs out of time blocks the call instead of letting it through,
+# and each has the same 3 seconds over the parser limit as the pre-tool hook
+# in hooks.json, for the same reason.
+if ! command -v jq >/dev/null 2>&1 || ! jq empty "$cursor_hooks" 2>/dev/null; then
+  bad "$cursor_hooks cannot be read"
+else
+  for event in beforeShellExecution beforeMCPExecution; do
+    entry="$(jq -c --arg e "$event" '[.hooks[$e][]? | select((.command // "") | test("eng-hook pre-tool cursor"))][0] // empty' "$cursor_hooks")"
+    if [ -z "$entry" ]; then
+      bad "$cursor_hooks: $event does not run eng-hook pre-tool cursor"
+      continue
+    fi
+    [ "$(printf '%s' "$entry" | jq -r '.failClosed')" = true ] \
+      || bad "$cursor_hooks: $event does not set failClosed, so a broken hook lets the call through"
+    timeout="$(printf '%s' "$entry" | jq -r '.timeout // empty')"
+    if [ -z "$parse_seconds" ] || [ -z "$timeout" ] ||
+       ! awk -v t="$timeout" -v p="$parse_seconds" 'BEGIN { exit !(t + 0 >= p + 3) }'; then
+      bad "$cursor_hooks: the $event timeout '$timeout' must be at least 3 s more than the parser limit '$parse_seconds' in $eng_hook"
+    fi
+  done
+fi
+
 # Inside the plugin a skill is reached as plugin:skill, and Claude Code does
 # not resolve every bare name: a bare commit came back unknown with eng:commit
 # installed. So every reference to a skill here, and every command a skill

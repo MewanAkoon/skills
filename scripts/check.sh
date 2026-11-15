@@ -3,12 +3,13 @@
 # Needs bash, jq, and the usual POSIX tools. Run before committing.
 #
 # --doctor adds the checks CI cannot run, because a fresh runner has no
-# Claude Code install to inspect: whether Claude Code is new enough, whether
-# the plugin is installed at user scope at this version, whether bare copies
-# of its skills are still loading beside it, whether the skillOverrides and
-# attribution entries the README asks for are in place, whether its
-# permission rules for gh stack are, whether this clone's own settings turn
-# attribution back on, and whether the plugin's hooks logged errors.
+# Claude Code install to inspect: whether the plugin is installed at user
+# scope at this version, whether bare copies of its skills are still loading
+# beside it, whether the settings the README asks for and the tools in
+# plugins/eng/standards/dependencies.md, Claude Code's version among them, are
+# in place, read by the same hooks/setup-check the session hook runs, whether
+# this clone's own settings turn attribution back on, and whether the
+# plugin's hooks logged errors.
 
 set -uo pipefail
 
@@ -33,8 +34,9 @@ done
 # The oldest Claude Code these skills support, and the one place it is set.
 # 2.1.292 closed a hole that let the model run a user-invoked skill after
 # compaction, and 2.1.293 is the first release every plugin check here ran
-# on, so nothing older is known to work. --doctor compares the install with
-# it, and the docs and CI that state the minimum are held to it below.
+# on, so nothing older is known to work. The plugin's dependency list states
+# it too, for the session hook and --doctor to compare the running Claude Code
+# with, and that list, the docs and CI are held to it below.
 cc_min=2.1.293
 
 # The plugin's own folder. An install copies this and nothing else, and every
@@ -44,19 +46,6 @@ plugin=plugins/eng
 fail=0
 bad() { printf 'FAIL  %s\n' "$1" >&2; fail=1; }
 warn() { printf 'WARN  %s\n' "$1" >&2; }
-
-# Is MAJOR.MINOR.PATCH $1 newer than $2? Field by field, so 0.10.0 counts as
-# newer than 0.9.0.
-newer() {
-  awk -v a="$1" -v b="$2" 'BEGIN {
-    split(a, x, "."); split(b, y, ".")
-    for (i = 1; i <= 3; i++) {
-      if (x[i] + 0 > y[i] + 0) exit 0
-      if (x[i] + 0 < y[i] + 0) exit 1
-    }
-    exit 1
-  }'
-}
 
 # Everything between the opening and closing --- of a markdown file.
 frontmatter() {
@@ -426,12 +415,12 @@ else
   fi
 fi
 
-# Every place the docs and CI state the oldest Claude Code supported carries
-# cc_min. A sentence such as "Claude Code 2.1.293 or later" and a pinned
-# claude-code@2.1.293 both count, and so do phrasings across a line break. A
-# file where none is found fails, because a rewording would otherwise turn
-# the check off without a word.
-for f in README.md AGENTS.md .github/workflows/check.yml; do
+# Every place the docs, CI and the plugin's dependency list state the oldest
+# Claude Code supported carries cc_min. A sentence such as "Claude Code
+# 2.1.293 or later" and a pinned claude-code@2.1.293 both count, and so do
+# phrasings across a line break. A file where none is found fails, because a
+# rewording would otherwise turn the check off without a word.
+for f in README.md AGENTS.md .github/workflows/check.yml "$plugin/standards/dependencies.md"; do
   stated="$(tr '\n' ' ' < "$f" | tr -s ' ' \
     | grep -oE '(Claude Code (is )?(older than )?|claude-code@)[0-9]+\.[0-9]+\.[0-9]+' \
     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | sort -u)"
@@ -550,6 +539,22 @@ for f in scripts/*.sh tests/*/*.sh "$plugin"/evals/*/scaffold.sh; do
   bash -n "$f" || bad "$f: does not parse"
 done
 sh -n "$eng_hook" || bad "$eng_hook: does not parse"
+setup_check="$plugin/hooks/setup-check"
+sh -n "$setup_check" || bad "$setup_check: does not parse"
+[ -x "$setup_check" ] || bad "$setup_check: is not executable, so the hook cannot run it"
+# Each row of the dependency list carries a check setup-check can run and an
+# install command, since a row it cannot read is skipped without a word.
+while IFS= read -r line; do
+  [ -n "$line" ] && bad "$line"
+done <<EOF
+$(CLAUDE_PLUGIN_ROOT="$plugin" "$setup_check" lint)
+EOF
+# The version setup-check compares with is the Check cell's, so that cell,
+# not only the row's prose, carries cc_min. The backticks are the cell's own.
+# shellcheck disable=SC2016
+checked_min="$(sed -nE 's/^\|[^|]*\|[^|]*\| `version ([0-9.]+)` \|.*/\1/p' "$plugin/standards/dependencies.md")"
+[ "$checked_min" = "$cc_min" ] \
+  || bad "$plugin/standards/dependencies.md checks for Claude Code ${checked_min:-(no version row)}, and the minimum in scripts/check.sh is $cc_min"
 awk -f "$plugin/hooks/classify-command.awk" < /dev/null > /dev/null || bad "$plugin/hooks/classify-command.awk: does not load"
 
 # The hooks run at every session start and around every command, and a broken
@@ -662,14 +667,7 @@ if [ "$doctor" = yes ]; then
   elif ! command -v jq >/dev/null 2>&1; then
     fix "jq is not installed, so the plugin list cannot be read"
   else
-    # cc_min, set at the top, is the README's minimum.
-    cc="$(claude --version 2>/dev/null | sed -nE 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)"
-    if [ -z "$cc" ]; then
-      fix "claude --version printed no version, so the $cc_min minimum cannot be checked"
-    elif newer "$cc_min" "$cc"; then
-      fix "Claude Code is $cc, and these skills need $cc_min or later. Run: claude update"
-    fi
-
+    # The Claude Code version is one of the tools setup-check reads below.
     # Listed from / rather than from this clone, so the enabled state is the
     # user-scope one and not what this repo's own project settings say. The
     # README installs at user scope, which is what loads in every project.
@@ -759,42 +757,16 @@ if [ "$doctor" = yes ]; then
     fix "the plugin's hooks logged $(wc -l < "$hook_log" | tr -d ' ') error(s) in $hook_log, the latest: $(tail -1 "$hook_log"). Fix the cause, then delete the log"
   fi
 
-  # The README's settings: the skillOverrides entry, without which a bare
-  # commit or pr, from Claude Code itself or from a project, can take a request
-  # meant for the plugin's, and the attribution entry below.
   settings="$config/settings.json"
-  if [ -f "$settings" ] && ! jq empty "$settings" >/dev/null 2>&1; then
-    fix "$settings is not valid JSON, so Claude Code cannot read it either"
-  else
-    for name in commit pr; do
-      value=""
-      [ -f "$settings" ] && value="$(jq -r --arg n "$name" '.skillOverrides[$n] // empty' "$settings" 2>/dev/null)"
-      [ "$value" = off ] \
-        || fix "$settings does not set skillOverrides.$name to \"off\", so a bare $name can load beside $plugin_name:$name"
-    done
-    # The README's attribution entry. Without it Claude Code tells the model
-    # to add a Co-Authored-By trailer, a PR footer and, from a Remote Control
-    # session, a session link. The skills keep all three out, so this is the
-    # second lock. false hides all three.
-    if ! jq -e '.attribution == false or
-        (.attribution | type == "object" and .commit == "" and .pr == "" and .sessionUrl == false)' \
-        "$settings" >/dev/null 2>&1; then
-      fix "$settings does not turn attribution off, so Claude Code asks for an AI credit line or a session link on commits and PRs. Set attribution to {\"commit\": \"\", \"pr\": \"\", \"sessionUrl\": false}"
-    fi
-    # The README's permission rules for gh stack: the allow rule lets gh stack
-    # run without a prompt, and the two ask rules keep one on a stack merge,
-    # which lands pull requests and cannot be undone, and on an unstack, which
-    # removes the stack on GitHub. Ask rules win over allow rules, whatever
-    # order they sit in. The hook denies a stack's push, sync, submit and link
-    # from a subagent, and leaves them to these rules in the main session.
-    for perm in 'allow Bash(gh stack:*)' 'ask Bash(gh stack merge:*)' 'ask Bash(gh stack unstack:*)'; do
-      perm_list="${perm%% *}"
-      perm_rule="${perm#* }"
-      jq -e --arg l "$perm_list" --arg r "$perm_rule" \
-        '.permissions[$l] | type == "array" and any(.[]; . == $r)' "$settings" >/dev/null 2>&1 \
-        || fix "$settings does not list $perm_rule under permissions.$perm_list. The README's Setup section has the rules"
-    done
-  fi
+  # The README's settings and the tools in standards/dependencies.md, read by
+  # the script the session hook runs, so the two never disagree. Each line it
+  # prints is one thing to fix. Whether a session's permission mode would
+  # stop eng's writes is left to the hook, since only a session knows its mode.
+  while IFS= read -r line; do
+    [ -n "$line" ] && fix "${line#eng: }"
+  done <<EOF
+$(CLAUDE_PLUGIN_ROOT="$plugin" "$plugin/hooks/setup-check" settings tools --project "$repo")
+EOF
 
   # A repo's own settings beat the user's, so this clone's can turn the credit
   # line or the session link back on for work here. Only a setting that does
@@ -819,7 +791,7 @@ if [ "$doctor" = yes ]; then
     printf 'doctor: %d to fix\n' "$problems"
     fail=1
   else
-    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it, the settings it needs, and no hook errors logged\n' "$id" "$version"
+    printf 'doctor: %s %s is installed and enabled, with no bare copies beside it, the settings and tools it needs, and no hook errors logged\n' "$id" "$version"
   fi
 fi
 

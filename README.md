@@ -23,7 +23,10 @@ One other file ships the same way:
 [plugins/eng/standards/workflow.md](plugins/eng/standards/workflow.md), the
 standing workflow every session follows. A SessionStart hook in the plugin
 sends it, with `plain-writing`'s core rules, at the start of every session and
-again after each compaction. Other hooks in the plugin enforce the rules that
+again after each compaction. On a new session the same hook also tells you
+what the machine is missing, as [Setup](#setup) describes.
+[plugins/eng/standards/dependencies.md](plugins/eng/standards/dependencies.md)
+lists the tools it checks. Other hooks in the plugin enforce the rules that
 have to hold, listed under "What the hooks enforce" below. The hooks are Claude
 Code packaging, like the manifests.
 
@@ -114,6 +117,18 @@ Code checks ask rules before allow rules, so the pair holds in either order.
 The plugin's hook still gates a stack's push, sync, submit and link, as it
 does any push or PR, and asks about a merge or an unstack either way.
 
+Nothing else needs a clone. On a new session the plugin's hook shows you one
+line, starting `eng:`, for each of these settings that is missing, and for
+each tool the skills rely on that is not installed, with its install command:
+`gh` and its login, the gh-stack extension and skill, git, jq, and Claude Code
+2.1.293 or later. [plugins/eng/standards/dependencies.md](plugins/eng/standards/dependencies.md)
+is that list. Your first prompt outside plan mode adds a line when the
+permission mode would stop `git commit`, `git push`, `gh pr create`,
+`gh pr edit`, `gh pr ready`, `gh stack` or an issue write through a tracker's
+MCP server for a prompt, naming the allow rules that would let them through.
+Auto mode shows nothing. The hook installs nothing and writes no settings
+file, and with everything in place it shows nothing.
+
 To confirm it worked from a clone of this repo:
 
 ```bash
@@ -123,7 +138,7 @@ To confirm it worked from a clone of this repo:
 A good run ends like this:
 
 ```
-doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it, the settings it needs, and no hook errors logged
+doctor: eng@mewanakoon <version> is installed and enabled, with no bare copies beside it, the settings and tools it needs, and no hook errors logged
 <n> skills, <m> model-invoked
 ok
 ```
@@ -132,7 +147,8 @@ It fails when Claude Code is older than 2.1.293, when the plugin is not
 installed at user scope, is disabled, or is at another version than this clone,
 when an old link or a personal copy of one of these skills is still loading,
 when the `skillOverrides` entry is missing, when `attribution` is not turned
-off, when one of the `gh stack` permission rules is missing, when this clone's
+off, when one of the `gh stack` permission rules is missing, when a tool in
+the dependency list is missing, when this clone's
 own `.claude/settings.json` or `settings.local.json` turns attribution back
 on, or when one of the plugin's hooks has logged an error. It reads no other
 repo's settings.
@@ -338,7 +354,8 @@ approved or named, or a follow-up on your open PR, covers them, handle PR
 feedback on evidence and review the unreviewed commits after each push, post
 nothing, and report briefly.
 The plugin's SessionStart hook sends it at the start of every session and after
-each compaction. It names the skill for each step that has a procedure, so a
+each compaction, and on a new session also shows you, not the model, what the
+machine is missing. It names the skill for each step that has a procedure, so a
 change of phase is the cue to load it:
 
 | Step | Skill |

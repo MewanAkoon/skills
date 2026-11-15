@@ -8,6 +8,13 @@ whole of its involvement. These are notes on what pairs well with
 these skills in each tool, written down so the same ground is not covered
 twice.
 
+What the skills do rely on is a different list.
+[plugins/eng/standards/dependencies.md](plugins/eng/standards/dependencies.md)
+names each tool a skill needs, such as `gh` and the gh-stack extension, and the
+plugin's hook checks them at the start of a new session and recommends any that
+is missing. A dependency is checked and recommended; an extra here stays
+unloaded and unchecked.
+
 ## Why other plugins stay out
 
 This repo ships one Claude Code plugin, `eng`, and nothing else rides inside

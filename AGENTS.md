@@ -36,7 +36,10 @@ Six scripts, all in bash, and no build step. The commands they carry:
 
 None of them needs a package installed beyond `jq` and `git`, which macOS 15
 and the CI runners ship, and `claude` for the validator and `--doctor`. The
-hook needs the same two and `awk`, and `cloud-setup.sh` needs `jq` and `awk`.
+hook needs the same two and `awk`. Its `setup-check` also runs `gh` and
+`claude` where they are present: a missing `gh` is one of the tools it
+reports, and a missing `claude` it skips, reading the version from the
+session instead. `cloud-setup.sh` needs `jq` and `awk`.
 Each script resolves its own path with `readlink -f`, apart from
 `cloud-setup.sh`, which runs from a text box with no repo beside it, and
 `check.sh` takes its file list from `git`.
@@ -53,18 +56,33 @@ moves on its own and disagreed with a local one about `A && B || C`.
 ## What belongs here
 
 The plugin is Claude Code packaging, and Claude Code is the harness this repo
-serves first. Two kinds of file travel, both plain markdown readable by any
-harness, and neither carrying machinery of its own:
+serves first. Three kinds of file travel, all plain markdown readable by any
+harness, and none carrying machinery of its own:
 
 - Skills under `plugins/eng/skills/`, the unit most of the repo is made of.
 - `plugins/eng/standards/workflow.md`, the standing workflow every session
   follows. It names the skill for each step that has a procedure, so every
   skill it names has to exist and be model-invoked.
+- `plugins/eng/standards/dependencies.md`, the one list of the tools outside
+  the plugin that the skills rely on, with what each is needed for and how to
+  install it.
+
+A dependency and an optional extra are kept apart. A dependency is something
+a skill needs to work as written: it goes in `dependencies.md`, the session
+hook checks it, and a missing one is recommended with its install command. An
+optional extra pairs well with the skills but none needs it: it goes in
+[OPTIONAL-EXTRAS.md](OPTIONAL-EXTRAS.md), and nothing loads or checks it.
 
 The manifests and `plugins/eng/hooks/` are the Claude Code packaging around
 them. The session hook reads `standards/workflow.md` and `plain-writing` at run
-time and adds nothing of its own, so a file read outside the plugin still reads
-the same. The other hooks enforce the workflow's rules on posting, remote
+time and adds nothing of its own to the block the model reads, so a file read
+outside the plugin still reads the same. On a new session it also shows you,
+and not the model, one line for each setting the README's Setup section asks
+for and each tool in `dependencies.md` that is missing, and the first prompt
+outside plan mode adds a line when the permission mode and rules would stop
+eng's commits, pushes, PR writes or MCP issue writes for a prompt. All of it
+comes from `plugins/eng/hooks/setup-check`, which `--doctor` runs too, and it
+writes no settings file. The other hooks enforce the workflow's rules on posting, remote
 writes and review, and in places go further. For example, a subagent never runs
 `git commit` or pushes, a PR merge, a `gh release` or a deploy always asks,
 even when your message asked for it, and under a plan you approved, a push of
@@ -198,8 +216,9 @@ Code updates an install only when the `version` in
   characters compaction keeps of a skill.
 - Every `scripts/*.sh`, `tests/*/*.sh`, and `plugins/eng/evals/*/scaffold.sh`
   parses under `bash -n`, because the checker runs few of them.
-  `plugins/eng/hooks/eng-hook` parses under `sh -n`, which names a syntax error
-  plainly, `plugins/eng/hooks/classify-command.awk` loads in `awk`, and the
+  `plugins/eng/hooks/eng-hook` and `plugins/eng/hooks/setup-check` parse under
+  `sh -n`, which names a syntax error plainly, `setup-check` is executable,
+  `plugins/eng/hooks/classify-command.awk` loads in `awk`, and the
   hook's fixtures, `scripts/test-cloud-setup.sh`'s cases and
   `scripts/test-checks.sh`'s cases pass.
 - Both manifests parse. The marketplace lists exactly one plugin, under the
@@ -214,9 +233,13 @@ Code updates an install only when the `version` in
   `plugins/eng/hooks/eng-hook` sets as `PARSE_SECONDS` on a line of its own, so
   the hook stops a slow parser and asks before Claude Code stops the hook and
   runs the command unread.
-- `README.md`, `AGENTS.md` and `.github/workflows/check.yml` each state the
-  oldest Claude Code these skills support, and state the same one as `cc_min`
-  in `scripts/check.sh`.
+- `README.md`, `AGENTS.md`, `.github/workflows/check.yml` and
+  `plugins/eng/standards/dependencies.md` each state the oldest Claude Code
+  these skills support, and state the same one as `cc_min` in
+  `scripts/check.sh`.
+- Every row of the table in `plugins/eng/standards/dependencies.md` has a
+  check `setup-check` can run and an install command, and the table has at
+  least one row, since the hook skips a row it cannot read without a word.
 - No skill takes a name Claude Code uses for a built-in command or bundled
   skill. `commit` and `pr` are the two kept on purpose, because every
   reference writes them `eng:commit` and `eng:pr` and the README's
@@ -240,13 +263,15 @@ the description stops riding every turn and the file stays.
 [WRITING-RULES.md](WRITING-RULES.md) under "Keeping skills" holds it.
 
 `./scripts/check.sh --doctor` adds the checks CI cannot run, because a fresh
-runner has no Claude Code install to inspect: that Claude Code is 2.1.293 or
-later; that `eng@mewanakoon` is installed at user scope, enabled and at this
-clone's version; that no old link or personal copy of one of these skills sits
-in `~/.claude/skills`; that `~/.claude/settings.json` is valid JSON and sets
-`skillOverrides` for `commit` and `pr` to `"off"`, turns `attribution` off,
-allows `Bash(gh stack:*)` and asks for `Bash(gh stack merge:*)` and
-`Bash(gh stack unstack:*)`; and that the plugin's hooks have logged no error under
+runner has no Claude Code install to inspect: that `eng@mewanakoon` is
+installed at user scope, enabled and at this clone's version; that no old link
+or personal copy of one of these skills sits in `~/.claude/skills`; through
+the same `plugins/eng/hooks/setup-check` the session hook runs, that
+`~/.claude/settings.json` is valid JSON and sets `skillOverrides` for `commit`
+and `pr` to `"off"`, turns `attribution` off, allows `Bash(gh stack:*)` and
+asks for `Bash(gh stack merge:*)` and `Bash(gh stack unstack:*)`, and that
+every tool in `plugins/eng/standards/dependencies.md` is in place, Claude Code
+2.1.293 or later among them; and that the plugin's hooks have logged no error under
 `~/.claude/plugins/data/eng-mewanakoon/`; and that this clone's own
 `.claude/settings.json` and `.claude/settings.local.json`, where present, are
 valid JSON and turn no AI credit line or session link back on.
@@ -289,6 +314,7 @@ governs this repo's own files too.
 | `.claude/rules/*.md` | Claude Code |
 | `plugins/eng/skills/*/SKILL.md` | Claude Code, through the `eng` plugin. Cursor only if its import of installed Claude Code plugins brings them, which is unverified. |
 | `plugins/eng/standards/workflow.md` | Claude Code, through the `eng` plugin's SessionStart hook, with `plain-writing`'s Punctuation and Word choice sections |
+| `plugins/eng/standards/dependencies.md` | The `eng` plugin's `hooks/setup-check`, at session start and from `--doctor`. No model reads it. |
 
 Anything true for both harnesses belongs in this file. The two rules
 directories carry one body in each harness's own format. Both fire on

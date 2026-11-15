@@ -1,0 +1,337 @@
+#!/bin/sh
+# Says what this machine is missing for eng to work as written. eng-hook runs
+# it at session start and on the first prompt, and scripts/check.sh --doctor
+# runs it from a clone, so the two read the same tests.
+#
+#   setup-check settings
+#   setup-check tools [--project <dir>]
+#   setup-check permissions --mode <permission mode> [--project <dir>]
+#   setup-check lint
+#
+# Several groups can be named at once, such as "settings tools", and run in
+# that order.
+#
+# settings     The four settings the README's Setup section asks for, in the
+#              user's settings.json, under CLAUDE_CONFIG_DIR when it is set. A
+#              plugin cannot set any of them itself.
+# tools        Each row of standards/dependencies.md, by the kind in its Check
+#              column.
+# permissions  Whether the writes eng makes without asking would stop for a
+#              prompt in the session's permission mode, reading the allow, ask
+#              and deny rules of the user's settings and the project's.
+# lint         Each row of standards/dependencies.md that this script cannot
+#              read, for check.sh.
+#
+# Prints one line per thing missing, starting "eng: ", and nothing when all is
+# in place. It reads files and runs gh and claude where present, writes
+# nothing, and exits 0 unless its arguments are wrong. Needs jq for settings
+# and permissions, and prints nothing for them without it.
+
+set -u
+
+root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+config="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+settings="$config/settings.json"
+list="$root/standards/dependencies.md"
+sep="$(printf '\037')"
+
+groups=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --*) break ;;
+    *) groups="$groups $1"; shift ;;
+  esac
+done
+mode=""
+project=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --mode) mode="${2:-}"; shift 2 || exit 2 ;;
+    --project) project="${2:-}"; shift 2 || exit 2 ;;
+    *) printf 'usage: setup-check settings|tools|permissions|lint [--mode <mode>] [--project <dir>]\n' >&2; exit 2 ;;
+  esac
+done
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Is MAJOR.MINOR.PATCH $1 newer than $2? Field by field, as check.sh compares.
+newer() {
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    split(a, x, "."); split(b, y, ".")
+    for (i = 1; i <= 3; i++) {
+      if (x[i] + 0 > y[i] + 0) exit 0
+      if (x[i] + 0 < y[i] + 0) exit 1
+    }
+    exit 1
+  }'
+}
+
+# Joins its arguments as "a", "a and b", or "a, b and c".
+join() {
+  out=""
+  while [ $# -gt 0 ]; do
+    if [ -z "$out" ]; then out="$1"
+    elif [ $# -eq 1 ]; then out="$out and $1"
+    else out="$out, $1"
+    fi
+    shift
+  done
+  printf '%s' "$out"
+}
+
+# Prints the user's settings as JSON, {} when there is no file. Prints a line
+# saying so and fails when the file cannot be read or is not JSON, since
+# Claude Code then reads none of it either.
+user_settings() {
+  if [ ! -e "$settings" ]; then
+    printf '{}'
+    return 0
+  fi
+  if [ ! -r "$settings" ] || [ -d "$settings" ]; then
+    printf 'eng: %s cannot be read, so the settings eng needs were not checked.\n' "$settings"
+    return 1
+  fi
+  if ! jq empty "$settings" >/dev/null 2>&1; then
+    printf 'eng: %s is not valid JSON, so Claude Code cannot read it either, and the settings eng needs were not checked.\n' "$settings"
+    return 1
+  fi
+  cat "$settings"
+}
+
+check_settings() {
+  have jq || return 0
+  json="$(user_settings)" || { printf '%s\n' "$json"; return 0; }
+  # A bare commit or pr skill, from Claude Code itself or from a project, can
+  # take a request meant for the plugin's.
+  for name in commit pr; do
+    value="$(printf '%s' "$json" | jq -r --arg n "$name" '.skillOverrides[$n] // empty' 2>/dev/null)"
+    [ "$value" = off ] ||
+      printf 'eng: %s does not set skillOverrides.%s to "off", so a bare %s skill can take a request meant for eng:%s. The README'"'"'s Setup section has the entry.\n' "$settings" "$name" "$name" "$name"
+  done
+  # Without it Claude Code tells the model to add a Co-Authored-By trailer, a
+  # PR footer and, from a Remote Control session, a session link. The skills
+  # keep all three out, so this is the second lock. false hides all three.
+  printf '%s' "$json" | jq -e '.attribution == false or
+      (.attribution | type == "object" and .commit == "" and .pr == "" and .sessionUrl == false)' >/dev/null 2>&1 ||
+    printf 'eng: %s does not turn attribution off, so Claude Code asks for an AI credit line or a session link on commits and PRs. Set "attribution": {"commit": "", "pr": "", "sessionUrl": false}.\n' "$settings"
+  # The allow rule lets gh stack run without a prompt, and the two ask rules
+  # keep one on a stack merge, which lands pull requests and cannot be undone,
+  # and on an unstack, which removes the stack on GitHub. Ask rules win over
+  # allow rules, whatever order they sit in.
+  for perm in 'allow Bash(gh stack:*)' 'ask Bash(gh stack merge:*)' 'ask Bash(gh stack unstack:*)'; do
+    perm_list="${perm%% *}"
+    perm_rule="${perm#* }"
+    printf '%s' "$json" | jq -e --arg l "$perm_list" --arg r "$perm_rule" \
+      '.permissions[$l] | type == "array" and any(.[]; . == $r)' >/dev/null 2>&1 ||
+      printf 'eng: %s does not list %s under permissions.%s. The README'"'"'s Setup section has the rules.\n' "$settings" "$perm_rule" "$perm_list"
+  done
+}
+
+# Prints each row of the table in standards/dependencies.md whose Check cell
+# is code, as what, needed for, kind, argument and install,
+# with the backticks taken out, split by the unit separator, which unlike a
+# tab is not whitespace, so an empty cell stays a field.
+rows() {
+  [ -r "$list" ] || return 0
+  awk -F'|' '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    NF >= 6 && trim($4) ~ /^`[^`]+`$/ {
+      what = trim($2); needed = trim($3); check = trim($4); install = trim($5)
+      gsub(/`/, "", what); gsub(/`/, "", needed); gsub(/`/, "", check); gsub(/`/, "", install)
+      kind = check; arg = ""
+      if (index(check, " ")) { kind = substr(check, 1, index(check, " ") - 1); arg = trim(substr(check, index(check, " ") + 1)) }
+      printf "%s\037%s\037%s\037%s\037%s\n", what, needed, kind, arg, install
+    }
+  ' "$list"
+}
+
+# True when the argument suits the kind, which the checks rely on before using
+# it as a name or a path.
+valid_row() {
+  case "$1" in
+    version) printf '%s' "$2" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ;;
+    command) printf '%s' "$2" | grep -Eq '^[A-Za-z0-9._-]+$' ;;
+    gh-login) [ -z "$2" ] ;;
+    gh-extension) printf '%s' "$2" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' ;;
+    skill) printf '%s' "$2" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$' ;;
+    *) return 1 ;;
+  esac
+}
+
+# The Claude Code running this, from AI_AGENT, which Claude Code sets for
+# its hooks as claude-code_2-1-318_harness, else from claude --version.
+# Prints the version and where it came from, or nothing.
+running_version() {
+  v="$(printf '%s' "${AI_AGENT:-}" | sed -nE 's/^claude-code_([0-9]+)-([0-9]+)-([0-9]+)(_.*)?$/\1.\2.\3/p')"
+  if [ -n "$v" ]; then
+    printf '%s%sthis session runs Claude Code %s' "$v" "$sep" "$v"
+    return 0
+  fi
+  have claude || return 0
+  v="$(claude --version 2>/dev/null | sed -nE 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -1)"
+  [ -n "$v" ] && printf '%s%sclaude --version prints %s' "$v" "$sep" "$v"
+}
+
+check_tools() {
+  rows | while IFS="$sep" read -r what needed kind arg install; do
+    valid_row "$kind" "$arg" || continue
+    missing=no
+    case "$kind" in
+      version)
+        found="$(running_version)"
+        [ -n "$found" ] || continue
+        if newer "$arg" "${found%%"$sep"*}"; then
+          printf 'eng: %s, and eng needs %s for %s. Run: %s\n' "${found#*"$sep"}" "$what" "$needed" "$install"
+        fi
+        continue ;;
+      command) have "$arg" || missing=yes ;;
+      gh-login) have gh || continue; gh auth token >/dev/null 2>&1 || missing=yes ;;
+      gh-extension)
+        have gh || continue
+        gh extension list 2>/dev/null | awk -F'\t' -v r="$arg" '$2 == r { f = 1 } END { exit !f }' || missing=yes ;;
+      skill)
+        [ -f "$config/skills/$arg/SKILL.md" ] ||
+          { [ -n "$project" ] && [ -f "$project/.claude/skills/$arg/SKILL.md" ]; } || missing=yes ;;
+    esac
+    [ "$missing" = yes ] && printf 'eng: %s is missing, needed for %s. Install: %s\n' "$what" "$needed" "$install"
+  done
+}
+
+lint_list() {
+  [ -r "$list" ] || { printf '%s cannot be read\n' "$list"; return 0; }
+  found="$(rows)"
+  if [ -z "$found" ]; then
+    printf '%s has no row this script can read\n' "$list"
+    return 0
+  fi
+  while IFS="$sep" read -r what needed kind arg install; do
+    valid_row "$kind" "$arg" || printf '%s: the row for "%s" has a check setup-check cannot run: %s %s\n' "$list" "$what" "$kind" "$arg"
+    [ -n "$install" ] || printf '%s: the row for "%s" gives no install command\n' "$list" "$what"
+  done <<EOF
+$found
+EOF
+  # A table row whose Check cell is not code is skipped by rows(), so it is
+  # named here rather than passed over.
+  awk -F'|' '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    /^\|/ && NF >= 6 && trim($4) != "Check" && trim($4) !~ /^-+$/ && trim($4) !~ /^`[^`]+`$/ {
+      print trim($2)
+    }
+  ' < "$list" | while IFS= read -r what; do
+    printf '%s: the row for "%s" has no check in backticks\n' "$list" "$what"
+  done
+}
+
+# Prints the rules in permissions.$1 of each settings file Claude Code merges
+# for this project, one per line. Managed settings are not read. A rule
+# holding a newline is left out, since splitting it would read as other rules,
+# such as a bare Bash that matches every command.
+rules() {
+  for f in "$settings" "$project/.claude/settings.json" "$project/.claude/settings.local.json"; do
+    [ -n "$project" ] || [ "$f" = "$settings" ] || continue
+    [ -f "$f" ] && [ -r "$f" ] || continue
+    jq -r --arg l "$1" '.permissions[$l] // [] | if type == "array" then .[] | strings | select(test("\n") | not) else empty end' "$f" 2>/dev/null
+  done
+}
+
+# True when the Bash permission rule $1 matches the command $2. A trailing :*
+# or " *" also matches the command with nothing after it, and bare Bash
+# matches every command. The pattern is matched, never run.
+rule_matches() {
+  case "$1" in
+    Bash | 'Bash()' | 'Bash(*)') return 0 ;;
+    'Bash('*')') pat="${1#Bash(}"; pat="${pat%)}" ;;
+    *) return 1 ;;
+  esac
+  case "$pat" in
+    *:\*) pat="${pat%:\*} *" ;;
+  esac
+  case "$pat" in
+    *' *') [ "$2" = "${pat% \*}" ] && return 0 ;;
+  esac
+  # shellcheck disable=SC2254
+  case "$2" in
+    $pat) return 0 ;;
+  esac
+  return 1
+}
+
+# True when some rule in the list $1 matches the command $2.
+any_matches() {
+  printf '%s\n' "$1" | {
+    while IFS= read -r rule; do
+      [ -n "$rule" ] && rule_matches "$rule" "$2" && exit 0
+    done
+    exit 1
+  }
+}
+
+check_permissions() {
+  have jq || return 0
+  case "$mode" in
+    default | acceptEdits) verb="ask each time" ; one="asks each time" ;;
+    dontAsk) verb="are refused"; one="is refused" ;;
+    *) return 0 ;;
+  esac
+  allow="$(rules allow)"
+  blocking="$(rules ask; rules deny)"
+  stopped=""
+  fixes=""
+  overridden=""
+  # Each write eng makes without asking, as its name and a command it runs.
+  for write in 'git commit|git commit -F message' 'git push|git push -u origin feature/x' \
+    'gh pr create|gh pr create --draft' 'gh pr edit|gh pr edit 1 --body-file body' \
+    'gh pr ready|gh pr ready 1' 'gh stack|gh stack push'; do
+    name="${write%%|*}"
+    sample="${write#*|}"
+    if any_matches "$blocking" "$sample"; then
+      stopped="$stopped|$name"
+      overridden="$overridden|$name"
+    elif ! any_matches "$allow" "$sample"; then
+      stopped="$stopped|$name"
+      fixes="$fixes|Bash($name:*)"
+    fi
+  done
+  if [ -n "$stopped" ]; then
+    # The lists are split on | with globbing off, since a rule holds a *.
+    old_ifs="$IFS"; IFS='|'; set -f
+    # shellcheck disable=SC2086
+    set -- ${stopped#|}; names="$(join "$@")"
+    line="eng: in $mode mode, $names $verb. Use auto mode"
+    if [ -n "$fixes" ]; then
+      # shellcheck disable=SC2086
+      set -- ${fixes#|}
+      line="$line, or add $(join "$@") to permissions.allow in $settings"
+    fi
+    line="$line."
+    if [ -n "$overridden" ]; then
+      # shellcheck disable=SC2086
+      set -- ${overridden#|}
+      line="$line An ask or deny rule names $(join "$@"), and stops it whatever the allow rules say."
+    fi
+    IFS="$old_ifs"; set +f
+    printf '%s\n' "$line"
+  fi
+  # A tracker's MCP server is not known here, so any allow rule naming a
+  # server counts as covering the issue writes. An unanchored mcp__* is
+  # skipped by Claude Code, so it does not count.
+  printf '%s\n' "$allow" | grep -Eq '^mcp__[A-Za-z0-9_-]+$|^mcp__[A-Za-z0-9_-]+__' ||
+    printf 'eng: in %s mode, an issue write through a tracker'"'"'s MCP server %s. Use auto mode, or add mcp__<server> to permissions.allow in %s.\n' "$mode" "$one" "$settings"
+}
+
+[ -n "$groups" ] || { printf 'usage: setup-check settings|tools|permissions|lint [--mode <mode>] [--project <dir>]\n' >&2; exit 2; }
+for group in $groups; do
+  case "$group" in
+    settings | tools | permissions | lint) ;;
+    *) printf 'usage: setup-check settings|tools|permissions|lint [--mode <mode>] [--project <dir>]\n' >&2; exit 2 ;;
+  esac
+done
+for group in $groups; do
+  case "$group" in
+    settings) check_settings ;;
+    tools) check_tools ;;
+    permissions) check_permissions ;;
+    lint) lint_list ;;
+  esac
+done
+exit 0

@@ -26,11 +26,11 @@
 #
 # The hook decides deny or ask, and never allow. In the main session a post
 # is denied, a write that is hard to take back asks, and a commit, push, pull
-# request or issue write gets no decision, so Claude Code's own permission
-# settings decide it. A push with an explicit lease that names no default
-# branch, as the lease, source or destination, counts as a plain push, with
-# a source read as classify-command.awk says. In a subagent every remote
-# write the hook finds is denied.
+# request, issue or other MCP write gets no decision, so Claude Code's own
+# permission settings decide it. A push with an explicit lease that names no
+# default branch, as the lease, source or destination, counts as a plain
+# push, with a source read as classify-command.awk says. In a subagent every
+# remote write the hook finds is denied.
 #
 # State lives in ${CLAUDE_PLUGIN_DATA}/sessions/<session>/, which survives
 # plugin updates. review-hash holds a hash of the uncommitted changes as they
@@ -91,7 +91,7 @@ a draft file, and hand the work back to the main session."
 # The words in an MCP tool's name that say what it does. The first of them in
 # the name decides whether it reads: a name that reads passes, unless "and" or
 # "or" joins it to a write or a post. EDITS and RISKY only mark a write, for
-# that check and for the one that makes a tracker's write an issue write.
+# that check and for the one that denies a subagent's MCP write.
 READS="read get list search fetch view retrieve query find lookup download \
 describe count inspect show summarize analyze"
 POSTS="comment comments reply review reviews reaction reactions approve"
@@ -108,7 +108,7 @@ WRITES="$EDITS $RISKY"
 # The words that make a write's name ask, because the write is hard to take
 # back or reaches other people. A GitHub or git write that mcp_tool maps is
 # decided there, before these words, so a GitHub delete_issue is an issue
-# write. Another tracker's delete_issue is an issue write that also asks.
+# write. Another tracker's delete_issue is a write that also asks.
 ASKS="delete merge release releases deploy send publish"
 
 REVIEW_REMINDER="There are uncommitted changes that have not been reviewed since \
@@ -458,18 +458,32 @@ mcp_tool() {
         esac
       done ;;
   esac
-  # Any tracker's issue, ticket or work item write is the same write as gh
-  # issue's, so a subagent's is denied, whatever the server is called. The
-  # verbs listed here are on none of the word lists: gh issue's lock, unlock,
-  # pin, unpin, transfer and develop, and the link, unlink, change, resolve and
-  # retire of other trackers' tools. It falls through, so a delete still asks
-  # in the main session.
+  # Any other MCP write leaves this machine, so a subagent's is denied,
+  # whatever the server is called and whatever it writes: a tracker's task,
+  # item, card or entity, a doc, a page or a sheet. Change is on none of the
+  # word lists, and Monday's change_item_column_values writes. Servers that
+  # run on this machine, a browser driver, a code editor, a memory store and
+  # the file system, are left out by their usual names. It falls through, so
+  # a delete still asks in the main session.
+  case "$first:$words" in
+    ?*:* | :*" change "*)
+      case "$server" in
+        *[Pp]laywright* | *[Pp]uppeteer* | *[Ss]erena* | memory | *-memory | filesystem | \
+          *-filesystem | sequential-thinking) ;;
+        *) printf 'gate write\n' ;;
+      esac ;;
+  esac
+  # An issue, ticket or work item write is one on any server, local names
+  # included. The verbs listed here are on none of the word lists: gh issue's
+  # lock, unlock, pin, unpin, transfer and develop, and the link, unlink,
+  # resolve and retire of other trackers' tools. Elsewhere they can read, as
+  # resolve-library-id does.
   case "$words" in
     *" issue "* | *" issues "* | *" ticket "* | *" tickets "* | *" work item "* | *" work items "*)
       case "$first:$words" in
-        ?*:* | :*" link "* | :*" unlink "* | :*" change "* | :*" resolve "* | :*" lock "* | :*" unlock "* | \
+        ?*:* | :*" link "* | :*" unlink "* | :*" resolve "* | :*" lock "* | :*" unlock "* | \
           :*" pin "* | :*" unpin "* | :*" transfer "* | :*" develop "* | :*" retire "*)
-          printf 'gate issue\n' ;;
+          printf 'gate write\n' ;;
       esac ;;
   esac
   for v in $ASKS; do
@@ -562,8 +576,9 @@ on_pre_tool() {
   [ -n "$found" ] || [ -n "$failed" ] || return 0
 
   # Any write found from a subagent is denied. In the main session a post is
-  # denied, a confirm line asks, and a gate line, a commit, push, pull request
-  # or issue write, is left to Claude Code's own permission settings.
+  # denied, a confirm line asks, and a gate line, a commit, push, pull
+  # request, issue or other MCP write, is left to Claude Code's own
+  # permission settings.
   deny="" ask=""
   [ -n "$found" ] && [ -n "$f_agent" ] && deny="$SUBAGENT_REASON"
   while IFS= read -r line; do

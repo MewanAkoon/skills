@@ -392,10 +392,9 @@ awk 'BEGIN { printf "printf \""; for (i = 0; i < 200000; i++) printf "ab\\\"c"; 
 long_post "a quoted string cut up by escapes"
 
 # Every remote write the hook finds from a subagent is denied, with the one
-# reason: a shell command's, a post through any MCP tool, an MCP write whose
-# name asks, the GitHub and git MCP writes it maps, and any tracker's issue,
-# ticket or work item writes. Its reads still pass. mcp.cases holds more
-# subagent cases for MCP tools.
+# reason: a shell command's, a post through any MCP tool, and any other MCP
+# write whose name shows it, apart from servers that run on this machine. Its
+# reads still pass. mcp.cases holds more subagent cases for MCP tools.
 subagent='{"agent_id": "a1", "agent_type": "general-purpose"}'
 for command in 'gh stack push' 'gh stack sync' 'gh stack submit --auto' 'gh stack merge 42 --yes' \
   'gh stack unstack' 'gh stack link 41 42' 'git commit -m x' 'git push origin x' 'gh pr create --fill' \

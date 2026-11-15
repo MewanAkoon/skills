@@ -18,6 +18,12 @@ Read everything the request points to, in full: a PR with its review
 threads, a whole Slack thread, a ticket, handoff or plan file, and the whole
 of an error or log, not the line quoted in the request.
 
+Read a ticket key or link with its tracker's MCP tools, found as `eng:issue`'s
+[tracker.md](../issue/references/tracker.md) says, or `gh` for GitHub. When
+the session has none for that tracker, say which tracker's MCP server to
+connect, and read nothing in its place: no guess at the ticket from its key,
+a branch name or a search.
+
 **Done when:** every source the request names is read, or listed with the
 reason it could not be.
 

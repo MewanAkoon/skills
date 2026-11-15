@@ -1,8 +1,8 @@
 # Estimate and priority
 
 Every new issue's body ends with this section, and the tracker's own fields
-carry the same values where they exist. Each tracker's file maps them:
-[linear.md](linear.md), [jira.md](jira.md), [github.md](github.md).
+carry the same values where they exist. [mcp.md](mcp.md) maps them for a
+tracker's MCP tools, and [github.md](github.md) for GitHub.
 
 ## The section
 
@@ -48,16 +48,16 @@ Each source measures one thing:
   merge measures the PR and review plus merge phases. Drop spans under 15
   minutes and over 8 hours, and take the median. Merge is the 10 minutes it
   takes the user, and PR and review is the rest of the median.
-- Without GitHub pull requests, a closed Linear issue's span stands in:
-  `list_issues` with the team, `state: "completed"`, and `fields` set to
-  `createdAt`, `startedAt`, `completedAt` and `estimate`. From `startedAt`
-  to `completedAt` measures everything after plan, or the whole total when
-  `startedAt` equals `createdAt`. A Jira span counts only from its In
-  Progress transition, when the tools return it.
+- Without GitHub pull requests, a closed issue's span in the tracker in use
+  stands in: its search or list tool on the team or project, filtered to
+  completed, asking for the created, started and completed dates and the
+  estimate where it returns them. From started to completed measures
+  everything after plan, or the whole total when started is missing or
+  equals created. A tracker that records the start only as a move to an in
+  progress state counts from that move, when its tools return it.
 - Points, whatever the time source: closed issues in the same tracker that
-  carry an estimate, from that `list_issues` call in Linear or a search of
-  resolved issues with the story points field in Jira. Match the points of
-  ones of similar size.
+  carry an estimate, from that same search. Match the points of ones of
+  similar size.
 
 As a fallback, one pull request across a handful of files takes about 2 hours
 of session work from plan through test, and 1 to 2 hours from open to merge.

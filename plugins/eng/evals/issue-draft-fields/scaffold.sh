@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# A repo tracked in Jira, with no Jira tools in the session, so the draft
-# takes the copy-paste path and every field lands in a file.
+# A repo tracked in Jira, with no Jira tools in the session. The prompt says
+# the server cannot be connected, so the draft takes the copy-paste path and
+# every field lands in a file.
 set -euo pipefail
 git init -q
 git config user.name eval

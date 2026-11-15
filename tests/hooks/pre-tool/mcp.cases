@@ -2,9 +2,9 @@
 # "[subagent] <deny|ask|allow> <tool name> [<tool input as JSON>]" per line,
 # the input {} when left out. A case runs in the main session, as
 # commands.cases does, unless it starts with "subagent", which runs it with an
-# agent_id. The names cover every form seen on this machine and the trackers the
-# plan names. "allow" means the hook stays out, and Claude Code's own
-# permission settings decide.
+# agent_id. The names cover every form seen on this machine and the trackers
+# whose tools the plans checked. "allow" means the hook stays out, and Claude
+# Code's own permission settings decide.
 #
 # Posting: comment, reply, review, reaction, send_message, post_message,
 # schedule_message.
@@ -168,17 +168,51 @@ subagent deny mcp__x__transfer_issue
 subagent deny mcp__x__develop_issue
 subagent deny mcp__0a1b2c3d__issue_write
 subagent deny mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__delete_issue {"id":"SKI-1"}
-# A subagent's reads pass, and so do its plain writes that name no issue,
-# ticket or work item, unless the name asks, posts, or is a GitHub or git
-# write the hook maps.
+# A subagent's reads pass, and so does a name with no action word, such as
+# issue_refund, or a write the name hides, such as Plane's workitem.
 subagent allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__get_issue {"id":"SKI-1"}
 subagent allow mcp__1d477a67-502d-4fdf-bd14-122050c3d81e__list_issues {"team":"SKI"}
 subagent allow mcp__zendesk__get_ticket
 subagent allow mcp__azure__wit_get_work_item
 subagent allow mcp__x__issue_refund
-subagent allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages
-subagent allow mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch
+subagent allow mcp__plane__workitem
+subagent allow mcp__context7__resolve-library-id
+subagent allow mcp__c64407bc-b8f7-494b-bb48-1cb85ff2b0d5__resolve-shortlink
+# The Claude app's own servers are left out before any of this.
+subagent allow mcp__ccd_session__start_session
+subagent allow mcp__visualize__show_widget
+subagent allow mcp__Claude_Browser__form_input
+# Every other MCP write from a subagent is denied, whatever the server is
+# called and whatever its items are: a tracker's tasks, items, cards, stories
+# or entities, a doc, a page or a sheet.
+subagent deny mcp__fibery__createEntity
+subagent deny mcp__fibery__create_entity
+subagent deny mcp__fibery__update_entity
+subagent deny mcp__asana__create_tasks
+subagent deny mcp__0f1e2d3c__create_tasks
+subagent deny mcp__monday__create_item
+subagent deny mcp__monday__change_item_column_values
+subagent deny mcp__trello__create_card
+subagent deny mcp__shortcut__create_story
+subagent deny mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages
+subagent deny mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c__batch
+subagent deny mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_values
+# The name cannot say whether a query only reads, so one run through execute
+# or run is denied too, and a verb kept for issues passes elsewhere.
+subagent deny mcp__supabase__execute_sql
+subagent allow mcp__x__link_preview
+subagent allow mcp__x__lock_status
+# Well-known servers that run on this machine are left out of that deny: a
+# browser driver, a code editor, a memory store and the file system. A
+# delete there still asks in the main session, so a subagent's is denied.
 subagent allow mcp__filesystem__write_file
+subagent allow mcp__playwright__browser_close
+subagent allow mcp__plugin_playwright_playwright__browser_file_upload
+subagent allow mcp__serena__insert_after_symbol
+subagent allow mcp__memory__create_entities
+subagent allow mcp__sequential-thinking__sequentialthinking
+subagent deny mcp__memory__delete_entities
+subagent deny mcp__team-memory__create_issue
 # A comment on a Linear issue is a post like any other, whatever the server is
 # called or the input holds.
 deny mcp__linear__save_comment {"issueId":"SKI-1","body":"Done in the PR."}
@@ -204,8 +238,15 @@ deny mcp__my_linear__save_comment {"issueId":"SKI-1","body":"x"}
 deny mcp__claude_ai_Linear__save_comment {"issueId":"SKI-1","body":"x"}
 deny mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-comment {"issueId":"SKI-1","body":"x"}
 deny mcp__github__add_issue_comment {"issueId":"1","body":"x"}
-# A write that only creates or changes something passes.
+# In the main session a write that only creates or changes something passes,
+# a tracker's included.
 allow mcp__fibery__createEntity
+allow mcp__asana__create_tasks
+allow mcp__monday__create_item
+allow mcp__monday__change_item_column_values
+allow mcp__trello__create_card
+allow mcp__shortcut__create_story
+allow mcp__playwright__browser_close
 allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-update-page
 allow mcp__5c236953-16e0-40fd-98e4-3923bdf825ae__notion-create-pages
 allow mcp__4e1ee1f7-cc14-4b33-88f0-e5988615f8be__update_values

@@ -772,11 +772,11 @@ edit
 hook_run pre-tool "$(jq -cn --arg d "$repo" '{session_id: "gate", cwd: $d, tool_name: "Skill", tool_input: {skill: "code-review", args: "medium a..b"}}')"
 stop gate
 reminded || bad "review gate: a review that was only asked for silenced it"
-# A review a subagent runs is not the main session's.
+# A review a subagent runs counts too, since a fix round's review runs in one.
 edit
 review_post "medium" '{"agent_id": "a1"}'
 stop gate
-reminded || bad "review gate: a subagent's review silenced it"
+[ ! -s "$scratch/out" ] || bad "review gate: a subagent's review did not silence it"
 # Any review that runs counts, whatever it was pointed at.
 for args in "medium" "medium 123" "medium HEAD~0..HEAD" "medium HEAD.." "medium main..." \
   "high https://github.com/o/r/pull/12" "medium feature/x" "medium #12" "m*m" "medium --max-findings 5" ""; do

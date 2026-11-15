@@ -10,12 +10,26 @@ line; each bug fix's test seen failing on the old code, extracted with
 `mkdir "$R/old" && git -C "$(git rev-parse --show-toplevel)" archive <parent> | tar -x -C "$R/old"`;
 and each changed sentence of prose backed by a `file:line`. It compares the
 diff with the approved plan and runs no probe beyond that old-code test. It
-edits, commits, and posts nothing, starts no subagents, writes only under
-`R`, and reports findings only, about 3,000 characters at most.
+edits, commits, and posts nothing, starts no subagents, does not call the
+advisor, writes only under `R`, and reports findings only, about 3,000
+characters at most.
 
 When the brief carries the checklist in [security.md](security.md), it also
 reports each security finding with its input, the path it takes, and the
 `file:line`, or says it found none.
+
+## The fix-round review
+
+From round 2 on, `review.md` reviews the fix diff in a general-purpose
+subagent on Sonnet at medium effort, whose description starts with
+`code-review medium`, so the Stop hook waits for it when it runs in the
+background. Its brief, with the hashes written out: call the Skill tool
+with `code-review` and `medium <parent>..<snapshot>`, follow it on that
+range alone, not the uncommitted tree, which earlier rounds read, and reply
+with each finding's `file:line`, its point and its failure scenario, or
+"none". It edits, commits, and posts nothing, starts no subagents, and does
+not call the advisor. When it cannot call the Skill tool, the main session
+runs the same review itself, on that range alone, and the report says so.
 
 ## Without code-review
 

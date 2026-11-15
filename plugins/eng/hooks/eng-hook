@@ -30,7 +30,8 @@
 #                  write it finds from a subagent, and the guard on a
 #                  code-review the model calls.
 #   post-tool      PostToolUse on the Skill tool. Records a code-review the
-#                  main session ran as covering the changes.
+#                  main session or one of its subagents ran as covering the
+#                  changes.
 #   stop           Stop. The review reminder.
 #
 # Cursor runs it two ways. Its own hooks file runs session-start on
@@ -700,8 +701,8 @@ EOF
 
 on_post_tool() {
   [ "$f_tool" = Skill ] || return 0
-  # A review a subagent runs leaves the main session's reminder as it was.
-  [ -z "$f_agent" ] || return 0
+  # A review a subagent runs counts as well, since the review loop runs each
+  # fix round's review in one, under the main session's id.
   name="$(skill_name "$(get .tool_input.skill)")"
   # A review that ran, as opposed to one that was asked for and refused.
   case "${name##*:}" in code-review | review) record_review ;; esac

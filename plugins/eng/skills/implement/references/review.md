@@ -22,18 +22,17 @@ git commit-tree "$tree" -p <parent> -m review | tee -a "$R/snapshots"
 
 ## 2. Check and review
 
-Run the repo's lint, typecheck, and tests in report-only modes. Call the Skill
-tool with `code-review` and `high <parent>..<snapshot>`, or `medium` after
-round 1, hashes written out. In round 1, brief the intent check in
-[intent-check.md](intent-check.md) at the same time. When a later round finds
-nothing to fix, brief it once more on that snapshot, with step 1's commit as
-`<parent>`, before the report. `code-review` and the intent check are the
-independent passes the loop needs, so add no third; without `code-review`,
-see [intent-check.md](intent-check.md). When
-the diff touches a trust boundary, as [security.md](security.md) says, each
-brief carries its checklist. When
-`code-review` runs in the background and the turn must end first, say so, and
-carry on from section 3 when it reports.
+Run the repo's lint, typecheck, and tests in report-only modes. In round 1,
+call the Skill tool with `code-review` and `high <parent>..<snapshot>`,
+hashes written out, and brief the intent check beside it. Each later round
+reviews its fix diff at `medium` in a subagent. When a later round finds
+nothing to fix, brief the intent check once more on that snapshot, with step
+1's commit as `<parent>`, before the report. [intent-check.md](intent-check.md)
+holds both briefs, and what to do without `code-review`. The two are the
+independent passes the loop needs, so add no third. When the diff touches a
+trust boundary, as [security.md](security.md) says, each brief carries its
+checklist. When a review runs in the background and the turn must end first,
+say so, and carry on from section 3 when it reports.
 
 ## 3. Triage
 

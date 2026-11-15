@@ -93,8 +93,9 @@ is why it waits for the commit.
    `git remote set-head origin -a`.
 2. Brief a general-purpose subagent to call the Skill tool with
    `security-review` and no arguments, and to reply with its report alone,
-   editing, committing and posting nothing. It runs in a subagent because
-   its prompt ends with a report-only reply, which would end the run's turn.
+   editing, committing and posting nothing, and not calling the advisor. It
+   runs in a subagent because its prompt ends with a report-only reply,
+   which would end the run's turn.
 3. Each finding goes in the review loop's ledger as round `S`, through
    `review.md` sections 3 and 4. A finding on a layer this run built is fixed
    on that layer, as [stack.md](stack.md) says, and one in lines another run

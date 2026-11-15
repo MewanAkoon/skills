@@ -215,8 +215,22 @@ follow semantic versioning.
   subagent. `gh run cancel` and `delete` still ask.
 - The rule against touching a live install moves from `eng:implement`'s
   step 3 to `references/tdd.md`, and covers every tool's install: a run
-  that starts another tool's CLI to see what it does sets `HOME` to a
-  scratch folder.
+  that starts a tool other than Claude Code to see what it does sets `HOME`
+  to a scratch folder.
+- Checks cost less and still take two passes. The review loop runs round 1
+  as `/code-review high` in the main session, as before, and each later
+  review of a fix diff as `/code-review medium` in a Sonnet subagent at
+  medium effort, so the large main context no longer pays for it; the level
+  is unchanged, only where it runs. The post-PR review follows the same
+  split. The hook records a review a subagent runs as covering the changes,
+  so it silences the reminder as the main session's does. The main session
+  calls the advisor at most twice, after the plan's last check round and
+  before the first `gh pr ready`, and every subagent brief says not to call
+  it; a point it raises after the last round is applied in place and
+  logged. `models.md` names the model for the review and security-review
+  subagents, and a checker's probe that needs a commit makes it in a
+  scratch repo with `git commit-tree`, since the hook denies a subagent's
+  `git commit`.
 
 ## 0.22.0 - 2026-11-14, not tagged
 

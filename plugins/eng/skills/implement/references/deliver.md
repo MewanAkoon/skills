@@ -151,14 +151,16 @@ and 5 for each layer in turn, then 3 and 6 to 9 for the stack.
 7. Open the PR through `eng:pr`, always as a draft. A plan whose Delivery
    lists no PR skips this step.
 8. After each push, the post-PR review: none is due while HEAD is the
-   `Reviewed:` commit. Otherwise run `/code-review high <Reviewed sha>..HEAD`,
-   or from the merge base when no local loop ran, judge the findings as
-   `eng:pr-feedback` does, fix the valid ones through the review loop, then
-   steps 4 to 6 again, and move `Reviewed:` to the new head. Then, whether or
-   not a review was due, when the new commits, or a later run's result such
-   as an eval or a hand run, made the PR's title or body false, update them
-   through `eng:pr`'s [update.md](../../pr/references/update.md), with no
-   question.
+   `Reviewed:` commit. Otherwise review `<Reviewed sha>..HEAD`, or from the
+   merge base when no local loop ran: `/code-review high` when the range
+   holds new work, or the fix-round review in a subagent, as
+   [review.md](review.md) runs it, when it holds only fixes to findings. Judge
+   the findings as `eng:pr-feedback` does, fix the valid ones through the
+   review loop, then steps 4 to 6 again, and move `Reviewed:` to the new
+   head. Then, whether or not a review was due, when the new commits, or a
+   later run's result such as an eval or a hand run, made the PR's title or
+   body false, update them through `eng:pr`'s
+   [update.md](../../pr/references/update.md), with no question.
 9. Mark the PR ready as the next section says. Without a PR, steps 8 and 9
    end at the push.
 

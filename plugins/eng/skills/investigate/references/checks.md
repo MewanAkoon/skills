@@ -55,8 +55,12 @@ Nothing is presented while they disagree.
 
 - Read and run, never write. Use `git log`, `git show`, `git blame`, `gh`
   and `gh api` reads, search, and the repo's checks in their report-only
-  modes. Edit no file, commit nothing, post nothing, start no subagents. A
-  probe writes only under the scratch directory.
+  modes. Edit no file, commit nothing, post nothing, start no subagents, and
+  do not call the advisor. A probe writes only under the scratch directory,
+  and one that needs a commit makes it in a scratch repo there, never in the
+  repo under review, with `git -C <scratch repo> commit-tree` and
+  `git -C <scratch repo> update-ref`, since the hook denies a subagent's
+  `git commit`.
 - Report findings only, about 3,000 characters at most. Every finding gives a
   `file:line` or the command run, what is wrong in one sentence, a
   confidence of high, medium, or low, and whether it blocks. Twelve at most,

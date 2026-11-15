@@ -123,7 +123,7 @@ failed; with none, retry once without `--assignee` and say so.
 
 Read back `gh pr view --json state,title,url` and print the URL. Then
 finish as deliver.md's steps 8 and 9 say, a plain request to open a PR
-included: the post-PR review, `/code-review high <from>..HEAD`, where
+included: the post-PR review of `<from>..HEAD`, where
 `<from>` is the `Reviewed:` commit, else
 `git merge-base <base remote>/<base> HEAD`, or
 `git merge-base <base> <layer>` for a stack layer whose base is another

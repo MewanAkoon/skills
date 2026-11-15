@@ -112,10 +112,11 @@ tracker line and assignee.
 
 ## Review and ready
 
-The post-PR review of a layer is `/code-review high <from>..<layer>`, with
-`<from>` its `Reviewed:` commit, else `git merge-base <parent> <layer>`, so
-it covers that layer's own diff, `<parent>` as above. Each PR is marked
-ready on its own, by `deliver.md`'s Ready section.
+The post-PR review of a layer reads `<from>..<layer>`, at the level
+`deliver.md`'s step 8 sets, with `<from>` its `Reviewed:` commit, else
+`git merge-base <parent> <layer>`, so it covers that layer's own diff,
+`<parent>` as above. Each PR is marked ready on its own, by `deliver.md`'s
+Ready section.
 
 **Done when:** each layer's PR is ready, or the hand-back says why it is a
 draft.

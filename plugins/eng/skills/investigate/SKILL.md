@@ -103,8 +103,8 @@ round found no blocker, and nothing has changed since that round read it but
 its own smaller points. Until then ask for no approval, in prose or in a
 harness's next-step box, and say only that planning continues. A re-check
 started after an approval ask withdraws it, and that turn ends with no
-approval button. Where the harness has an advisor tool, consult it on the
-final plan first. Lead with the result and any departure from the request,
+approval button. The main session alone consults any advisor on the final
+plan first. Lead with the result and any departure from the request,
 then wait. Repo files other than the plan file stay unedited, and the branch
 stays as it is, until the user approves. A yes that names items approves
 those items. In Claude Code plan mode, call ExitPlanMode with the

@@ -13,6 +13,15 @@ follow semantic versioning.
 
 ## Unreleased
 
+### Fixed
+
+- CI's shellcheck job passes `GITHUB_TOKEN` to the npm wrapper, which
+  sends it when it downloads the shellcheck binary from github.com. Without
+  it the download counted against the limit github.com sets per runner
+  address, and on 2026-11-15 both runs on `main` failed with a 403.
+- 0.9.1's heading no longer says "not tagged", since `v0.9.1` is now pushed
+  on cbb389b.
+
 ## 0.23.0 - 2026-11-15
 
 ### Added
@@ -572,7 +581,7 @@ follow semantic versioning.
   findings ledger so no round undoes another, and stops early only when it
   is not converging or after six rounds.
 
-## 0.9.1 - 2026-11-10, not tagged
+## 0.9.1 - 2026-11-10
 
 ### Changed
 

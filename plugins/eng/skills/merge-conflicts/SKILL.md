@@ -1,14 +1,20 @@
 ---
 name: merge-conflicts
-description: Use when git reports unmerged paths or conflict markers after a merge, rebase, cherry-pick, revert, stash pop, pull, or applied patch, and the user's latest message asks to resolve them, reports them, or asks for that operation.
+description: Use when git reports unmerged paths or conflict markers after a merge, rebase, cherry-pick, revert, stash pop, pull, or applied patch, and the user's latest message asks to resolve them, reports them, or asks for that operation, or a rebase the run started stopped on them.
 ---
 
 # Merge conflicts
 
 `eng:commit` and `eng:pr` hand to this skill when `git status` shows an
-operation in progress. Without a request to resolve it, report the operation
-and the unmerged paths, and wait. Conflict markers in a file git has not
-listed as unmerged are text, such as a parser fixture: leave them.
+operation in progress. Without a request to resolve it, or a rebase this run
+started under a Delivery, report the operation and the unmerged paths, and
+wait. Conflict markers in a file git has not listed as unmerged are text,
+such as a parser fixture: leave them.
+
+For a paused `gh stack rebase` this run started, which lists this branch as
+`eng:implement`'s [stack.md](../implement/references/stack.md) checks, run
+every step in the worktree its output named for the conflict, by absolute
+path.
 
 ## Step 1: See the state
 
@@ -99,7 +105,10 @@ Without `GIT_EDITOR=true` a continue opens an editor nobody closes. It also
 runs the commit hooks. One that fails and changed files: stage
 its changes and continue once more. One that fails and changed nothing: print
 its output and stop. One that passes and rewrote files: leave them unstaged
-and name them. A rebase stops on the next commit: repeat from step 1.
+and name them. A rebase stops on the next commit: repeat from step 1. A
+stack rebase continues with `gh stack rebase --continue` in place of
+`git rebase --continue`, which would leave the layers above it behind. It
+takes no `GIT_EDITOR` prefix and opens no editor.
 
 A stash pop has no continue: stage, then drop the entry by the SHA step 2
 recorded, found again with `git stash list --format='%H %gd'`, since its

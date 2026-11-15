@@ -13,7 +13,9 @@ Its push is a lease push, which follows `eng:commit`'s Push section, and the
 title and body wait until it lands. Anything else: say so and stop.
 
 When `git rev-list --count <headRefOid>..HEAD` is above zero, push those
-commits with `git push <remote> HEAD:<headRefName>` if the request asks or a
+commits with `git push <remote> HEAD:<headRefName>`, or on a stack with
+`gh stack push` after the layer check in `eng:implement`'s
+[stack.md](../../implement/references/stack.md), if the request asks or a
 Delivery covers the PR, as `eng:implement`'s
 [deliver.md](../../implement/references/deliver.md) says, else ask first.
 Never `--force`.

@@ -10,8 +10,13 @@ description: Use when the user's latest message asks to open, raise, or update a
 Run `git status`, `git status --porcelain -uall`, `gh auth status`, and
 `gh pr view --json number,url,state,baseRefName,headRefName,headRefOid,title,body`.
 When the plain `git status` reports a merge, rebase, cherry-pick, or revert in
-progress, or an unmerged path, hand the run to `eng:merge-conflicts` and
-stop. Stop too on a detached `HEAD` or no remote.
+progress, or an unmerged path, or a `gh-stack-rebase-state` file in
+`git rev-parse --path-format=absolute --git-common-dir` lists this branch
+under `stackBranches`, as `eng:implement`'s
+[stack.md](../implement/references/stack.md) says, hand the run to
+`eng:merge-conflicts` and stop. Stop too on a detached `HEAD` or
+no remote. A branch `gh stack view --json` lists under `branches[]` is a
+stack, run with stack.md beside this file.
 
 Uncommitted changes, other than untracked `.claude/plans/` and
 `.claude/handoffs/` files: without a Delivery, as `eng:implement`'s
@@ -37,7 +42,8 @@ The stack parent comes from `gh stack view --json` when it lists this branch:
 the `name` of the entry below it in `branches[]`, bottom first, or `trunk`
 for the bottom one, since each `base` there is a SHA. When
 `git ls-remote --exit-code --heads <remote> <base>` fails, use the default
-branch and log that as a ruling.
+branch and log that as a ruling, unless the base is a stack layer this run
+made, which stays the base because `gh stack submit` pushes it.
 
 `gh repo view --json defaultBranchRef,parent` gives the default. A set
 `parent` means a fork: the base lives on the remote whose URL holds the
@@ -53,8 +59,11 @@ git log --oneline <base remote>/<base>..HEAD
 git diff --stat <base remote>/<base>...HEAD
 ```
 
-With no commits ahead, stop. Past about 20 files or 500 lines, read one
-package at a time.
+A stack layer whose base is another layer skips the fetch and reads against
+the local base branch, `<base>..<layer>` and `<base>...<layer>`, where
+`<layer>` is the layer's branch, `HEAD` only when it is checked out. With
+no commits ahead, stop. Past about 20 files or 500 lines, read one package
+at a time.
 
 **Done when:** every changed file has a named role.
 
@@ -97,7 +106,8 @@ Push as `eng:commit`'s Push section says, unless the upstream holds `HEAD`.
 Write title and body to files in the scratchpad, or `mktemp -d`. Every PR
 opens as a draft. Assign whoever the user names, else `@me`; add no
 reviewer. A stack opens through `gh stack submit --auto`, which drafts each
-new PR.
+new PR, and then each PR it opened gets its title, body and `@me` assignee
+through `gh pr edit`, as stack.md says.
 
 ```bash
 gh pr create --draft --title "$(cat <title file>)" --body-file <body file> --base <base> --assignee @me
@@ -115,7 +125,10 @@ Read back `gh pr view --json state,title,url` and print the URL. Then
 finish as deliver.md's steps 8 and 9 say, a plain request to open a PR
 included: the post-PR review, `/code-review high <from>..HEAD`, where
 `<from>` is the `Reviewed:` commit, else
-`git merge-base <base remote>/<base> HEAD`, then ready by its Ready section.
+`git merge-base <base remote>/<base> HEAD`, or
+`git merge-base <base> <layer>` for a stack layer whose base is another
+layer, with the review range ending at `<layer>`, then ready by its Ready
+section.
 Without a Delivery, fixes the review finds wait for the user, and the PR
 stays a draft until they land.
 

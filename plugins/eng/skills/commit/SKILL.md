@@ -12,10 +12,14 @@ nothing to commit, goes to Push.
 
 Run `git status`, `git status --porcelain -uall`, `git diff`, and
 `git diff --staged`. `-uall` lists the files inside a new directory. Only the
-plain `git status` names a paused operation. When it reports a
-merge, rebase, cherry-pick, or revert in progress, or an unmerged path, hand
-the run to `eng:merge-conflicts` and stop. With nothing listed, say so and
-end.
+plain `git status` names a paused git operation. A paused stack rebase shows
+instead as a `gh-stack-rebase-state` file in
+`git rev-parse --path-format=absolute --git-common-dir` whose
+`stackBranches` lists this branch, as `eng:implement`'s
+[stack.md](../implement/references/stack.md) says. When `git status`
+reports a merge, rebase, cherry-pick, or revert in progress, or an unmerged
+path, or that file lists this branch, hand the run to `eng:merge-conflicts`
+and stop. With nothing listed, say so and end.
 
 **Done when:** a path is listed and nothing is mid-operation.
 
@@ -29,7 +33,8 @@ untracked `.claude/plans/` and `.claude/handoffs/` files out unless named.
 A file that fits no group: without a Delivery, as `eng:implement`'s
 `references/deliver.md` names one, ask. Under one, its grouping decides, and
 the file stays uncommitted, named in the hand-back as a ruling. Commit
-unrelated groups one at a time.
+unrelated groups one at a time. In a stack, a group is committed on the
+layer that owns it, as stack.md says.
 
 Stop and name the file when a path starts with `.env`, other than
 `.env.example` or `.env.sample`, or matches `*.pem`, `*.key`, `id_rsa`, or
@@ -111,8 +116,9 @@ git for-each-ref --format='%(upstream:lstrip=2)' "$(git symbolic-ref -q HEAD)"
 
 On a branch that `gh stack view --json` lists under `branches`, a rebase is
 `gh stack rebase` and a push is `gh stack push`, each with `--remote <remote>`
-when there are several remotes. A rejected `gh stack push` is any other
-rejection.
+when there are several remotes, after stack.md's layer check. That is the
+only forced update on a stack, never `--force` or `-f`. A rejected
+`gh stack push` is any other rejection.
 
 Otherwise, `<remote>/<branch>`: `git push`. Empty:
 `git push -u <remote> <branch>`. Another branch, such as `origin/main`: under

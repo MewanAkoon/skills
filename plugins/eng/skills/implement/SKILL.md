@@ -23,7 +23,8 @@ approved, the directory, the branch, the commit work starts from
 (`git rev-parse --short HEAD`), and the files already changed
 (`git status --short`). Do only the items approved. Then get onto the
 work's branch, as [references/deliver.md](references/deliver.md) says under
-"The branch".
+"The branch", or create or join the stack, as
+[references/stack.md](references/stack.md) says.
 
 **Done when:** that line is written and `HEAD` in the work's directory is on
 the work's branch.

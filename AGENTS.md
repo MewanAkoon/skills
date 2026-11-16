@@ -112,8 +112,12 @@ when `version` in `plugins/eng/.claude-plugin/plugin.json` changes. The Cursor
 manifest carries the same `version`, and a release bumps both.
 
 - A pull request leaves `version` alone and adds its entry under
-  `## Unreleased` at the top of `CHANGELOG.md`.
-- A release moves those entries under the new version and its date, bumps
+  `## Unreleased` at the top of `CHANGELOG.md`. Dependabot's pull requests
+  add no entry, since Dependabot can't write one.
+- A release moves those entries under the new version and its date, adds a
+  `### Changed` line naming the action and its new version for each
+  Dependabot bump merged since the last tag
+  (`git log --oneline --author=dependabot <last tag>..HEAD`), bumps
   `version` in both manifests, tags the commit on `main` as `vX.Y.Z`, and
   fast-forwards `stable` to it. `stable` moves no other way, and never by a
   force push.

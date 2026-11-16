@@ -97,7 +97,8 @@ invocation mode, which `check.sh` checks.
 A pull request leaves the `version` in
 `plugins/eng/.claude-plugin/plugin.json` and
 `plugins/eng/.cursor-plugin/plugin.json` alone and adds its entry under
-`## Unreleased` at the top of [CHANGELOG.md](CHANGELOG.md). Installs follow
+`## Unreleased` at the top of [CHANGELOG.md](CHANGELOG.md). Dependabot's pull
+requests add no entry, since Dependabot can't write one. Installs follow
 `stable`, so a change reaches them at the next release.
 
 ## Evals

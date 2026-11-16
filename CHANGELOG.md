@@ -2,10 +2,13 @@
 
 Each release of the `eng` plugin, newest first. The version is the one in
 `plugins/eng/.claude-plugin/plugin.json`. A pull request adds its entry under
-`## Unreleased` and leaves the version alone. A release moves those entries
-under a heading for its version with its date, bumps the version in both
-plugin manifests, Claude Code's and Cursor's, tags the
-commit `vX.Y.Z`, and fast-forwards the `stable` branch that installs follow.
+`## Unreleased` and leaves the version alone. Dependabot's pull requests add
+no entry, since Dependabot can't write one. A release moves those entries
+under a heading for its version with its date, adds a `### Changed` line
+naming the action and its new version for each Dependabot bump merged since
+the last tag, bumps the version in both plugin manifests, Claude Code's and
+Cursor's, tags the commit `vX.Y.Z`, and fast-forwards the `stable` branch
+that installs follow.
 A version marked "not tagged" reached `main`, and every install that followed
 `main` then, but has no tag. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the numbers
@@ -18,6 +21,12 @@ follow semantic versioning.
 - Dependabot opens a monthly pull request when an action pinned in
   `.github/workflows` has a newer release. npm has no entry, since its two
   tools are pinned on purpose.
+
+### Changed
+
+- Dependabot's pull requests add no `## Unreleased` entry, since Dependabot
+  can't write one. A release adds a `### Changed` line for each Dependabot
+  bump merged since the last tag.
 
 ## 0.23.1 - 2026-11-16
 

@@ -1,0 +1,14 @@
+# Dependabot keeps the actions pinned in .github/workflows current. Pins are
+# commits, not tags, so a moved tag can't change what CI runs, and without
+# this they'd go stale until GitHub retired the runtime they use.
+#
+# npm has no entry: package.json lists no dependencies, and the two tools
+# run through npx are pinned on purpose. Claude Code at 2.1.293 is cc_min in
+# scripts/check.sh, the oldest version supported, and the shellcheck pins
+# keep CI and local lint on the same binary.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

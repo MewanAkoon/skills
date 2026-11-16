@@ -13,6 +13,12 @@ follow semantic versioning.
 
 ## Unreleased
 
+### Added
+
+- Dependabot opens a monthly pull request when an action pinned in
+  `.github/workflows` has a newer release. npm has no entry, since its two
+  tools are pinned on purpose.
+
 ## 0.23.1 - 2026-11-16
 
 ### Fixed

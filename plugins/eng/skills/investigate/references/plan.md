@@ -1,8 +1,11 @@
 # Plan template
 
-A plan file opens with its title. Fill each section the task needs, kept to
-what a reviewer needs to approve or reject it, and leave out the rest rather
-than writing "none". Point at code with `file:line` rather than pasting it.
+A plan file is `<checkout>/.claude/plans/<slug>/plan.md`, and the plan's
+other files, such as `report.md`, `review.md` or `pr-body.md`, sit beside it
+in that folder. It opens with its title. Fill each section the task needs,
+kept to what a reviewer needs to approve or reject it, and leave out the rest
+rather than writing "none". Point at code with `file:line` rather than
+pasting it.
 
 **Goal.** What will be true when this is done.
 

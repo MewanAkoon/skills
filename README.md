@@ -218,10 +218,13 @@ plugins from your machine or your settings.
 
 ## Working files
 
-Plans go under `.claude/plans/` and handoffs under `.claude/handoffs/` in the
-repo you work in, and `eng:commit` leaves them out unless you name them. To
-keep them out of every repo, add `.claude/` to your global git ignore file,
-unless a team you work with commits `.claude/settings.json`.
+Each plan gets a folder of its own under `.claude/plans/` in the checkout
+that does the work, and goes when that worktree goes, so the PR and the
+issue are the lasting record. Handoffs go under `.claude/handoffs/` in the
+main clone, so they outlive the worktree that wrote them. `eng:commit` leaves
+both out unless you name them. To keep them out of every repo, add `.claude/`
+to your global git ignore file, unless a team you work with commits
+`.claude/settings.json`.
 
 ## More
 

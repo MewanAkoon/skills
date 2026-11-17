@@ -16,6 +16,8 @@ follow semantic versioning.
 
 ## Unreleased
 
+## 0.24.0 - 2026-11-17
+
 ### Added
 
 - Dependabot opens a monthly pull request when an action pinned in

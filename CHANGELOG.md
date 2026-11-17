@@ -16,6 +16,13 @@ follow semantic versioning.
 
 ## Unreleased
 
+### Fixed
+
+- `eng:handoff` writes to the current checkout's `.claude/handoffs/`, since
+  Claude Code refuses a worktree session's Write and Edit on a path in the
+  main clone. The file goes with its worktree, so the reply gives its
+  absolute path and the document's text to paste into the next session.
+
 ## 0.24.0 - 2026-11-17
 
 ### Added

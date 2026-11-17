@@ -221,9 +221,11 @@ plugins from your machine or your settings.
 Each plan gets a folder of its own under `.claude/plans/` in the checkout
 that does the work, and goes when that worktree goes, so the PR and the
 issue are the lasting record. Handoffs go under `.claude/handoffs/` in the
-main clone, so they outlive the worktree that wrote them. `eng:commit` leaves
-both out unless you name them. To keep them out of every repo, add `.claude/`
-to your global git ignore file, unless a team you work with commits
+checkout that wrote them and go with it too, so the reply gives each one's
+text to paste into the next session. A worktree `eng:implement` makes goes
+under `.claude/worktrees/` in the main clone. `eng:commit` leaves all three
+out unless you name them. To keep them out of every repo, add `.claude/` to
+your global git ignore file, unless a team you work with commits
 `.claude/settings.json`.
 
 ## More

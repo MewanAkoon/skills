@@ -27,6 +27,16 @@ follow semantic versioning.
 - Dependabot's pull requests add no `## Unreleased` entry, since Dependabot
   can't write one. A release adds a `### Changed` line for each Dependabot
   bump merged since the last tag.
+- Each plan gets a folder of its own, `.claude/plans/<slug>/plan.md` in the
+  checkout that does the work, and the files that belong to it, such as a
+  report, a review or a PR body draft, sit beside it named for what they
+  are. When `eng:implement` moves the work into another worktree, the
+  plan's folder moves with it, so a plan written in the main clone ends
+  where the work is and goes with that worktree.
+- `eng:handoff` writes to the main clone's `.claude/handoffs/`, so a handoff
+  outlives the worktree that wrote it. In a bare repo, a submodule, or a
+  repo whose git dir sits apart, it falls back to the current checkout and
+  says so.
 
 ## 0.23.1 - 2026-11-16
 

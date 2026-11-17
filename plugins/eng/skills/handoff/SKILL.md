@@ -20,8 +20,14 @@ when the work is finished, because the commits and the PR carry it.
 ## How to use it
 
 Type `/eng:handoff`, optionally with what the next session is for. The
-document goes to `<repo>/.claude/handoffs/<slug>.md`, or a path you name, and
-you get the path. Paste it as the first message of the next session.
+document goes to `.claude/handoffs/<slug>.md` in the main clone, the parent
+of `git rev-parse --path-format=absolute --git-common-dir`, so it outlives
+the worktree that wrote it, or to a path you name, and you get the path.
+That parent is a checkout only when `git -C <parent> rev-parse
+--show-toplevel` prints it back. When it does not, as in a bare repo, a
+submodule, or a repo whose git dir sits apart, the document goes in the
+current checkout's `.claude/handoffs/`, and the reply says so. Paste it as
+the first message of the next session.
 
 ---
 
@@ -51,13 +57,16 @@ password, connection string or personal data, since the document travels.
 ## Checking it
 
 If this were all you had, could you do the next step? Add what is missing.
-Then run `git check-ignore <path>`, and when the repo does not ignore the
-file, say so, so the user keeps it out of commits.
+Then run `git -C <checkout holding the file> check-ignore <path>`, since a
+plain `git check-ignore` in a worktree fails on a path in the main clone, and
+when that repo does not ignore the file, say so, so the user keeps it out of
+commits.
 
 **Done when:** every name the next step uses appears in the document as a
 real path or name, each section holds content or says it is empty, every
 secret reads `<REDACTED>`, and the file is saved with its path given, plus
-the ignore note when it applies.
+the ignore note when it applies, and the note that it went in the current
+checkout when it did.
 
 ---
 

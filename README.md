@@ -48,9 +48,11 @@ plugin's data folder, `~/.claude/plugins/data/eng-mewanakoon/`.
 
 **In Cursor.** With eng installed in Claude Code, Cursor already loads it,
 and the update above updates it there too. Install nothing more, or every
-skill loads twice. Its guards hold there from 0.23.0, the first release that
-carries the Cursor plugin. 0.22.0's import brings the skills and guards nothing. On a
-machine with Cursor alone, in steps not yet run end to end:
+skill loads twice. Its guards are expected to hold there from 0.23.0, the
+first release that carries the Cursor plugin, and are checked after the 1.0.0
+release, as [docs/cursor.md](docs/cursor.md) says. 0.22.0's import brings the
+skills and guards nothing. On a machine with Cursor alone, in steps not yet
+run end to end:
 
 1. If `agent plugin marketplace list` shows `mewanakoon`, run
    `agent plugin marketplace remove mewanakoon`.
@@ -85,7 +87,9 @@ prompts. To stop that, add `Bash(git commit:*)`, `Bash(git push:*)`,
 `Bash(gh pr create:*)`, `Bash(gh pr edit:*)`, `Bash(gh pr ready:*)`, and
 `mcp__<server>` for your tracker's MCP server to `permissions.allow`. With
 `Bash(git push:*)` allowed, a plain push to `main` no longer prompts either,
-and only the skills hold it back.
+and only the skills hold it back. Plan and handoff files sit under
+`.claude/`, which Claude Code protects: a write there prompts outside auto
+mode whatever your allow rules say, and is refused in don't-ask mode.
 
 **The settings.** `skillOverrides` hides a skill by its bare name
 ([docs](https://code.claude.com/docs/en/skills#override-skill-visibility-from-settings)),
@@ -180,7 +184,9 @@ These run only when typed, and cost no context until then.
 
 - Nothing is posted. Comments, reviews and replies are drafted to a file for
   you to post.
-- Merges, releases, tags, deploys and force pushes wait for your own message.
+- Merges, releases, tags, deploys, pushes to the default branch, and force
+  pushes other than `eng:commit`'s explicit-lease push to another branch wait
+  for your own message.
 - Commits, pushes and PRs happen when you ask, or when a plan you approved, a
   change you named, or a follow-up on your open PR covers them.
 - A subagent writes nothing outside your machine.

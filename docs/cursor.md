@@ -10,8 +10,8 @@ otherwise. The Cursor IDE was not tested.
 
 - **eng is installed in Claude Code on this machine.** Install nothing in
   Cursor. Until 0.23.0 or later is installed, the first release that
-  carries this change, the import brings the skills and the workflow and guards
-  nothing, as "What the import brings" says. Cursor imports installed
+  carries the Cursor plugin, the import brings the skills and the workflow
+  and guards nothing, as "What the import brings" says. Cursor imports installed
   Claude Code plugins by default, through Cursor Settings, Agents,
   Third-Party Imports, "Include Third-Party Plugins, Skills, and Other
   Configs"
@@ -69,7 +69,7 @@ To remove, uninstall `eng` in the plugins view, then run
   - A folder with both manifests, loaded with `--plugin-dir`, ran only
     `hooks/hooks-cursor.json`, the Cursor plugin's file. The import of a
     release that carries both is expected to do the same. That is checked
-    after the release, since the import reads only `~/.claude`.
+    after the 1.0.0 release, since the import reads only `~/.claude`.
 
 ## Both installed
 

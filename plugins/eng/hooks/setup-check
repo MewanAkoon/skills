@@ -11,9 +11,11 @@
 # Several groups can be named at once, such as "settings tools", and run in
 # that order.
 #
-# settings     The four settings the README's Setup section asks for, in the
-#              user's settings.json, under CLAUDE_CONFIG_DIR when it is set. A
-#              plugin cannot set any of them itself.
+# settings     The settings the README's Setup section marks required, in the
+#              user's settings.json, under CLAUDE_CONFIG_DIR when it is set:
+#              skillOverrides set to "off" for commit and pr, attribution
+#              off, and the gh stack allow rule with its merge and unstack
+#              ask rules. A plugin cannot set any of them itself.
 # tools        Each row of standards/dependencies.md, by the kind in its Check
 #              column.
 # permissions  Whether the writes eng makes without asking would stop for a

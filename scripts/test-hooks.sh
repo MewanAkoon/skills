@@ -832,6 +832,14 @@ start plans
 printf 'plan two\n' > "$repo/.claude/plans/p.md"
 stop plans
 [ ! -s "$scratch/out" ] || bad "review gate: a change under .claude/plans got a reminder"
+# A plan in a folder of its own, with a file beside it, counts no more.
+mkdir -p "$repo/.claude/plans/p"
+printf 'plan\n' > "$repo/.claude/plans/p/plan.md"
+start plan-folder
+printf 'plan two\n' > "$repo/.claude/plans/p/plan.md"
+printf 'report\n' > "$repo/.claude/plans/p/report.md"
+stop plan-folder
+[ ! -s "$scratch/out" ] || bad "review gate: a change in a plan's folder got a reminder"
 mkdir -p "$scratch/plain"
 stop plain '' "$scratch/plain"
 [ ! -s "$scratch/out" ] || bad "review gate: a directory outside git got a reminder"
@@ -891,6 +899,11 @@ mkdir -p "$planned/.claude/plans"
 printf 'plan\n' > "$planned/.claude/plans/p.md"
 stop moved '' "$planned"
 [ ! -s "$scratch/out" ] || bad "review gate: a new plan in a repo with old edits got a reminder"
+mkdir -p "$planned/.claude/plans/p"
+printf 'plan\n' > "$planned/.claude/plans/p/plan.md"
+printf 'review\n' > "$planned/.claude/plans/p/review.md"
+stop moved '' "$planned"
+[ ! -s "$scratch/out" ] || bad "review gate: a new plan folder in a repo with old edits got a reminder"
 # A deleted file has no time, so its folder's stands in.
 gone="$scratch/old-delete"
 other_repo "$gone"

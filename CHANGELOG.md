@@ -22,6 +22,18 @@ follow semantic versioning.
   Claude Code refuses a worktree session's Write and Edit on a path in the
   main clone. The file goes with its worktree, so the reply gives its
   absolute path and the document's text to paste into the next session.
+- `eng:implement` makes a new worktree at
+  `<main clone>/.claude/worktrees/<slug>`, where the desktop app puts its
+  own, rather than beside the clone. The main clone falls back to the
+  current checkout when the parent of the git common dir is not one, as in
+  a submodule.
+
+### Changed
+
+- The review reminder, the review loop's snapshot, `eng:commit` and
+  `eng:pr` leave `.claude/worktrees/` out, beside plans and handoffs, so a
+  clone that does not ignore it neither reminds about a new worktree nor
+  stages it as an embedded repo.
 
 ## 0.24.0 - 2026-11-17
 

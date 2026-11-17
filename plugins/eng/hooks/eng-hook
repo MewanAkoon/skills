@@ -231,12 +231,13 @@ has_word() {
 }
 
 # Runs git with the arguments given in the repo at $top, over the paths whose
-# changes count: all but .claude/plans and .claude/handoffs, as the review
-# loop's snapshot leaves them out, and .claude/.cc-writes, which is Claude
-# Code's own state and never work to review.
+# changes count: all but .claude/plans, .claude/handoffs and
+# .claude/worktrees, as the review loop's snapshot leaves them out, and
+# .claude/.cc-writes, which is Claude Code's own state and never work to
+# review. A worktree there is another checkout, whose changes are its own.
 in_tree() {
   git -C "$top" "$@" -- . ':(exclude).claude/plans' ':(exclude).claude/handoffs' \
-    ':(exclude).claude/.cc-writes'
+    ':(exclude).claude/worktrees' ':(exclude).claude/.cc-writes'
 }
 
 # Sets $base to what the changes in $top are measured against: HEAD, or the

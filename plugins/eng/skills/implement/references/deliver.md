@@ -102,22 +102,24 @@ and say so in the hand-back. With no unclaimed changes, claimed
 ones ride along with the switch. Each branch move in this section is a
 ruling.
 
-The plan's folder, the one holding the approved `plan.md`, is neither a
-claimed nor an unclaimed change, and no patch or switch carries an ignored
-file. When the work moves to another checkout `<dir>`, the ticket branch's
-worktree or a new one once its patch applies, the folder moves with it, and
-the run reads and writes the plan there:
+The plan's folder, `.claude/plans/<name>/` holding the approved `plan.md`,
+is neither a claimed nor an unclaimed change, and no patch or switch carries
+an ignored file. When the work moves to another checkout `<dir>`, the ticket
+branch's worktree or a new one once its patch applies, the folder moves with
+it, and the run reads and writes the plan there. `<checkout>` is the
+checkout the run started in:
 
 ```bash
-mkdir -p <dir>/.claude/plans && mv <plan folder> <dir>/.claude/plans/
+mkdir -p <dir>/.claude/plans && mv <checkout>/.claude/plans/<name> <dir>/.claude/plans/
 ```
 
 Into a new worktree it moves only after the patch, because
 `git worktree remove` deletes ignored files with no warning. A run with no
-plan file moves nothing. When `<dir>` already holds a folder of that name,
-or the `mv` fails, the approved plan stays at its first path and the run
-keeps using it there, the folder in `<dir>` stays as it is, and a ruling
-names both paths.
+such folder moves nothing, and never moves `.claude/plans` itself. When the
+`mv` fails, as it does when `<dir>` already holds a folder of that name
+that is not empty, the approved plan stays at its first path and the run keeps
+using it there, the folder in `<dir>` stays as it is, and a ruling names
+both paths.
 
 ## Rulings
 

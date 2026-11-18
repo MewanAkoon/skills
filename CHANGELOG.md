@@ -16,6 +16,8 @@ follow semantic versioning.
 
 ## Unreleased
 
+## 0.24.1 - 2026-11-18
+
 ### Fixed
 
 - `eng:handoff` writes to the current checkout's `.claude/handoffs/`, since

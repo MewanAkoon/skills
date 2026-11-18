@@ -28,7 +28,8 @@ and stop. With nothing listed, say so and end.
 Paths the user named are the group. Otherwise keep what is staged, a partly
 staged path as it is, and add files in the same module or that import one
 another. Stage by name, never `git add -A` or `.` unless told. Leave
-untracked `.claude/plans/` and `.claude/handoffs/` files out unless named.
+untracked `.claude/plans/`, `.claude/handoffs/` and `.claude/worktrees/`
+files out unless named.
 
 A file that fits no group: without a Delivery, as `eng:implement`'s
 `references/deliver.md` names one, ask. Under one, its grouping decides, and

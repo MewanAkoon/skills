@@ -81,11 +81,11 @@ Fill in [references/plan.md](references/plan.md). The plan goes in
 `<checkout>/.claude/plans/<slug>/plan.md` whenever its Delivery lists writes,
 or when it is longer than a screen, where `<checkout>` is what
 `git rev-parse --show-toplevel` prints. It is a folder even for one file.
-Any other file that belongs to the plan, such as a report, a review or a PR
-body draft, goes in the same folder, named for what it is: `report.md`,
-`review.md`, `pr-body.md`. The folder lives and goes with its checkout, so
-the PR body and the issue are the lasting record. The lists steps 1 to 3 ask
-for go in its Progress, not the reply.
+Any other file that belongs to the plan, such as a report or a review,
+goes in the same folder, named for what it is: `report.md`, `review.md`.
+The folder lives and goes with its checkout, so the PR body and the issue
+are the lasting record. The lists steps 1 to 3 ask for go in its Progress,
+not the reply.
 
 **Done when:** every section the task needs is filled, and the rest are
 left out.

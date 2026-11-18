@@ -78,10 +78,13 @@ follows, or from `<remote>/<default>` when the first fallback under Rulings
 applies.
 
 Changes step 1 lists that the request does not claim stay where they are.
-The work then goes in a worktree beside the main clone, the parent of
-`git rev-parse --path-format=absolute --git-common-dir`, named
-`<clone>-<slug>`: `git worktree add <dir> <branch>` for an existing branch,
-else `git worktree add --no-track -b <branch> <dir> <remote>/<default>`.
+The work then goes in a new worktree, `<dir>`, at
+`<main clone>/.claude/worktrees/<slug>`. The main clone is the parent of
+`git rev-parse --path-format=absolute --git-common-dir` when
+`git -C <parent> rev-parse --show-toplevel` prints it back, and otherwise, as
+in a submodule or a repo whose git dir sits apart, the current checkout. Use
+`git worktree add <dir> <branch>` for an existing branch, else
+`git worktree add --no-track -b <branch> <dir> <remote>/<default>`.
 Every later command runs there by absolute path. Claimed changes move by
 patch:
 

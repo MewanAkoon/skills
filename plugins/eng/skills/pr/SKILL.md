@@ -18,11 +18,11 @@ under `stackBranches`, as `eng:implement`'s
 no remote. A branch `gh stack view --json` lists under `branches[]` is a
 stack, run with stack.md beside this file.
 
-Uncommitted changes, other than untracked `.claude/plans/` and
-`.claude/handoffs/` files: without a Delivery, as `eng:implement`'s
-[deliver.md](../implement/references/deliver.md) names one, ask whether to
-continue without them; under one, leave them out and name them in the
-hand-back as a ruling.
+Uncommitted changes, other than untracked `.claude/plans/`,
+`.claude/handoffs/` and `.claude/worktrees/` files: without a Delivery, as
+`eng:implement`'s [deliver.md](../implement/references/deliver.md) names
+one, ask whether to continue without them; under one, leave them out and
+name them in the hand-back as a ruling.
 
 With a remote that is not GitHub, take the base from the message or
 Delivery's `Base:`, else the default from `git remote set-head <remote> -a`

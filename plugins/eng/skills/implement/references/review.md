@@ -7,13 +7,14 @@ Read this at implement's step 5. Never pass a bare level, `ultra`,
 
 Make a directory once with `mktemp -d` in the scratchpad, and write its
 literal path for `R` in every command. A snapshot holds every file, untracked
-too, keeps `.claude/plans` and `.claude/handoffs` as `HEAD` has them, and
-leaves your index, branch, and refs alone:
+too, keeps `.claude/plans` and `.claude/handoffs` as `HEAD` has them, leaves
+out the other checkouts under `.claude/worktrees`, and leaves your index,
+branch, and refs alone:
 
 ```bash
 cp "$(git rev-parse --git-dir)/index" "$R/index"
-GIT_INDEX_FILE="$R/index" git add -A
-GIT_INDEX_FILE="$R/index" git reset -q -- ':/.claude/plans' ':/.claude/handoffs'
+GIT_INDEX_FILE="$R/index" git add -A -- ':/' ':(top,exclude).claude/worktrees'
+GIT_INDEX_FILE="$R/index" git reset -q -- ':/.claude/plans' ':/.claude/handoffs' ':/.claude/worktrees'
 tree="$(GIT_INDEX_FILE="$R/index" git write-tree)"
 git commit-tree "$tree" -p <parent> -m review | tee -a "$R/snapshots"
 ```

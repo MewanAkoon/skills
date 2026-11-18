@@ -840,6 +840,15 @@ printf 'plan two\n' > "$repo/.claude/plans/p/plan.md"
 printf 'report\n' > "$repo/.claude/plans/p/report.md"
 stop plan-folder
 [ ! -s "$scratch/out" ] || bad "review gate: a change in a plan's folder got a reminder"
+# A worktree under .claude/worktrees is another checkout, so making one is no
+# change to review, even where nothing ignores the folder.
+start worktrees
+git -C "$repo" worktree add -q "$repo/.claude/worktrees/w" -b w
+[ -f "$repo/.claude/worktrees/w/.git" ] || bad "review gate: the worktree for the .claude/worktrees case was not made"
+stop worktrees
+[ ! -s "$scratch/out" ] || bad "review gate: a worktree under .claude/worktrees got a reminder"
+git -C "$repo" worktree remove --force "$repo/.claude/worktrees/w"
+git -C "$repo" branch -q -D w
 mkdir -p "$scratch/plain"
 stop plain '' "$scratch/plain"
 [ ! -s "$scratch/out" ] || bad "review gate: a directory outside git got a reminder"

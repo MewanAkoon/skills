@@ -16,6 +16,13 @@ follow semantic versioning.
 
 ## Unreleased
 
+## 1.0.0 - 2026-11-23
+
+### Changed
+
+- eng's first stable release. The skills, hooks and workflow are the same
+  as in 0.24.1.
+
 ## 0.24.1 - 2026-11-18
 
 ### Fixed
